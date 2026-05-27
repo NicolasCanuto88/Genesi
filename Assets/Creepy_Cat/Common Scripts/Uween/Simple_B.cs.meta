@@ -1,0 +1,18 @@
+fileFormatVersion: 2
+guid: 2035f1d5843652844ac6bdd9f9032891
+MonoImporter:
+  externalObjects: {}
+  serializedVersion: 2
+  defaultReferences: []
+  executionOrder: 0
+  icon: {instanceID: 0}
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 231805
+  packageName: 3D Scifi Kit Vol 4
+  packageVersion: 3.5.1
+  assetPath: Assets/Creepy_Cat/Common Scripts/Uween/Simple_B.cs
+  uploadId: 902372

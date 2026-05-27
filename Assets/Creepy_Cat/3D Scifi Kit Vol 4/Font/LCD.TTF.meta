@@ -1,0 +1,28 @@
+fileFormatVersion: 2
+guid: e602b892b37196841a368a5707d6cfb5
+TrueTypeFontImporter:
+  externalObjects: {}
+  serializedVersion: 4
+  fontSize: 150
+  forceTextureCase: -2
+  characterSpacing: 0
+  characterPadding: 1
+  includeFontData: 1
+  fontNames:
+  - Electronic Highway Sign
+  fallbackFontReferences: []
+  customCharacters: 
+  fontRenderingMode: 0
+  ascentCalculationMode: 1
+  useLegacyBoundsCalculation: 0
+  shouldRoundAdvanceValue: 1
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 231805
+  packageName: 3D Scifi Kit Vol 4
+  packageVersion: 3.5.1
+  assetPath: Assets/Creepy_Cat/3D Scifi Kit Vol 4/Font/LCD.TTF
+  uploadId: 902372

@@ -1,0 +1,14 @@
+fileFormatVersion: 2
+guid: 624c061ee4dfdaf4787b9c0bb51b4c1f
+AssemblyDefinitionImporter:
+  externalObjects: {}
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 231805
+  packageName: 3D Scifi Kit Vol 4
+  packageVersion: 3.5.1
+  assetPath: Assets/Creepy_Cat/Common Scripts/BezierSolution/BezierSolution.Runtime.asmdef
+  uploadId: 902372

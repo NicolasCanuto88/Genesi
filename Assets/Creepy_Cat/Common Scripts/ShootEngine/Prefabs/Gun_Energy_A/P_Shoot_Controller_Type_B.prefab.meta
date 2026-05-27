@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: 7142cafde55b16447a8998e906d8d463
+timeCreated: 1457887571
+licenseType: Store
+NativeFormatImporter:
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 231805
+  packageName: 3D Scifi Kit Vol 4
+  packageVersion: 3.5.1
+  assetPath: Assets/Creepy_Cat/Common Scripts/ShootEngine/Prefabs/Gun_Energy_A/P_Shoot_Controller_Type_B.prefab
+  uploadId: 902372

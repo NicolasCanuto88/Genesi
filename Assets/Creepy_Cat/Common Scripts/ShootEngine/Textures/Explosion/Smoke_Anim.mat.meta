@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: 698a8134f4ebbbd4e848648685f68067
+timeCreated: 1471944184
+licenseType: Store
+NativeFormatImporter:
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 231805
+  packageName: 3D Scifi Kit Vol 4
+  packageVersion: 3.5.1
+  assetPath: Assets/Creepy_Cat/Common Scripts/ShootEngine/Textures/Explosion/Smoke_Anim.mat
+  uploadId: 902372

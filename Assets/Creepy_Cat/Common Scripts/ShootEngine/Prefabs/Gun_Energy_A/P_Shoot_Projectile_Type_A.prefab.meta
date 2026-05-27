@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: 938459aeb26fb124998973f4dfcfb24d
+timeCreated: 1457887177
+licenseType: Store
+NativeFormatImporter:
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 231805
+  packageName: 3D Scifi Kit Vol 4
+  packageVersion: 3.5.1
+  assetPath: Assets/Creepy_Cat/Common Scripts/ShootEngine/Prefabs/Gun_Energy_A/P_Shoot_Projectile_Type_A.prefab
+  uploadId: 902372

@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: 49dacde05aa497e44a41eee411e12c39
+timeCreated: 1457817891
+licenseType: Store
+NativeFormatImporter:
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 231805
+  packageName: 3D Scifi Kit Vol 4
+  packageVersion: 3.5.1
+  assetPath: Assets/Creepy_Cat/Common Scripts/ShootEngine/Textures/Sprites/Laser_Shoot_Red.mat
+  uploadId: 902372

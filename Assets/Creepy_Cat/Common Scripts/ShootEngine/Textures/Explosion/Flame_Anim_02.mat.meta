@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: d7f098ed9997e714193be5e86df013f4
+timeCreated: 1472825013
+licenseType: Store
+NativeFormatImporter:
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 231805
+  packageName: 3D Scifi Kit Vol 4
+  packageVersion: 3.5.1
+  assetPath: Assets/Creepy_Cat/Common Scripts/ShootEngine/Textures/Explosion/Flame_Anim_02.mat
+  uploadId: 902372

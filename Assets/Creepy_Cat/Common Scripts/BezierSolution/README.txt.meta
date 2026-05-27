@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: 90c5928df0356a746a1423cce53181b9
+timeCreated: 1562520040
+licenseType: Store
+TextScriptImporter:
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 231805
+  packageName: 3D Scifi Kit Vol 4
+  packageVersion: 3.5.1
+  assetPath: Assets/Creepy_Cat/Common Scripts/BezierSolution/README.txt
+  uploadId: 902372

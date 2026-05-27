@@ -1,0 +1,14 @@
+fileFormatVersion: 2
+guid: 48338a86d37f0ee499cec7f2ff20dace
+PrefabImporter:
+  externalObjects: {}
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 231805
+  packageName: 3D Scifi Kit Vol 4
+  packageVersion: 3.5.1
+  assetPath: Assets/Creepy_Cat/Common Scripts/ShootEngine/Prefabs/Gun_Energy_A/P_Shoot_2_Launcher_Type_A.prefab
+  uploadId: 902372

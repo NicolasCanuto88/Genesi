@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: fa35d75604d172d48b7a6b62a07c7dbf
+timeCreated: 1472572134
+licenseType: Store
+NativeFormatImporter:
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 231805
+  packageName: 3D Scifi Kit Vol 4
+  packageVersion: 3.5.1
+  assetPath: Assets/Creepy_Cat/Common Scripts/ShootEngine/Prefabs/Gun_Energy_A/P_Shoot_Explosion_Type_B_Light.prefab
+  uploadId: 902372

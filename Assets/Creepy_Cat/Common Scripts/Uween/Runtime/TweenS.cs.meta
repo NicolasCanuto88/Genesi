@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: 66fbb4779e6814baebbc4f0e50935955
+MonoImporter:
+  serializedVersion: 2
+  defaultReferences: []
+  executionOrder: 0
+  icon: {instanceID: 0}
+  userData: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 231805
+  packageName: 3D Scifi Kit Vol 4
+  packageVersion: 3.5.1
+  assetPath: Assets/Creepy_Cat/Common Scripts/Uween/Runtime/TweenS.cs
+  uploadId: 902372

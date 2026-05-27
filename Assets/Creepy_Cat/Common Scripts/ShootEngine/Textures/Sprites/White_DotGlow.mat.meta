@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: 1fa0611dcffb84c978f3f91bb1f2df0c
+timeCreated: 1457817885
+licenseType: Store
+NativeFormatImporter:
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 231805
+  packageName: 3D Scifi Kit Vol 4
+  packageVersion: 3.5.1
+  assetPath: Assets/Creepy_Cat/Common Scripts/ShootEngine/Textures/Sprites/White_DotGlow.mat
+  uploadId: 902372

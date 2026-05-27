@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: e97020b412a78b34ca9310a7db87c211
+NativeFormatImporter:
+  externalObjects: {}
+  mainObjectFileID: 2100000
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 231805
+  packageName: 3D Scifi Kit Vol 4
+  packageVersion: 3.5.1
+  assetPath: Assets/Creepy_Cat/Common Scripts/ShootEngine/Textures/Explosion/Explode_01.mat
+  uploadId: 902372

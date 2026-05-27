@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: 2112e48a1ae1648409fbe6f20ed3dd1e
+timeCreated: 1457817891
+licenseType: Store
+NativeFormatImporter:
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 231805
+  packageName: 3D Scifi Kit Vol 4
+  packageVersion: 3.5.1
+  assetPath: Assets/Creepy_Cat/Common Scripts/ShootEngine/Textures/Sprites/Laser_Shoot_Blue.mat
+  uploadId: 902372

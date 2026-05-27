@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: 83a6240a04fa9fb45a23d575dae6824d
+timeCreated: 1457815803
+licenseType: Store
+NativeFormatImporter:
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 231805
+  packageName: 3D Scifi Kit Vol 4
+  packageVersion: 3.5.1
+  assetPath: Assets/Creepy_Cat/Common Scripts/ShootEngine/Textures/Sprites/Laser_Trail.mat
+  uploadId: 902372
