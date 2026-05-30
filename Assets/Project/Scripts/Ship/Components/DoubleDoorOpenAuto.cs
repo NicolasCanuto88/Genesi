@@ -65,6 +65,7 @@ namespace creepycat.scifikitvol4
             if (requiresPower && PowerManager.Instance != null)
             {
                 PowerManager.Instance.RegisterPowerConsumer(this);
+                PowerManager.Instance.OnPowerRestored += OnPowerRestoredEvent;
             }
         }
 
@@ -74,6 +75,7 @@ namespace creepycat.scifikitvol4
             if (requiresPower && PowerManager.Instance != null)
             {
                 PowerManager.Instance.UnregisterPowerConsumer(this);
+                PowerManager.Instance.OnPowerRestored -= OnPowerRestoredEvent;
             }
         }
 
@@ -233,6 +235,10 @@ namespace creepycat.scifikitvol4
                 PlaySound(deniedSound);
                 Debug.LogWarning($"[Door {gameObject.name}] Power lost - closing door");
             }
+        }
+        private void OnPowerRestoredEvent()
+        {
+            isPowered = true;
         }
 
         public string GetSystemName()

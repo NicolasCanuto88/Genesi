@@ -119,6 +119,109 @@ NavMeshSettings:
     debug:
       m_Flags: 0
   m_NavMeshData: {fileID: 0}
+--- !u!1 &7475648
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 7475649}
+  - component: {fileID: 7475652}
+  - component: {fileID: 7475651}
+  - component: {fileID: 7475650}
+  m_Layer: 0
+  m_Name: PlaceHolder
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!224 &7475649
+RectTransform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 7475648}
+  m_LocalRotation: {x: -0.000000029802322, y: 0.000000029802322, z: 0.00000010430813, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: -0.000016255173}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children:
+  - {fileID: 1375712470}
+  m_Father: {fileID: 1419505643}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+  m_AnchorMin: {x: 0, y: 0}
+  m_AnchorMax: {x: 0, y: 0}
+  m_AnchoredPosition: {x: 0, y: 0}
+  m_SizeDelta: {x: 875, y: 430}
+  m_Pivot: {x: 0.5, y: 0.5}
+--- !u!114 &7475650
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 7475648}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 59f8146938fff824cb5fd77236b75775, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: UnityEngine.UI::UnityEngine.UI.VerticalLayoutGroup
+  m_Padding:
+    m_Left: 30
+    m_Right: 30
+    m_Top: 5
+    m_Bottom: 30
+  m_ChildAlignment: 4
+  m_Spacing: 15
+  m_ChildForceExpandWidth: 1
+  m_ChildForceExpandHeight: 1
+  m_ChildControlWidth: 0
+  m_ChildControlHeight: 0
+  m_ChildScaleWidth: 0
+  m_ChildScaleHeight: 0
+  m_ReverseArrangement: 0
+--- !u!114 &7475651
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 7475648}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: fe87c0e1cc204ed48ad3b37840f39efc, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: UnityEngine.UI::UnityEngine.UI.Image
+  m_Material: {fileID: 0}
+  m_Color: {r: 1, g: 1, b: 1, a: 0}
+  m_RaycastTarget: 1
+  m_RaycastPadding: {x: 0, y: 0, z: 0, w: 0}
+  m_Maskable: 1
+  m_OnCullStateChanged:
+    m_PersistentCalls:
+      m_Calls: []
+  m_Sprite: {fileID: 0}
+  m_Type: 1
+  m_PreserveAspect: 0
+  m_FillCenter: 1
+  m_FillMethod: 4
+  m_FillAmount: 1
+  m_FillClockwise: 1
+  m_FillOrigin: 0
+  m_UseSpriteMesh: 0
+  m_PixelsPerUnitMultiplier: 1
+--- !u!222 &7475652
+CanvasRenderer:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 7475648}
+  m_CullTransparentMesh: 1
 --- !u!1 &21097991
 GameObject:
   m_ObjectHideFlags: 0
@@ -187,7 +290,7 @@ RectTransform:
   m_AnchorMin: {x: 0, y: 0}
   m_AnchorMax: {x: 0, y: 0}
   m_AnchoredPosition: {x: 0, y: 0}
-  m_SizeDelta: {x: 600, y: 60}
+  m_SizeDelta: {x: 438, y: 198}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!114 &33056780
 MonoBehaviour:
@@ -253,7 +356,7 @@ MonoBehaviour:
   m_OnCullStateChanged:
     m_PersistentCalls:
       m_Calls: []
-  m_Sprite: {fileID: 10905, guid: 0000000000000000f000000000000000, type: 0}
+  m_Sprite: {fileID: 21300014, guid: 56d84991286850f428b4e7df0cca7380, type: 3}
   m_Type: 1
   m_PreserveAspect: 0
   m_FillCenter: 1
@@ -331,8 +434,8 @@ MonoBehaviour:
       m_Calls: []
   m_text: MANUAL LIGHTS CONTROL
   m_isRightToLeft: 0
-  m_fontAsset: {fileID: 11400000, guid: 8f586378b4e144a9851e7b34d9b748ee, type: 2}
-  m_sharedMaterial: {fileID: 2180264, guid: 8f586378b4e144a9851e7b34d9b748ee, type: 2}
+  m_fontAsset: {fileID: 11400000, guid: a1ecca717a54bdc4181f39c3345bfe37, type: 2}
+  m_sharedMaterial: {fileID: 5595164888071055425, guid: a1ecca717a54bdc4181f39c3345bfe37, type: 2}
   m_fontSharedMaterials: []
   m_fontMaterial: {fileID: 0}
   m_fontMaterials: []
@@ -362,7 +465,7 @@ MonoBehaviour:
   m_enableAutoSizing: 0
   m_fontSizeMin: 18
   m_fontSizeMax: 72
-  m_fontStyle: 0
+  m_fontStyle: 1
   m_HorizontalAlignment: 1
   m_VerticalAlignment: 256
   m_textAlignment: 65535
@@ -783,8 +886,8 @@ MonoBehaviour:
       m_Calls: []
   m_text: 'Generating:'
   m_isRightToLeft: 0
-  m_fontAsset: {fileID: 11400000, guid: 8f586378b4e144a9851e7b34d9b748ee, type: 2}
-  m_sharedMaterial: {fileID: 2180264, guid: 8f586378b4e144a9851e7b34d9b748ee, type: 2}
+  m_fontAsset: {fileID: 11400000, guid: a1ecca717a54bdc4181f39c3345bfe37, type: 2}
+  m_sharedMaterial: {fileID: 5595164888071055425, guid: a1ecca717a54bdc4181f39c3345bfe37, type: 2}
   m_fontSharedMaterials: []
   m_fontMaterial: {fileID: 0}
   m_fontMaterials: []
@@ -1046,8 +1149,8 @@ MonoBehaviour:
       m_Calls: []
   m_text: POWER STATUS
   m_isRightToLeft: 0
-  m_fontAsset: {fileID: 11400000, guid: 8f586378b4e144a9851e7b34d9b748ee, type: 2}
-  m_sharedMaterial: {fileID: 2180264, guid: 8f586378b4e144a9851e7b34d9b748ee, type: 2}
+  m_fontAsset: {fileID: 11400000, guid: a1ecca717a54bdc4181f39c3345bfe37, type: 2}
+  m_sharedMaterial: {fileID: 5595164888071055425, guid: a1ecca717a54bdc4181f39c3345bfe37, type: 2}
   m_fontSharedMaterials: []
   m_fontMaterial: {fileID: 0}
   m_fontMaterials: []
@@ -1783,7 +1886,7 @@ MonoBehaviour:
     m_Top: 30
     m_Bottom: 30
   m_ChildAlignment: 1
-  m_Spacing: 5
+  m_Spacing: 35
   m_ChildForceExpandWidth: 1
   m_ChildForceExpandHeight: 0
   m_ChildControlWidth: 1
@@ -1921,8 +2024,8 @@ MonoBehaviour:
       m_Calls: []
   m_text: RESTORE POWER
   m_isRightToLeft: 0
-  m_fontAsset: {fileID: 11400000, guid: 8f586378b4e144a9851e7b34d9b748ee, type: 2}
-  m_sharedMaterial: {fileID: 2180264, guid: 8f586378b4e144a9851e7b34d9b748ee, type: 2}
+  m_fontAsset: {fileID: 11400000, guid: a1ecca717a54bdc4181f39c3345bfe37, type: 2}
+  m_sharedMaterial: {fileID: 5595164888071055425, guid: a1ecca717a54bdc4181f39c3345bfe37, type: 2}
   m_fontSharedMaterials: []
   m_fontMaterial: {fileID: 0}
   m_fontMaterials: []
@@ -2112,8 +2215,8 @@ MonoBehaviour:
       m_Calls: []
   m_text: 'Consumption:'
   m_isRightToLeft: 0
-  m_fontAsset: {fileID: 11400000, guid: 8f586378b4e144a9851e7b34d9b748ee, type: 2}
-  m_sharedMaterial: {fileID: 2180264, guid: 8f586378b4e144a9851e7b34d9b748ee, type: 2}
+  m_fontAsset: {fileID: 11400000, guid: a1ecca717a54bdc4181f39c3345bfe37, type: 2}
+  m_sharedMaterial: {fileID: 5595164888071055425, guid: a1ecca717a54bdc4181f39c3345bfe37, type: 2}
   m_fontSharedMaterials: []
   m_fontMaterial: {fileID: 0}
   m_fontMaterials: []
@@ -2340,8 +2443,8 @@ MonoBehaviour:
       m_Calls: []
   m_text: 1000W / 1000W
   m_isRightToLeft: 0
-  m_fontAsset: {fileID: 11400000, guid: 8f586378b4e144a9851e7b34d9b748ee, type: 2}
-  m_sharedMaterial: {fileID: 2180264, guid: 8f586378b4e144a9851e7b34d9b748ee, type: 2}
+  m_fontAsset: {fileID: 11400000, guid: a1ecca717a54bdc4181f39c3345bfe37, type: 2}
+  m_sharedMaterial: {fileID: 5595164888071055425, guid: a1ecca717a54bdc4181f39c3345bfe37, type: 2}
   m_fontSharedMaterials: []
   m_fontMaterial: {fileID: 0}
   m_fontMaterials: []
@@ -2537,7 +2640,7 @@ RectTransform:
   m_AnchorMin: {x: 0, y: 0}
   m_AnchorMax: {x: 0, y: 0}
   m_AnchoredPosition: {x: 0, y: 0}
-  m_SizeDelta: {x: 0, y: 280}
+  m_SizeDelta: {x: 0, y: 323.4}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!114 &746955437
 MonoBehaviour:
@@ -2556,9 +2659,9 @@ MonoBehaviour:
   m_Vertical: 1
   m_MovementType: 1
   m_Elasticity: 0.1
-  m_Inertia: 1
-  m_DecelerationRate: 0.135
-  m_ScrollSensitivity: 1
+  m_Inertia: 0
+  m_DecelerationRate: 1
+  m_ScrollSensitivity: 4
   m_Viewport: {fileID: 319644820}
   m_HorizontalScrollbar: {fileID: 1324728025}
   m_VerticalScrollbar: {fileID: 118150652}
@@ -2952,8 +3055,8 @@ MonoBehaviour:
       m_Calls: []
   m_text: 750W (75%)
   m_isRightToLeft: 0
-  m_fontAsset: {fileID: 11400000, guid: 8f586378b4e144a9851e7b34d9b748ee, type: 2}
-  m_sharedMaterial: {fileID: 2180264, guid: 8f586378b4e144a9851e7b34d9b748ee, type: 2}
+  m_fontAsset: {fileID: 11400000, guid: a1ecca717a54bdc4181f39c3345bfe37, type: 2}
+  m_sharedMaterial: {fileID: 5595164888071055425, guid: a1ecca717a54bdc4181f39c3345bfe37, type: 2}
   m_fontSharedMaterials: []
   m_fontMaterial: {fileID: 0}
   m_fontMaterials: []
@@ -3299,8 +3402,8 @@ MonoBehaviour:
       m_Calls: []
   m_text: ENGINEERING STATION - POWER MANAGEMENT
   m_isRightToLeft: 0
-  m_fontAsset: {fileID: 11400000, guid: 8f586378b4e144a9851e7b34d9b748ee, type: 2}
-  m_sharedMaterial: {fileID: 2180264, guid: 8f586378b4e144a9851e7b34d9b748ee, type: 2}
+  m_fontAsset: {fileID: 11400000, guid: a1ecca717a54bdc4181f39c3345bfe37, type: 2}
+  m_sharedMaterial: {fileID: 5595164888071055425, guid: a1ecca717a54bdc4181f39c3345bfe37, type: 2}
   m_fontSharedMaterials: []
   m_fontMaterial: {fileID: 0}
   m_fontMaterials: []
@@ -3513,8 +3616,8 @@ MonoBehaviour:
       m_Calls: []
   m_text: 'Reserve:'
   m_isRightToLeft: 0
-  m_fontAsset: {fileID: 11400000, guid: 8f586378b4e144a9851e7b34d9b748ee, type: 2}
-  m_sharedMaterial: {fileID: 2180264, guid: 8f586378b4e144a9851e7b34d9b748ee, type: 2}
+  m_fontAsset: {fileID: 11400000, guid: a1ecca717a54bdc4181f39c3345bfe37, type: 2}
+  m_sharedMaterial: {fileID: 5595164888071055425, guid: a1ecca717a54bdc4181f39c3345bfe37, type: 2}
   m_fontSharedMaterials: []
   m_fontMaterial: {fileID: 0}
   m_fontMaterials: []
@@ -3799,8 +3902,8 @@ MonoBehaviour:
       m_Calls: []
   m_text: SYSTEM BLACKOUT
   m_isRightToLeft: 0
-  m_fontAsset: {fileID: 11400000, guid: 8f586378b4e144a9851e7b34d9b748ee, type: 2}
-  m_sharedMaterial: {fileID: 2180264, guid: 8f586378b4e144a9851e7b34d9b748ee, type: 2}
+  m_fontAsset: {fileID: 11400000, guid: a1ecca717a54bdc4181f39c3345bfe37, type: 2}
+  m_sharedMaterial: {fileID: 5595164888071055425, guid: a1ecca717a54bdc4181f39c3345bfe37, type: 2}
   m_fontSharedMaterials: []
   m_fontMaterial: {fileID: 0}
   m_fontMaterials: []
@@ -3996,7 +4099,7 @@ MonoBehaviour:
   m_HandleRect: {fileID: 843565302}
   m_Direction: 0
   m_Value: 1
-  m_Size: 0.99999964
+  m_Size: 0.9999999
   m_NumberOfSteps: 0
   m_OnValueChanged:
     m_PersistentCalls:
@@ -4065,15 +4168,15 @@ RectTransform:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1375712469}
-  m_LocalRotation: {x: -0.000000029802322, y: 0.000000029802322, z: 0.00000010430813, w: 1}
-  m_LocalPosition: {x: 0, y: 0, z: -0.000016255173}
-  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_LocalRotation: {x: -0.00000008940697, y: -0.000000029802315, z: 0.000000074505806, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0.00005268263}
+  m_LocalScale: {x: 1, y: 1.0000299, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children:
   - {fileID: 1270746455}
   - {fileID: 1888945871}
   - {fileID: 33056779}
-  m_Father: {fileID: 1419505643}
+  m_Father: {fileID: 7475649}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0, y: 0}
   m_AnchorMax: {x: 0, y: 0}
@@ -4283,7 +4386,7 @@ RectTransform:
   m_ConstrainProportionsScale: 0
   m_Children:
   - {fileID: 1378484302}
-  - {fileID: 1375712470}
+  - {fileID: 7475649}
   m_Father: {fileID: 1252118757}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0, y: 0}
@@ -4409,8 +4512,8 @@ MonoBehaviour:
       m_Calls: []
   m_text: 60%
   m_isRightToLeft: 0
-  m_fontAsset: {fileID: 11400000, guid: 8f586378b4e144a9851e7b34d9b748ee, type: 2}
-  m_sharedMaterial: {fileID: 2180264, guid: 8f586378b4e144a9851e7b34d9b748ee, type: 2}
+  m_fontAsset: {fileID: 11400000, guid: a1ecca717a54bdc4181f39c3345bfe37, type: 2}
+  m_sharedMaterial: {fileID: 5595164888071055425, guid: a1ecca717a54bdc4181f39c3345bfe37, type: 2}
   m_fontSharedMaterials: []
   m_fontMaterial: {fileID: 0}
   m_fontMaterials: []
@@ -4621,8 +4724,8 @@ MonoBehaviour:
       m_Calls: []
   m_text: POWER STATUS
   m_isRightToLeft: 0
-  m_fontAsset: {fileID: 11400000, guid: 8f586378b4e144a9851e7b34d9b748ee, type: 2}
-  m_sharedMaterial: {fileID: 2180264, guid: 8f586378b4e144a9851e7b34d9b748ee, type: 2}
+  m_fontAsset: {fileID: 11400000, guid: a1ecca717a54bdc4181f39c3345bfe37, type: 2}
+  m_sharedMaterial: {fileID: 5595164888071055425, guid: a1ecca717a54bdc4181f39c3345bfe37, type: 2}
   m_fontSharedMaterials: []
   m_fontMaterial: {fileID: 0}
   m_fontMaterials: []
@@ -4652,7 +4755,7 @@ MonoBehaviour:
   m_enableAutoSizing: 0
   m_fontSizeMin: 18
   m_fontSizeMax: 72
-  m_fontStyle: 0
+  m_fontStyle: 1
   m_HorizontalAlignment: 1
   m_VerticalAlignment: 256
   m_textAlignment: 65535
@@ -5067,7 +5170,7 @@ RectTransform:
   m_AnchorMin: {x: 0, y: 0}
   m_AnchorMax: {x: 0, y: 0}
   m_AnchoredPosition: {x: 0, y: 0}
-  m_SizeDelta: {x: 1900, y: 435}
+  m_SizeDelta: {x: 1150, y: 443.73}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!114 &1827335951
 MonoBehaviour:
@@ -5451,8 +5554,8 @@ MonoBehaviour:
       m_Calls: []
   m_text: Reserve too low... / Ready to restore
   m_isRightToLeft: 0
-  m_fontAsset: {fileID: 11400000, guid: 8f586378b4e144a9851e7b34d9b748ee, type: 2}
-  m_sharedMaterial: {fileID: 2180264, guid: 8f586378b4e144a9851e7b34d9b748ee, type: 2}
+  m_fontAsset: {fileID: 11400000, guid: a1ecca717a54bdc4181f39c3345bfe37, type: 2}
+  m_sharedMaterial: {fileID: 5595164888071055425, guid: a1ecca717a54bdc4181f39c3345bfe37, type: 2}
   m_fontSharedMaterials: []
   m_fontMaterial: {fileID: 0}
   m_fontMaterials: []
@@ -205928,7 +206031,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::ShipLight
   lightMode: 1
-  powerConsumption: 10
+  powerConsumption: 50
   priority: 3
   normalColor: {r: 1, g: 0.95, b: 0.9, a: 1}
   normalIntensity: 30
@@ -266067,7 +266170,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::ShipLight
   lightMode: 1
-  powerConsumption: 5
+  powerConsumption: 50
   priority: 3
   normalColor: {r: 1, g: 0.95, b: 0.9, a: 1}
   normalIntensity: 1.5
@@ -345594,7 +345697,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::ShipLight
   lightMode: 1
-  powerConsumption: 10
+  powerConsumption: 50
   priority: 3
   normalColor: {r: 1, g: 0.95, b: 0.9, a: 1}
   normalIntensity: 30
@@ -384638,7 +384741,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::ShipLight
   lightMode: 1
-  powerConsumption: 10
+  powerConsumption: 50
   priority: 3
   normalColor: {r: 1, g: 0.95, b: 0.9, a: 1}
   normalIntensity: 30
@@ -399056,7 +399159,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::ShipLight
   lightMode: 1
-  powerConsumption: 10
+  powerConsumption: 50
   priority: 3
   normalColor: {r: 1, g: 0.95, b: 0.9, a: 1}
   normalIntensity: 30
@@ -413860,7 +413963,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::ShipLight
   lightMode: 1
-  powerConsumption: 10
+  powerConsumption: 50
   priority: 3
   normalColor: {r: 1, g: 0.95, b: 0.9, a: 1}
   normalIntensity: 30
@@ -420656,7 +420759,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::ShipLight
   lightMode: 1
-  powerConsumption: 5
+  powerConsumption: 50
   priority: 3
   normalColor: {r: 1, g: 0.95, b: 0.9, a: 1}
   normalIntensity: 1.5
@@ -504405,7 +504508,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::ShipLight
   lightMode: 1
-  powerConsumption: 950
+  powerConsumption: 50
   priority: 3
   normalColor: {r: 1, g: 0.95, b: 0.9, a: 1}
   normalIntensity: 30
@@ -508343,7 +508446,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::ShipLight
   lightMode: 1
-  powerConsumption: 10
+  powerConsumption: 50
   priority: 3
   normalColor: {r: 1, g: 0.95, b: 0.9, a: 1}
   normalIntensity: 30
@@ -513403,7 +513506,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::ShipLight
   lightMode: 1
-  powerConsumption: 10
+  powerConsumption: 50
   priority: 3
   normalColor: {r: 1, g: 0.95, b: 0.9, a: 1}
   normalIntensity: 30
@@ -569679,7 +569782,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::ShipLight
   lightMode: 1
-  powerConsumption: 10
+  powerConsumption: 600
   priority: 3
   normalColor: {r: 1, g: 0.95, b: 0.9, a: 1}
   normalIntensity: 30
@@ -569943,7 +570046,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::ShipLight
   lightMode: 1
-  powerConsumption: 5
+  powerConsumption: 50
   priority: 3
   normalColor: {r: 1, g: 0.95, b: 0.9, a: 1}
   normalIntensity: 1.5
@@ -575023,7 +575126,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::ShipLight
   lightMode: 1
-  powerConsumption: 5
+  powerConsumption: 50
   priority: 3
   normalColor: {r: 1, g: 0.95, b: 0.9, a: 1}
   normalIntensity: 1.5
