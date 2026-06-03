@@ -1,0 +1,131 @@
+using UnityEngine;
+using UnityEngine.InputSystem;
+
+/// <summary>
+/// Monitor switcher for the Engineering Station (Milestone 1B).
+/// Cycles between dashboard pages (Monitor 1/2/3) with the Player map's
+/// Previous/Next actions (← → keyboard, L/R gamepad) while the dashboard is open.
+///
+/// Self-contained: gates navigation on VirtualCursor.Instance.IsActive and reads
+/// input from a PlayerInput reference — it does NOT modify EngineeringStation, so
+/// the existing enter/exit/camera transition is untouched.
+///
+/// Pages are shown/hidden via CanvasGroup (not SetActive) so Monitor 1's live
+/// EngineeringDashboardUI keeps updating in the background.
+/// </summary>
+public class MonitorSwitcher : MonoBehaviour
+{
+    [Header("Input")]
+    [Tooltip("PlayerInput del player (stessa reference usata dagli altri sistemi).")]
+    [SerializeField] private PlayerInput playerInput;
+    [SerializeField] private string previousActionName = "Previous";
+    [SerializeField] private string nextActionName = "Next";
+
+    [Header("Monitors (in order: 1, 2, 3...)")]
+    [Tooltip("Un CanvasGroup per pagina-monitor, nell'ordine di navigazione.")]
+    [SerializeField] private CanvasGroup[] monitors;
+
+    [Tooltip("Monitor mostrato all'apertura della dashboard (0 = Monitor 1).")]
+    [SerializeField] private int defaultMonitorIndex = 0;
+
+    [Tooltip("Se true, dopo l'ultimo monitor si torna al primo (e viceversa).")]
+    [SerializeField] private bool wrapAround = false;
+
+    [Header("Camera")]
+    [Tooltip("Riferimento opzionale per animare la camera verso il monitor attivo.")]
+    [SerializeField] private EngineeringStation engineeringStation;
+
+    private InputAction previousAction;
+    private InputAction nextAction;
+
+    private int currentIndex = 0;
+    private bool dashboardWasActive = false;
+
+    public int CurrentIndex => currentIndex;
+
+    private void Start()
+    {
+        if (playerInput != null)
+        {
+            previousAction = playerInput.actions.FindAction(previousActionName, throwIfNotFound: false);
+            nextAction = playerInput.actions.FindAction(nextActionName, throwIfNotFound: false);
+
+            if (previousAction == null || nextAction == null)
+            {
+                Debug.LogWarning("[MonitorSwitcher] Action Previous/Next non trovate nel PlayerInput (map Player).");
+            }
+        }
+        else
+        {
+            Debug.LogWarning("[MonitorSwitcher] PlayerInput reference non assegnato.");
+        }
+
+        ShowMonitor(defaultMonitorIndex, instant: true);
+    }
+
+    private void Update()
+    {
+        bool dashboardActive = VirtualCursor.Instance != null && VirtualCursor.Instance.IsActive;
+
+        // On open: reset to the default monitor so reopening always starts on Monitor 1.
+        if (dashboardActive && !dashboardWasActive)
+        {
+            ShowMonitor(defaultMonitorIndex, instant: true);
+        }
+        dashboardWasActive = dashboardActive;
+
+        if (!dashboardActive) return;
+
+        if (nextAction != null && nextAction.WasPressedThisFrame())
+        {
+            Next();
+        }
+        else if (previousAction != null && previousAction.WasPressedThisFrame())
+        {
+            Previous();
+        }
+    }
+
+    public void Next() => Navigate(+1);
+    public void Previous() => Navigate(-1);
+
+    private void Navigate(int direction)
+    {
+        if (monitors == null || monitors.Length == 0) return;
+
+        int target = currentIndex + direction;
+
+        if (wrapAround)
+        {
+            target = (target + monitors.Length) % monitors.Length;
+        }
+        else
+        {
+            target = Mathf.Clamp(target, 0, monitors.Length - 1);
+        }
+
+        ShowMonitor(target);
+    }
+
+    public void ShowMonitor(int index, bool instant = false)
+    {
+        if (monitors == null || monitors.Length == 0) return;
+
+        currentIndex = Mathf.Clamp(index, 0, monitors.Length - 1);
+
+        for (int i = 0; i < monitors.Length; i++)
+        {
+            CanvasGroup cg = monitors[i];
+            if (cg == null) continue;
+
+            bool show = (i == currentIndex);
+            cg.alpha = show ? 1f : 0f;
+            cg.interactable = show;
+            cg.blocksRaycasts = show;
+        }
+
+        // Anima la camera verso il monitor attivo
+        if (engineeringStation != null)
+            engineeringStation.LookAtMonitor(currentIndex);
+    }
+}

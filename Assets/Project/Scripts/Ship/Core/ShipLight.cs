@@ -305,7 +305,13 @@ public class ShipLight : MonoBehaviour, IPowerConsumer
 
     public float GetPowerDemand()
     {
-        return (currentState != LightState.Off) ? powerConsumption : 0f;
+        if (currentState == LightState.Off) return 0f;
+
+        float multiplier = ElectricalDegradationManager.Instance != null
+            ? ElectricalDegradationManager.Instance.GetTotalMultiplier()
+            : 1.0f;
+
+        return powerConsumption * multiplier;
     }
 
     public int GetPriority()

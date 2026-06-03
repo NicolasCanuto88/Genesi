@@ -1,6 +1,7 @@
 using UnityEngine;
 using UnityEngine.InputSystem;
 using UnityEngine.EventSystems;
+using System.Collections;
 
 /// <summary>
 /// Engineering Station - Physical workstation with player snap positioning
@@ -15,8 +16,9 @@ public class EngineeringStation : MonoBehaviour, IInteractable
     [SerializeField] private UnityEngine.UI.Selectable firstSelectedElement;
 
     [Header("Player Positioning")]
-    [SerializeField] private Transform playerSnapPoint; // Where player stands
-    [SerializeField] private Transform cameraLookAtPoint; // Where camera looks (monitor center)
+    [SerializeField] private Transform playerSnapPoint;
+    [Tooltip("Un LookAt point per monitor, nell'ordine Monitor 1/2/3.")]
+    [SerializeField] private Transform[] cameraLookAtPoints;
     [SerializeField] private float snapTransitionSpeed = 5f;
     [SerializeField] private float cameraTransitionSpeed = 8f;
 
@@ -124,7 +126,7 @@ public class EngineeringStation : MonoBehaviour, IInteractable
 
     private void EnterStation(GameObject player)
     {
-        if (playerSnapPoint == null || cameraLookAtPoint == null)
+        if (playerSnapPoint == null || cameraLookAtPoints[0] == null)
         {
             Debug.LogError("[EngineeringStation] Missing snap points!");
             return;
@@ -224,6 +226,40 @@ public class EngineeringStation : MonoBehaviour, IInteractable
 
         Debug.Log("[EngineeringStation] Exiting station - Returning to normal movement");
     }
+    public void LookAtMonitor(int index)
+    {
+        if (cameraLookAtPoints == null || cameraLookAtPoints.Length == 0) return;
+        if (!isUsingStation || isTransitioning) return;
+
+        index = Mathf.Clamp(index, 0, cameraLookAtPoints.Length - 1);
+        Transform target = cameraLookAtPoints[index];
+        if (target == null) return;
+
+        if (monitorLookCoroutine != null) StopCoroutine(monitorLookCoroutine);
+        monitorLookCoroutine = StartCoroutine(LookAtMonitorRoutine(target));
+    }
+
+    private Coroutine monitorLookCoroutine;
+
+    private IEnumerator LookAtMonitorRoutine(Transform target)
+    {
+        Quaternion startRot = playerCamera.transform.localRotation;
+
+        float t = 0f;
+        while (t < 1f)
+        {
+            t += Time.deltaTime * cameraTransitionSpeed;
+
+            Vector3 dir = (target.position - playerCamera.transform.position).normalized;
+            Quaternion worldRot = Quaternion.LookRotation(dir);
+            Quaternion localRot = Quaternion.Inverse(playerController.transform.rotation) * worldRot;
+
+            playerCamera.transform.localRotation = Quaternion.Slerp(startRot, localRot, Mathf.Clamp01(t));
+            yield return null;
+        }
+
+        monitorLookCoroutine = null;
+    }
 
     private void Update()
     {
@@ -275,10 +311,10 @@ public class EngineeringStation : MonoBehaviour, IInteractable
             // Interpolate camera rotation
             Quaternion targetCameraLocalRotation;
 
-            if (useLookAtPoint && cameraLookAtPoint != null)
+            if (useLookAtPoint && cameraLookAtPoints[0] != null)
             {
                 Vector3 cameraPosition = playerCamera.transform.position;
-                Vector3 directionToMonitor = (cameraLookAtPoint.position - cameraPosition).normalized;
+                Vector3 directionToMonitor = (cameraLookAtPoints[0].position - cameraPosition).normalized;
                 Quaternion targetCameraWorldRotation = Quaternion.LookRotation(directionToMonitor);
 
                 Quaternion worldToLocal = Quaternion.Inverse(playerController.transform.rotation);
@@ -322,9 +358,9 @@ public class EngineeringStation : MonoBehaviour, IInteractable
 
             // Camera: lerp from station look direction back to original
             Quaternion stationCameraLocalRot;
-            if (useLookAtPoint && cameraLookAtPoint != null)
+            if (useLookAtPoint && cameraLookAtPoints[0] != null)
             {
-                Vector3 dirToMonitor = (cameraLookAtPoint.position - playerCamera.transform.position).normalized;
+                Vector3 dirToMonitor = (cameraLookAtPoints[0].position - playerCamera.transform.position).normalized;
                 Quaternion stationCameraWorldRot = Quaternion.LookRotation(dirToMonitor);
                 stationCameraLocalRot = Quaternion.Inverse(playerController.transform.rotation) * stationCameraWorldRot;
             }
@@ -381,13 +417,13 @@ public class EngineeringStation : MonoBehaviour, IInteractable
             Gizmos.DrawWireSphere(eyesPosition, 0.1f);
 
             // Draw camera direction preview
-            if (useLookAtPoint && cameraLookAtPoint != null)
+            if (useLookAtPoint && cameraLookAtPoints[0] != null)
             {
                 // LookAt mode - draw line to target
                 Gizmos.color = Color.yellow;
-                Gizmos.DrawLine(eyesPosition, cameraLookAtPoint.position);
+                Gizmos.DrawLine(eyesPosition, cameraLookAtPoints[0].position);
 
-                Vector3 direction = (cameraLookAtPoint.position - eyesPosition).normalized;
+                Vector3 direction = (cameraLookAtPoints[0].position - eyesPosition).normalized;
                 Gizmos.color = Color.red;
                 Gizmos.DrawRay(eyesPosition, direction * 1.5f);
             }
@@ -408,9 +444,9 @@ public class EngineeringStation : MonoBehaviour, IInteractable
             // Label with current mode and values
             string modeText = useLookAtPoint ? "MODE: LookAt Point" : $"MODE: Manual (Pitch: {cameraPitchOffset:F1}°, Yaw: {cameraYawOffset:F1}°)";
             
-            if (useLookAtPoint && cameraLookAtPoint != null)
+            if (useLookAtPoint && cameraLookAtPoints[0] != null)
             {
-                Vector3 direction = (cameraLookAtPoint.position - eyesPosition).normalized;
+                Vector3 direction = (cameraLookAtPoints[0].position - eyesPosition).normalized;
                 float verticalAngle = Mathf.Atan2(direction.y, new Vector2(direction.x, direction.z).magnitude) * Mathf.Rad2Deg;
                 modeText += $"\nAngle: {verticalAngle:F1}° (+ = UP)";
             }
@@ -420,10 +456,10 @@ public class EngineeringStation : MonoBehaviour, IInteractable
         }
 
         // Draw look at point (only in LookAt mode)
-        if (useLookAtPoint && cameraLookAtPoint != null)
+        if (useLookAtPoint && cameraLookAtPoints[0] != null)
         {
             Gizmos.color = Color.cyan;
-            Gizmos.DrawWireSphere(cameraLookAtPoint.position, 0.2f);
+            Gizmos.DrawWireSphere(cameraLookAtPoints[0].position, 0.2f);
         }
     }
 }
