@@ -1,64 +1,77 @@
 ﻿using UnityEngine;
+using Unity.Netcode;
 using System.Collections.Generic;
 using System;
 
 /// <summary>
-/// Central power management system for the ship
-/// Manages power generation, distribution, and consumption
+/// Central power management system for the ship (NGO v2 — NetworkBehaviour).
+/// Authority: Server only. Clients ricevono lo stato via NetworkVariable e vengono
+/// notificati degli eventi via ClientRpc.
+///
+/// Il Singleton è assegnato in OnNetworkSpawn() — prima dello spawn NGO non garantisce
+/// che l'oggetto sia pronto in rete.
+///
+/// Compatibile con tutto il codice esistente che usa PowerManager.Instance.
 /// </summary>
-public class PowerManager : MonoBehaviour
+public class PowerManager : NetworkBehaviour
 {
     [Header("Power Generation")]
-    [SerializeField] private float maxPowerOutput = 1000f; // Total power available
-    [SerializeField] private float currentReactorEfficiency = 1.0f; // 0-1, can be damaged
-    [SerializeField] private float reactorDegradationRate = 0.01f; // Per hour of operation
-
-    [Header("Power Status")]
-    [SerializeField] private float currentPowerGeneration;
-    [SerializeField] private float currentPowerConsumption;
-    [SerializeField] private float powerReserve; // Battery backup
-    [SerializeField] private float maxPowerReserve = 500f;
+    [SerializeField] private float maxPowerOutput = 1000f;
+    [SerializeField] private float currentReactorEfficiency = 1.0f;
+    [SerializeField] private float reactorDegradationRate = 0.01f;
 
     [Header("Critical Settings")]
-    [SerializeField] private float criticalPowerThreshold = 0.2f; // 20% - trigger warnings
-    [SerializeField] private float blackoutThreshold = 0.05f; // 5% - start shutting down systems
+    [SerializeField] private float criticalPowerThreshold = 0.2f; // 20%
+    [SerializeField] private float blackoutThreshold = 0.05f;     // 5%
 
     [Header("Blackout Settings")]
-    [SerializeField] private bool requireManualRecovery = true; // Blackout needs manual restart
-    private bool blackoutManualResetNeeded = false; // Set during blackout if manual recovery required
+    [SerializeField] private bool requireManualRecovery = true;
 
-    // Power consumers (all systems that need power)
+    // ===== NetworkVariables (server scrive, tutti leggono) =====
+    private NetworkVariable<float> netPowerGeneration = new NetworkVariable<float>(0f, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Server);
+    private NetworkVariable<float> netPowerConsumption = new NetworkVariable<float>(0f, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Server);
+    private NetworkVariable<float> netPowerReserve = new NetworkVariable<float>(500f, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Server);
+    private NetworkVariable<float> netReactorEfficiency = new NetworkVariable<float>(1f, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Server);
+    private NetworkVariable<bool> netIsInBlackout = new NetworkVariable<bool>(false, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Server);
+    private NetworkVariable<bool> netIsInCriticalState = new NetworkVariable<bool>(false, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Server);
+
+    // ===== Stato server-only (non sincronizzato — calcolato ogni frame) =====
+    private float maxPowerReserve = 500f;
+    private bool blackoutManualResetNeeded = false;
     private List<IPowerConsumer> powerConsumers = new List<IPowerConsumer>();
 
-    // Events
-    public event Action<float> OnPowerLevelChanged; // Current percentage
+    // ===== Singleton =====
+    public static PowerManager Instance { get; private set; }
+    /// <summary>
+    /// Fired quando PowerManager è pronto (dopo OnNetworkSpawn).
+    /// I sistemi dipendenti si sottoscrivono se Instance è null al loro Start().
+    /// </summary>
+    public static event Action OnInstanceReady;
+
+    // ===== Events (fired localmente su tutti i client via Rpc) =====
+    public event Action<float> OnPowerLevelChanged;
     public event Action OnCriticalPower;
     public event Action OnBlackout;
     public event Action OnPowerRestored;
 
-    // State
-    private bool isInCriticalState;
-    private bool isInBlackout;
-
-    // Singleton (for easy access)
-    public static PowerManager Instance { get; private set; }
-
-    // Properties
-    public float MaxPowerOutput => maxPowerOutput * currentReactorEfficiency;
-    public float CurrentPowerGeneration => currentPowerGeneration;
-    public float CurrentPowerConsumption => currentPowerConsumption;
-    public float PowerPercentage => (currentPowerGeneration > 0) ? (currentPowerConsumption / currentPowerGeneration) : 0;
-    public float PowerReservePercentage => powerReserve / maxPowerReserve;
-    public bool IsInCriticalState => isInCriticalState;
-    public bool IsInBlackout => isInBlackout;
+    // ===== Properties pubbliche (leggono NetworkVariable — safe da tutti i client) =====
+    public float MaxPowerOutput => maxPowerOutput * netReactorEfficiency.Value;
+    public float CurrentPowerGeneration => netPowerGeneration.Value;
+    public float CurrentPowerConsumption => netPowerConsumption.Value;
+    public float PowerPercentage => (netPowerGeneration.Value > 0) ? (netPowerConsumption.Value / netPowerGeneration.Value) : 0f;
+    public float PowerReservePercentage => netPowerReserve.Value / maxPowerReserve;
+    public bool IsInCriticalState => netIsInCriticalState.Value;
+    public bool IsInBlackout => netIsInBlackout.Value;
     public bool IsBlackoutManualResetNeeded => blackoutManualResetNeeded;
 
-    private void Awake()
+    // ===== NGO Lifecycle =====
+
+    public override void OnNetworkSpawn()
     {
-        // Singleton setup
         if (Instance == null)
         {
             Instance = this;
+            OnInstanceReady?.Invoke();
         }
         else
         {
@@ -66,94 +79,147 @@ public class PowerManager : MonoBehaviour
             return;
         }
 
-        // Initialize
-        currentPowerGeneration = MaxPowerOutput;
-        powerReserve = maxPowerReserve;
+        if (IsServer)
+        {
+            // Inizializzazione server
+            netPowerGeneration.Value = MaxPowerOutput;
+            netPowerReserve.Value = maxPowerReserve;
+            netReactorEfficiency.Value = currentReactorEfficiency;
+        }
+
+        // Tutti i client sottoscrivono i cambi di stato per aggiornare la UI locale
+        netIsInBlackout.OnValueChanged += OnBlackoutStateChanged;
+        netIsInCriticalState.OnValueChanged += OnCriticalStateChanged;
+        netPowerConsumption.OnValueChanged += (_, newVal) => OnPowerLevelChanged?.Invoke(PowerPercentage);
     }
+
+    public override void OnNetworkDespawn()
+    {
+        netIsInBlackout.OnValueChanged -= OnBlackoutStateChanged;
+        netIsInCriticalState.OnValueChanged -= OnCriticalStateChanged;
+
+        if (Instance == this) Instance = null;
+    }
+
+    // ===== Callbacks NetworkVariable =====
+
+    private void OnBlackoutStateChanged(bool previous, bool current)
+    {
+        if (current && !previous)
+        {
+            OnBlackout?.Invoke();
+        }
+        else if (!current && previous)
+        {
+            OnPowerRestored?.Invoke();
+        }
+    }
+
+    private void OnCriticalStateChanged(bool previous, bool current)
+    {
+        if (current && !previous)
+        {
+            OnCriticalPower?.Invoke();
+        }
+    }
+
+    // ===== Update (solo server) =====
 
     private void Update()
     {
+        if (!IsServer) return;
+
         UpdatePowerGeneration();
         CalculatePowerConsumption();
         HandlePowerDeficit();
         CheckCriticalStates();
-
-        // Reactor degradation over time (simulation)
         DegradeReactor();
     }
 
+    // ===== Logica server =====
+
     private void UpdatePowerGeneration()
     {
-        // Current generation based on reactor efficiency
-        currentPowerGeneration = MaxPowerOutput;
-
-        // In blackout, generation is severely limited
-        if (isInBlackout)
-        {
-            currentPowerGeneration *= 0.1f; // Only 10% during blackout (emergency power)
-        }
+        float gen = MaxPowerOutput;
+        if (netIsInBlackout.Value) gen *= 0.1f;
+        netPowerGeneration.Value = gen;
     }
 
     private void CalculatePowerConsumption()
     {
-        currentPowerConsumption = 0f;
-
+        float total = 0f;
         foreach (var consumer in powerConsumers)
         {
             if (consumer != null && consumer.IsActive())
-            {
-                currentPowerConsumption += consumer.GetPowerDemand();
-            }
+                total += consumer.GetPowerDemand();
         }
+        netPowerConsumption.Value = total;
     }
 
     private void HandlePowerDeficit()
     {
-        float powerDeficit = currentPowerConsumption - currentPowerGeneration;
+        float deficit = netPowerConsumption.Value - netPowerGeneration.Value;
 
-        if (powerDeficit > 0)
+        if (deficit > 0)
         {
-            // We're consuming more than we generate - drain reserves
-            powerReserve -= powerDeficit * Time.deltaTime;
-            powerReserve = Mathf.Max(0f, powerReserve);
+            float reserve = netPowerReserve.Value - deficit * Time.deltaTime;
+            netPowerReserve.Value = Mathf.Max(0f, reserve);
 
-            // If reserves depleted, we need to shed load
-            if (powerReserve <= 0)
-            {
-                ShedLoad(powerDeficit);
-            }
+            if (netPowerReserve.Value <= 0)
+                ShedLoad(deficit);
         }
         else
         {
-            // We're generating surplus - charge reserves
-            float surplus = Mathf.Abs(powerDeficit);
-            powerReserve += surplus * Time.deltaTime * 0.5f; // Charges slower than it drains
-            powerReserve = Mathf.Min(maxPowerReserve, powerReserve);
+            float surplus = Mathf.Abs(deficit);
+            netPowerReserve.Value = Mathf.Min(maxPowerReserve, netPowerReserve.Value + surplus * Time.deltaTime * 0.5f);
+
+            if (netPowerReserve.Value >= maxPowerReserve * 0.3f)
+                RestoreLoad();
         }
     }
 
     private void ShedLoad(float deficitAmount)
     {
-        // Automatic load shedding - turn off lowest priority systems
-        // Sort consumers by priority (lowest first)
         powerConsumers.Sort((a, b) => a.GetPriority().CompareTo(b.GetPriority()));
 
         float shedAmount = 0f;
-
         foreach (var consumer in powerConsumers)
         {
             if (consumer != null && consumer.IsActive() && consumer.CanBeDisabled())
             {
-                float consumerDemand = consumer.GetPowerDemand();
-                consumer.SetPowerState(false); // Turn off
-                shedAmount += consumerDemand;
+                float demand = consumer.GetPowerDemand();
+                consumer.SetPowerState(false);
+                shedAmount += demand;
 
-                Debug.LogWarning($"[PowerManager] Auto-disabled {consumer.GetSystemName()} (Priority {consumer.GetPriority()}) to save {consumerDemand}W");
+                Debug.LogWarning($"[PowerManager] Auto-disabled {consumer.GetSystemName()} (Priority {consumer.GetPriority()}) — {demand}W");
 
-                if (shedAmount >= deficitAmount)
-                {
-                    break; // We've shed enough load
-                }
+                if (shedAmount >= deficitAmount) break;
+            }
+        }
+    }
+
+    private void RestoreLoad()
+    {
+        if (netIsInBlackout.Value) return;
+
+        float available = netPowerGeneration.Value - netPowerConsumption.Value;
+        if (available <= 0f) return;
+
+        powerConsumers.Sort((a, b) => b.GetPriority().CompareTo(a.GetPriority()));
+
+        foreach (var consumer in powerConsumers)
+        {
+            if (consumer == null) continue;
+            if (consumer.IsActive()) continue;
+            if (!consumer.CanBeDisabled()) continue;
+
+            float demand = consumer.GetPowerDemand();
+            if (demand <= available)
+            {
+                consumer.SetPowerState(true);
+                available -= demand;
+                if (demand > 0)
+                    Debug.Log($"[PowerManager] Restored {consumer.GetSystemName()} ({demand}W) — surplus: {available:F0}W");
             }
         }
     }
@@ -162,187 +228,202 @@ public class PowerManager : MonoBehaviour
     {
         float powerPercent = PowerPercentage;
 
-        // Check for critical power
-        if (powerPercent >= criticalPowerThreshold && !isInCriticalState)
+        // Critical state
+        if (powerPercent >= criticalPowerThreshold && !netIsInCriticalState.Value)
         {
-            isInCriticalState = true;
-            OnCriticalPower?.Invoke();
-            Debug.LogWarning("[PowerManager] CRITICAL POWER - Load at " + (powerPercent * 100f).ToString("F1") + "%");
+            netIsInCriticalState.Value = true;
+            Debug.LogWarning("[PowerManager] CRITICAL POWER — " + (powerPercent * 100f).ToString("F1") + "%");
         }
-        else if (powerPercent < criticalPowerThreshold * 0.8f && isInCriticalState)
+        else if (powerPercent < criticalPowerThreshold * 0.8f && netIsInCriticalState.Value)
         {
-            isInCriticalState = false;
+            netIsInCriticalState.Value = false;
         }
 
-        // Check for blackout ENTRY
-        if (powerReserve <= 0 && powerPercent >= 1.0f && !isInBlackout)
+        // Blackout entry
+        if (netPowerReserve.Value <= 0 && powerPercent >= 1.0f && !netIsInBlackout.Value)
         {
             EnterBlackout();
         }
 
-        // Check for blackout EXIT
-        if (isInBlackout)
+        // Blackout exit
+        if (netIsInBlackout.Value)
         {
-            // If manual recovery required, prevent auto-exit
-            if (requireManualRecovery && blackoutManualResetNeeded)
+            if (!requireManualRecovery || !blackoutManualResetNeeded)
             {
-                // Reserve can recharge, but blackout persists until manual reset
-                // Player must use Engineering Dashboard to restore
-                // (do nothing - wait for TryManualPowerRestore() call)
-            }
-            else
-            {
-                // Auto-exit blackout (only if manual recovery disabled)
-                float fullGenerationPercent = currentPowerConsumption / MaxPowerOutput;
-
-                if (fullGenerationPercent < 0.5f && powerReserve > maxPowerReserve * 0.3f)
+                float fullGenPercent = netPowerConsumption.Value / MaxPowerOutput;
+                if (fullGenPercent < 0.5f && netPowerReserve.Value > maxPowerReserve * 0.3f)
                 {
                     ExitBlackout();
                 }
             }
         }
 
-        // Notify listeners of power level changes
-        OnPowerLevelChanged?.Invoke(powerPercent);
+        // Notify power level (ogni frame — il subscriber decide se aggiornare la UI)
+        if (IsSpawned)
+            NotifyPowerLevelRpc(powerPercent);
     }
 
     private void EnterBlackout()
     {
-        isInBlackout = true;
-        blackoutManualResetNeeded = requireManualRecovery; // Set flag for manual recovery
+        netIsInBlackout.Value = true;
+        blackoutManualResetNeeded = requireManualRecovery;
 
-        OnBlackout?.Invoke();
-        Debug.LogError("[PowerManager] BLACKOUT! Systems shutting down! Manual recovery required.");
+        Debug.LogError("[PowerManager] BLACKOUT! Manual recovery required.");
 
-        // Force disable all non-critical systems
         foreach (var consumer in powerConsumers)
         {
-            if (consumer != null && consumer.GetPriority() < 10) // Priority 10+ = critical
-            {
+            if (consumer != null && consumer.GetPriority() < 10)
                 consumer.SetPowerState(false);
-            }
         }
     }
 
     private void ExitBlackout()
     {
-        isInBlackout = false;
-        OnPowerRestored?.Invoke();
-        Debug.Log("[PowerManager] Power restored from blackout");
+        netIsInBlackout.Value = false;
+        blackoutManualResetNeeded = false;
+        Debug.Log("[PowerManager] Power restored.");
+    }
+
+    // ===== RPC =====
+
+    /// <summary>
+    /// Notifica tutti i client del livello di potenza corrente (fired dal server ogni frame).
+    /// </summary>
+    [Rpc(SendTo.ClientsAndHost)]
+    private void NotifyPowerLevelRpc(float percent)
+    {
+        OnPowerLevelChanged?.Invoke(percent);
     }
 
     /// <summary>
-    /// Manually restore power from blackout - called by Engineering Dashboard
+    /// Il giocatore chiede il restore manuale dalla Engineering Dashboard.
+    /// Può essere chiamato da qualsiasi client — l'esecuzione avviene solo sul server.
     /// </summary>
-    public bool TryManualPowerRestore()
+    [Rpc(SendTo.Server)]
+    public void TryManualPowerRestoreRpc()
     {
-        if (!isInBlackout)
+        if (!IsServer) return;
+
+        if (!netIsInBlackout.Value)
         {
-            Debug.LogWarning("[PowerManager] Not in blackout - cannot restore");
-            return false;
+            Debug.LogWarning("[PowerManager] Not in blackout.");
+            return;
         }
 
         if (!blackoutManualResetNeeded)
         {
-            Debug.LogWarning("[PowerManager] Blackout doesn't require manual reset");
-            return false;
+            Debug.LogWarning("[PowerManager] No manual reset needed.");
+            return;
         }
 
-        // Requirement 1: Reserve must have at least 30% charge
-        float reservePercent = powerReserve / maxPowerReserve;
+        float reservePercent = netPowerReserve.Value / maxPowerReserve;
         if (reservePercent < 0.3f)
         {
-            Debug.LogWarning($"[PowerManager] Insufficient reserve ({reservePercent * 100f:F0}%) - need 30% minimum");
-            return false;
+            Debug.LogWarning($"[PowerManager] Reserve too low ({reservePercent * 100f:F0}%) — need 30%");
+            RestoreFailedRpc("Riserva insufficiente — attendere ricarica");
+            return;
         }
 
-        // Requirement 2: Consumption must be under 70% of max
-        float consumptionPercent = currentPowerConsumption / MaxPowerOutput;
+        float consumptionPercent = netPowerConsumption.Value / MaxPowerOutput;
         if (consumptionPercent > 0.7f)
         {
-            Debug.LogWarning($"[PowerManager] Load too high ({consumptionPercent * 100f:F0}%) - reduce consumption first");
-            return false;
+            Debug.LogWarning($"[PowerManager] Load too high ({consumptionPercent * 100f:F0}%)");
+            RestoreFailedRpc("Carico troppo alto — spegnere sistemi non essenziali");
+            return;
         }
 
-        // All checks passed - restore power
         Debug.Log("[PowerManager] ✅ Manual power restore successful!");
+        blackoutManualResetNeeded = false;
+        ExitBlackout();
+    }
+
+    /// <summary>
+    /// Notifica il client chiamante che il restore è fallito (con motivazione).
+    /// </summary>
+    [Rpc(SendTo.ClientsAndHost)]
+    private void RestoreFailedRpc(string reason)
+    {
+        Debug.LogWarning($"[PowerManager] Restore fallito: {reason}");
+        // dipende da: EngineeringDashboardUI — aggiornare il pannello con il messaggio
+    }
+
+    // ===== API pubblica (compatibile con codice esistente) =====
+
+    /// <summary>
+    /// Versione locale di TryManualPowerRestore — chiama l'Rpc se in rete,
+    /// esegue direttamente se in single player (IsServer senza client).
+    /// Mantenuta per compatibilità con EngineeringDashboardUI esistente.
+    /// </summary>
+    public bool TryManualPowerRestore()
+    {
+        if (NetworkManager.Singleton != null && NetworkManager.Singleton.IsListening)
+        {
+            TryManualPowerRestoreRpc();
+            return true; // ottimistico — la UI si aggiorna via NetworkVariable
+        }
+
+        // Fallback single player (utile in editor senza host)
+        return TryManualPowerRestoreLocal();
+    }
+
+    private bool TryManualPowerRestoreLocal()
+    {
+        if (!netIsInBlackout.Value) return false;
+        if (!blackoutManualResetNeeded) return false;
+
+        float reservePercent = netPowerReserve.Value / maxPowerReserve;
+        if (reservePercent < 0.3f) return false;
+
+        float consumptionPercent = netPowerConsumption.Value / MaxPowerOutput;
+        if (consumptionPercent > 0.7f) return false;
+
         blackoutManualResetNeeded = false;
         ExitBlackout();
         return true;
     }
 
-    /// <summary>
-    /// Check if manual power restore is currently possible
-    /// </summary>
     public bool CanRestorePower(out string reason)
     {
         reason = "";
 
-        if (!isInBlackout)
-        {
-            reason = "Not in blackout";
-            return false;
-        }
+        if (!netIsInBlackout.Value) { reason = "Not in blackout"; return false; }
+        if (!blackoutManualResetNeeded) { reason = "Auto-recovery in progress"; return false; }
 
-        if (!blackoutManualResetNeeded)
-        {
-            reason = "Auto-recovery in progress";
-            return false;
-        }
-
-        float reservePercent = powerReserve / maxPowerReserve;
+        float reservePercent = netPowerReserve.Value / maxPowerReserve;
         if (reservePercent < 0.3f)
         {
-            reason = $"Reserve too low ({reservePercent * 100f:F0}% / 30% required)";
+            reason = $"Riserva troppo bassa ({reservePercent * 100f:F0}% / 30% richiesto)";
             return false;
         }
 
-        float consumptionPercent = currentPowerConsumption / MaxPowerOutput;
+        float consumptionPercent = netPowerConsumption.Value / MaxPowerOutput;
         if (consumptionPercent > 0.7f)
         {
-            reason = $"Load too high ({consumptionPercent * 100f:F0}% / 70% max)";
+            reason = $"Carico troppo alto ({consumptionPercent * 100f:F0}% / 70% max)";
             return false;
         }
 
-        reason = "Ready to restore";
+        reason = "Pronto al ripristino";
         return true;
     }
 
-    /// <summary>
-    /// Get all manual lights for dashboard control
-    /// </summary>
     public List<ShipLight> GetManualLights()
     {
-        List<ShipLight> manualLights = new List<ShipLight>();
-
+        var manualLights = new List<ShipLight>();
         foreach (var consumer in powerConsumers)
         {
-            if (consumer is ShipLight light)
-            {
-                if (light.GetLightMode() == ShipLight.LightMode.Manual)
-                {
-                    manualLights.Add(light);
-                }
-            }
+            if (consumer is ShipLight light && light.GetLightMode() == ShipLight.LightMode.Manual)
+                manualLights.Add(light);
         }
-
         return manualLights;
     }
 
-    private void DegradeReactor()
-    {
-        // Simulate reactor wear over time
-        currentReactorEfficiency -= reactorDegradationRate * Time.deltaTime / 3600f; // Per hour
-        currentReactorEfficiency = Mathf.Max(0.5f, currentReactorEfficiency); // Min 50% efficiency
-    }
-
-    // Public methods for systems to register/unregister
     public void RegisterPowerConsumer(IPowerConsumer consumer)
     {
         if (!powerConsumers.Contains(consumer))
         {
             powerConsumers.Add(consumer);
-            Debug.Log($"[PowerManager] Registered consumer: {consumer.GetSystemName()}");
+            Debug.Log($"[PowerManager] Registered: {consumer.GetSystemName()}");
         }
     }
 
@@ -351,45 +432,48 @@ public class PowerManager : MonoBehaviour
         powerConsumers.Remove(consumer);
     }
 
-    // Manual reactor control
     public void SetReactorEfficiency(float efficiency)
     {
+        if (!IsServer) return;
         currentReactorEfficiency = Mathf.Clamp01(efficiency);
+        netReactorEfficiency.Value = currentReactorEfficiency;
     }
 
     public void RepairReactor(float amount)
     {
-        currentReactorEfficiency += amount;
-        currentReactorEfficiency = Mathf.Min(1.0f, currentReactorEfficiency);
+        if (!IsServer) return;
+        currentReactorEfficiency = Mathf.Min(1.0f, currentReactorEfficiency + amount);
+        netReactorEfficiency.Value = currentReactorEfficiency;
     }
 
-    // Debug
+    private void DegradeReactor()
+    {
+        currentReactorEfficiency -= reactorDegradationRate * Time.deltaTime / 3600f;
+        currentReactorEfficiency = Mathf.Max(0.5f, currentReactorEfficiency);
+        netReactorEfficiency.Value = currentReactorEfficiency;
+    }
+
+    // ===== Debug GUI =====
+
     private void OnGUI()
     {
         if (!Debug.isDebugBuild) return;
 
         int y = 100;
-        GUI.Label(new Rect(10, y, 300, 20), $"=== POWER SYSTEM ===");
-        y += 20;
-        GUI.Label(new Rect(10, y, 300, 20), $"Generation: {currentPowerGeneration:F0}W / {MaxPowerOutput:F0}W");
-        y += 20;
-        GUI.Label(new Rect(10, y, 300, 20), $"Consumption: {currentPowerConsumption:F0}W ({(PowerPercentage * 100f):F1}%)");
-        y += 20;
-        GUI.Label(new Rect(10, y, 300, 20), $"Reserve: {powerReserve:F0}W / {maxPowerReserve:F0}W");
-        y += 20;
-        GUI.Label(new Rect(10, y, 300, 20), $"Reactor Efficiency: {(currentReactorEfficiency * 100f):F1}%");
-        y += 20;
-        GUI.Label(new Rect(10, y, 300, 20), $"Active Consumers: {powerConsumers.Count}");
-        y += 20;
+        GUI.Label(new Rect(10, y, 300, 20), $"=== POWER SYSTEM [{(IsServer ? "SERVER" : "CLIENT")}] ==="); y += 20;
+        GUI.Label(new Rect(10, y, 300, 20), $"Generation: {netPowerGeneration.Value:F0}W / {MaxPowerOutput:F0}W"); y += 20;
+        GUI.Label(new Rect(10, y, 300, 20), $"Consumption: {netPowerConsumption.Value:F0}W ({(PowerPercentage * 100f):F1}%)"); y += 20;
+        GUI.Label(new Rect(10, y, 300, 20), $"Reserve: {netPowerReserve.Value:F0}W / {maxPowerReserve:F0}W"); y += 20;
+        GUI.Label(new Rect(10, y, 300, 20), $"Reactor: {(netReactorEfficiency.Value * 100f):F1}%"); y += 20;
+        GUI.Label(new Rect(10, y, 300, 20), $"Consumers: {powerConsumers.Count}"); y += 20;
 
-        if (isInCriticalState)
+        if (netIsInCriticalState.Value)
         {
             GUI.color = Color.yellow;
-            GUI.Label(new Rect(10, y, 300, 20), "⚠ CRITICAL POWER");
-            y += 20;
+            GUI.Label(new Rect(10, y, 300, 20), "⚠ CRITICAL POWER"); y += 20;
         }
 
-        if (isInBlackout)
+        if (netIsInBlackout.Value)
         {
             GUI.color = Color.red;
             GUI.Label(new Rect(10, y, 300, 20), "⚠⚠⚠ BLACKOUT ⚠⚠⚠");
@@ -400,37 +484,14 @@ public class PowerManager : MonoBehaviour
 }
 
 /// <summary>
-/// Interface for all systems that consume power
+/// Interface for all systems that consume power.
 /// </summary>
 public interface IPowerConsumer
 {
-    /// <summary>
-    /// Current power demand in Watts
-    /// </summary>
     float GetPowerDemand();
-
-    /// <summary>
-    /// Priority level (0-10, 10 = critical, cannot be auto-disabled)
-    /// </summary>
     int GetPriority();
-
-    /// <summary>
-    /// Is this system currently active and consuming power?
-    /// </summary>
     bool IsActive();
-
-    /// <summary>
-    /// Can this system be automatically disabled during power shortage?
-    /// </summary>
     bool CanBeDisabled();
-
-    /// <summary>
-    /// Set power state (on/off) - called by PowerManager during load shedding
-    /// </summary>
     void SetPowerState(bool isOn);
-
-    /// <summary>
-    /// System name for debugging
-    /// </summary>
     string GetSystemName();
 }

@@ -6,12 +6,7 @@ using System.Collections.Generic;
 /// <summary>
 /// Engineering Dashboard UI — Power management interface.
 /// Aggiornamento M1B: Slider standard sostituiti con SciFiSegmentedBar.
-///
-/// MODIFICA RISPETTO ALLA VERSIONE PRECEDENTE:
-///   - Rimossi: [SerializeField] Slider powerGenerationSlider / powerReserveSlider
-///   - Aggiunti: [SerializeField] SciFiSegmentedBar powerGenerationBar / powerReserveBar
-///   - UpdateUI() aggiorna bar.SetValue() invece di slider.value
-///   - Il resto della logica è INVARIATO (PowerManager, lights, blackout)
+/// Aggiornamento NGO: PowerManager.Instance cercato via OnInstanceReady.
 /// </summary>
 public class EngineeringDashboardUI : MonoBehaviour
 {
@@ -21,10 +16,8 @@ public class EngineeringDashboardUI : MonoBehaviour
     [SerializeField] private TextMeshProUGUI powerReserveText;
     [SerializeField] private TextMeshProUGUI powerStatusText;
 
-    // ── SOSTITUITI: erano Slider, ora SciFiSegmentedBar ──────────────────────
     [SerializeField] private SciFiSegmentedBar powerGenerationBar;
     [SerializeField] private SciFiSegmentedBar powerReserveBar;
-    // ─────────────────────────────────────────────────────────────────────────
 
     [Header("Blackout Recovery")]
     [SerializeField] private GameObject blackoutPanel;
@@ -37,6 +30,7 @@ public class EngineeringDashboardUI : MonoBehaviour
 
     private PowerManager powerManager;
     private List<LightControlEntry> lightControls = new List<LightControlEntry>();
+    private bool isOpen = false;
 
     private class LightControlEntry
     {
@@ -50,14 +44,43 @@ public class EngineeringDashboardUI : MonoBehaviour
 
     private void Awake()
     {
-        powerManager = PowerManager.Instance;
-
         if (restorePowerButton != null)
             restorePowerButton.onClick.AddListener(OnRestorePowerClicked);
     }
 
+    private void Start()
+    {
+        if (PowerManager.Instance != null)
+            InitWithPowerManager();
+        else
+            PowerManager.OnInstanceReady += InitWithPowerManager;
+    }
+
+    private void InitWithPowerManager()
+    {
+        PowerManager.OnInstanceReady -= InitWithPowerManager;
+        powerManager = PowerManager.Instance;
+
+        // Se la dashboard era già aperta quando PowerManager è diventato disponibile,
+        // refresha la lista ora che abbiamo il riferimento
+        if (isOpen)
+            RefreshLightsList();
+    }
+
+    private void OnDestroy()
+    {
+        PowerManager.OnInstanceReady -= InitWithPowerManager;
+        CancelInvoke(nameof(UpdateUI));
+    }
+
     public void Open()
     {
+        isOpen = true;
+
+        // Open() è sempre chiamato dopo Start Host — PowerManager.Instance è già disponibile
+        if (powerManager == null)
+            powerManager = PowerManager.Instance;
+
         RefreshLightsList();
         UpdateUI();
         InvokeRepeating(nameof(UpdateUI), 0f, 0.1f);
@@ -65,6 +88,7 @@ public class EngineeringDashboardUI : MonoBehaviour
 
     public void Close()
     {
+        isOpen = false;
         CancelInvoke(nameof(UpdateUI));
     }
 
@@ -76,17 +100,12 @@ public class EngineeringDashboardUI : MonoBehaviour
 
         // — Generazione —
         if (powerGenerationText != null)
-        {
             powerGenerationText.text =
                 $"{powerManager.CurrentPowerGeneration:F0}W / {powerManager.MaxPowerOutput:F0}W";
-        }
 
-        // SetValue() invece di slider.value
         if (powerGenerationBar != null)
-        {
             powerGenerationBar.SetValue(
                 powerManager.CurrentPowerGeneration / powerManager.MaxPowerOutput);
-        }
 
         // — Consumo —
         if (powerConsumptionText != null)
@@ -100,16 +119,11 @@ public class EngineeringDashboardUI : MonoBehaviour
 
         // — Riserva —
         if (powerReserveText != null)
-        {
             powerReserveText.text =
                 $"Reserve: {powerManager.PowerReservePercentage * 100f:F0}%";
-        }
 
-        // SetValue() invece di slider.value
         if (powerReserveBar != null)
-        {
             powerReserveBar.SetValue(powerManager.PowerReservePercentage);
-        }
 
         // — Stato testuale —
         if (powerStatusText != null)
@@ -133,10 +147,8 @@ public class EngineeringDashboardUI : MonoBehaviour
 
         // — Pannello blackout —
         if (blackoutPanel != null)
-        {
             blackoutPanel.SetActive(
                 powerManager.IsInBlackout && powerManager.IsBlackoutManualResetNeeded);
-        }
 
         // — Pulsante restore —
         if (restorePowerButton != null && restorePowerStatusText != null)
@@ -171,6 +183,7 @@ public class EngineeringDashboardUI : MonoBehaviour
 
     private void RefreshLightsList()
     {
+        // Distruggi le voci esistenti
         foreach (var entry in lightControls)
         {
             if (entry.uiElement != null)
@@ -178,10 +191,21 @@ public class EngineeringDashboardUI : MonoBehaviour
         }
         lightControls.Clear();
 
-        if (powerManager == null || lightsListParent == null || lightControlPrefab == null)
+        if (powerManager == null)
+        {
+            Debug.LogWarning("[EngineeringDashboard] RefreshLightsList: powerManager è null — lista vuota");
             return;
+        }
+
+        if (lightsListParent == null || lightControlPrefab == null)
+        {
+            Debug.LogWarning("[EngineeringDashboard] RefreshLightsList: lightsListParent o lightControlPrefab non assegnati");
+            return;
+        }
 
         List<ShipLight> manualLights = powerManager.GetManualLights();
+
+        Debug.Log($"[EngineeringDashboard] RefreshLightsList: trovate {manualLights.Count} luci Manual");
 
         foreach (var light in manualLights)
         {

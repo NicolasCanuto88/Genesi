@@ -1,23 +1,24 @@
 ﻿using UnityEngine;
 
 /// <summary>
-/// Ship light system with power integration and emergency modes
-/// Supports both automatic (always on) and manual (dashboard controlled) operation
+/// Ship light system with power integration and emergency modes.
+/// Supports both automatic (always on) and manual (dashboard controlled) operation.
+/// Usa PowerManager.OnInstanceReady per gestire l'ordine di spawn NGO.
 /// </summary>
 [RequireComponent(typeof(Light))]
 public class ShipLight : MonoBehaviour, IPowerConsumer
 {
     [Header("Light Configuration")]
     [SerializeField] private LightMode lightMode = LightMode.Automatic;
-    [SerializeField] private float powerConsumption = 50f; // Watts when ON
-    [SerializeField] private int priority = 3; // 0-10, lower = disabled first during load shedding
+    [SerializeField] private float powerConsumption = 50f;
+    [SerializeField] private int priority = 3;
 
     [Header("Normal Operation")]
-    [SerializeField] private Color normalColor = new Color(1f, 0.95f, 0.9f); // Warm white
+    [SerializeField] private Color normalColor = new Color(1f, 0.95f, 0.9f);
     [SerializeField] private float normalIntensity = 1.5f;
 
     [Header("Emergency Mode")]
-    [SerializeField] private Color emergencyColor = new Color(1f, 0.1f, 0.05f); // Red
+    [SerializeField] private Color emergencyColor = new Color(1f, 0.1f, 0.05f);
     [SerializeField] private float emergencyIntensity = 0.5f;
 
     [Header("Flickering (Critical Power)")]
@@ -26,7 +27,7 @@ public class ShipLight : MonoBehaviour, IPowerConsumer
     [SerializeField] private float flickerAmount = 0.3f;
 
     [Header("Emissive Materials (Optional)")]
-    [SerializeField] private Renderer[] emissiveRenderers; // Lampadine/bulbs
+    [SerializeField] private Renderer[] emissiveRenderers;
     [SerializeField] private float normalEmissionIntensity = 2f;
     [SerializeField] private float emergencyEmissionIntensity = 1f;
     [SerializeField] private bool updateEmissiveMaterials = true;
@@ -34,146 +35,109 @@ public class ShipLight : MonoBehaviour, IPowerConsumer
     [Header("Transition")]
     [SerializeField] private float colorTransitionSpeed = 2f;
 
-    // Material property IDs (cached for performance)
     private static readonly int EmissionColorID = Shader.PropertyToID("_EmissionColor");
     private static readonly int BaseColorID = Shader.PropertyToID("_BaseColor");
     private MaterialPropertyBlock propertyBlock;
 
-    // Components
     private Light lightComponent;
     private PowerManager powerManager;
 
-    // State
     private LightState currentState = LightState.Off;
-    private bool manuallyEnabled = true; // For manual mode - dashboard controls this
+    private bool manuallyEnabled = true;
     private bool isPowered = false;
     private float targetIntensity = 0f;
     private Color targetColor = Color.white;
     private float flickerTimer = 0f;
 
-    public enum LightMode
-    {
-        Automatic,  // Always on when power available
-        Manual      // Controlled by engineering dashboard
-    }
-
-    public enum LightState
-    {
-        Off,
-        Normal,
-        Emergency
-    }
+    public enum LightMode { Automatic, Manual }
+    public enum LightState { Off, Normal, Emergency }
 
     private void Awake()
     {
         lightComponent = GetComponent<Light>();
 
-        // Store initial settings if not set
-        if (normalColor == Color.white)
-        {
-            normalColor = lightComponent.color;
-        }
-        if (normalIntensity == 0f)
-        {
-            normalIntensity = lightComponent.intensity;
-        }
+        if (normalColor == Color.white) normalColor = lightComponent.color;
+        if (normalIntensity == 0f) normalIntensity = lightComponent.intensity;
 
-        // Initialize MaterialPropertyBlock for emissive materials
         if (updateEmissiveMaterials && emissiveRenderers != null && emissiveRenderers.Length > 0)
-        {
             propertyBlock = new MaterialPropertyBlock();
-        }
     }
 
     private void Start()
     {
-        powerManager = PowerManager.Instance;
-
-        if (powerManager != null)
-        {
-            powerManager.RegisterPowerConsumer(this);
-
-            // Subscribe to power events
-            powerManager.OnPowerRestored += OnPowerRestoredEvent;
-        }
-        else
-        {
-            Debug.LogError($"[ShipLight {gameObject.name}] PowerManager not found!");
-        }
-
-        // Initialize power state (start with power available)
         isPowered = true;
 
-        // Initialize light state
+        if (PowerManager.Instance != null)
+            InitWithPowerManager();
+        else
+            PowerManager.OnInstanceReady += InitWithPowerManager;
+
         UpdateLightState();
+    }
+
+    private void InitWithPowerManager()
+    {
+        PowerManager.OnInstanceReady -= InitWithPowerManager;
+        powerManager = PowerManager.Instance;
+        powerManager.RegisterPowerConsumer(this);
+        powerManager.OnPowerRestored += OnPowerRestoredEvent;
     }
 
     private void OnDestroy()
     {
+        PowerManager.OnInstanceReady -= InitWithPowerManager;
+
         if (powerManager != null)
         {
             powerManager.UnregisterPowerConsumer(this);
-
-            // Unsubscribe from events
             powerManager.OnPowerRestored -= OnPowerRestoredEvent;
         }
     }
 
-    // Event handler for power restored
     private void OnPowerRestoredEvent()
     {
-        Debug.Log($"[ShipLight {gameObject.name}] Received power restored event - re-enabling");
-        isPowered = true; // Restore power to this light
+        isPowered = true;
     }
 
     private void Update()
     {
-        // Update light state based on power conditions
         UpdateLightState();
-
-        // Apply visual changes
         ApplyLightTransition();
 
-        // Flickering effect during critical power
         if (enableFlickering && currentState == LightState.Normal && powerManager != null)
         {
             if (powerManager.IsInCriticalState && !powerManager.IsInBlackout)
-            {
                 ApplyFlickering();
-            }
         }
     }
 
     private void UpdateLightState()
     {
-        if (powerManager == null) return;
+        if (powerManager == null)
+        {
+            if (currentState != LightState.Normal)
+            {
+                currentState = LightState.Normal;
+                OnStateChanged();
+            }
+            return;
+        }
 
         LightState newState = LightState.Off;
 
-        // Determine desired state based on power and mode
         if (powerManager.IsInBlackout)
         {
-            // Blackout: all lights off
             newState = LightState.Off;
         }
         else if (powerManager.IsInCriticalState)
         {
-            // Critical power: emergency mode
-            if (ShouldBeOn())
-            {
-                newState = LightState.Emergency;
-            }
+            if (ShouldBeOn()) newState = LightState.Emergency;
         }
         else if (isPowered)
         {
-            // Normal operation
-            if (ShouldBeOn())
-            {
-                newState = LightState.Normal;
-            }
+            if (ShouldBeOn()) newState = LightState.Normal;
         }
 
-        // State changed?
         if (newState != currentState)
         {
             currentState = newState;
@@ -183,17 +147,7 @@ public class ShipLight : MonoBehaviour, IPowerConsumer
 
     private bool ShouldBeOn()
     {
-        switch (lightMode)
-        {
-            case LightMode.Automatic:
-                return true; // Always on when power available
-
-            case LightMode.Manual:
-                return manuallyEnabled; // Only if dashboard enabled it
-
-            default:
-                return false;
-        }
+        return lightMode == LightMode.Automatic ? true : manuallyEnabled;
     }
 
     private void OnStateChanged()
@@ -205,13 +159,11 @@ public class ShipLight : MonoBehaviour, IPowerConsumer
                 targetColor = normalColor;
                 lightComponent.enabled = false;
                 break;
-
             case LightState.Normal:
                 targetIntensity = normalIntensity;
                 targetColor = normalColor;
                 lightComponent.enabled = true;
                 break;
-
             case LightState.Emergency:
                 targetIntensity = emergencyIntensity;
                 targetColor = emergencyColor;
@@ -222,86 +174,61 @@ public class ShipLight : MonoBehaviour, IPowerConsumer
 
     private void ApplyLightTransition()
     {
-        // Smooth color transition
-        lightComponent.color = Color.Lerp(
-            lightComponent.color,
-            targetColor,
-            colorTransitionSpeed * Time.deltaTime
-        );
+        lightComponent.color = Color.Lerp(lightComponent.color, targetColor, colorTransitionSpeed * Time.deltaTime);
+        lightComponent.intensity = Mathf.Lerp(lightComponent.intensity, targetIntensity, colorTransitionSpeed * Time.deltaTime);
 
-        // Smooth intensity transition
-        lightComponent.intensity = Mathf.Lerp(
-            lightComponent.intensity,
-            targetIntensity,
-            colorTransitionSpeed * Time.deltaTime
-        );
-
-        // Update emissive materials (bulbs/glass)
         if (updateEmissiveMaterials && propertyBlock != null)
-        {
             UpdateEmissiveMaterials();
-        }
     }
 
     private void UpdateEmissiveMaterials()
     {
         if (emissiveRenderers == null || emissiveRenderers.Length == 0) return;
 
-        // Calculate emission color based on current state
-        Color baseColor = Color.white;
-        Color emissionColor = Color.black;
-        float emissionIntensity = 0f;
+        Color baseColor;
+        Color emissionColor;
+        float emissionIntensity;
 
         switch (currentState)
         {
             case LightState.Off:
-                baseColor = new Color(0.2f, 0.2f, 0.2f); // Dark grey when off
+                baseColor = new Color(0.2f, 0.2f, 0.2f);
                 emissionColor = Color.black;
                 emissionIntensity = 0f;
                 break;
-
             case LightState.Normal:
-                baseColor = normalColor; // Warm white base
+                baseColor = normalColor;
                 emissionColor = normalColor;
                 emissionIntensity = normalEmissionIntensity;
                 break;
-
             case LightState.Emergency:
-                baseColor = emergencyColor; // RED base color ⬅️ QUESTO!
+                baseColor = emergencyColor;
                 emissionColor = emergencyColor;
                 emissionIntensity = emergencyEmissionIntensity;
                 break;
+            default:
+                return;
         }
 
-        // Apply HDR emission color (intensity > 1 for bloom effect)
         Color finalEmission = emissionColor * emissionIntensity;
 
-        // Update all emissive renderers
         foreach (var renderer in emissiveRenderers)
         {
-            if (renderer != null)
-            {
-                propertyBlock.SetColor(BaseColorID, baseColor); // Base color (albedo)
-                propertyBlock.SetColor(EmissionColorID, finalEmission); // Emission (glow)
-                renderer.SetPropertyBlock(propertyBlock);
-            }
+            if (renderer == null) continue;
+            propertyBlock.SetColor(BaseColorID, baseColor);
+            propertyBlock.SetColor(EmissionColorID, finalEmission);
+            renderer.SetPropertyBlock(propertyBlock);
         }
     }
 
     private void ApplyFlickering()
     {
         flickerTimer += Time.deltaTime * flickerSpeed;
-
-        // Perlin noise for organic flickering
-        float flicker = Mathf.PerlinNoise(flickerTimer, 0f);
-        flicker = Mathf.Clamp01(flicker);
-
-        // Apply to intensity
-        float flickerIntensity = targetIntensity * (1f - flickerAmount * (1f - flicker));
-        lightComponent.intensity = flickerIntensity;
+        float flicker = Mathf.Clamp01(Mathf.PerlinNoise(flickerTimer, 0f));
+        lightComponent.intensity = targetIntensity * (1f - flickerAmount * (1f - flicker));
     }
 
-    // ===== IPOWER CONSUMER (PowerManager Interface) =====
+    // ===== IPowerConsumer =====
 
     public float GetPowerDemand()
     {
@@ -314,96 +241,46 @@ public class ShipLight : MonoBehaviour, IPowerConsumer
         return powerConsumption * multiplier;
     }
 
-    public int GetPriority()
-    {
-        return priority;
-    }
-
-    public bool IsActive()
-    {
-        return currentState != LightState.Off;
-    }
-
-    public bool CanBeDisabled()
-    {
-        // Automatic lights cannot be disabled (always need light in corridors)
-        // Manual lights can be disabled during load shedding
-        return lightMode == LightMode.Manual;
-    }
+    public int GetPriority() => priority;
+    public bool IsActive() => currentState != LightState.Off;
+    public bool CanBeDisabled() => lightMode == LightMode.Manual;
 
     public void SetPowerState(bool isOn)
     {
         isPowered = isOn;
-
-        if (!isOn)
-        {
-            Debug.Log($"[ShipLight {gameObject.name}] Power cut by PowerManager");
-        }
+        if (!isOn) Debug.Log($"[ShipLight {gameObject.name}] Power cut by PowerManager");
     }
 
-    public string GetSystemName()
-    {
-        return $"Light_{gameObject.name}";
-    }
+    public string GetSystemName() => $"Light_{gameObject.name}";
 
-    // ===== PUBLIC CONTROL METHODS (for Engineering Dashboard) =====
+    // ===== Public API =====
 
-    /// <summary>
-    /// Enable/disable this light (only works in Manual mode)
-    /// </summary>
     public void SetManualState(bool enabled)
     {
         if (lightMode == LightMode.Manual)
-        {
             manuallyEnabled = enabled;
-            Debug.Log($"[ShipLight {gameObject.name}] Manual state: {(enabled ? "ON" : "OFF")}");
-        }
         else
-        {
             Debug.LogWarning($"[ShipLight {gameObject.name}] Cannot manually control Automatic light!");
-        }
     }
 
-    /// <summary>
-    /// Get current manual state
-    /// </summary>
-    public bool GetManualState()
-    {
-        return manuallyEnabled;
-    }
-
-    /// <summary>
-    /// Get current light mode
-    /// </summary>
-    // Public properties for external access
+    public bool GetManualState() => manuallyEnabled;
     public float PowerConsumption => powerConsumption;
     public LightMode GetLightMode() => lightMode;
     public LightState GetCurrentState() => currentState;
 
-    /// <summary>
-    /// Change light mode at runtime (for reconfiguration)
-    /// </summary>
     public void SetLightMode(LightMode mode)
     {
         lightMode = mode;
-        Debug.Log($"[ShipLight {gameObject.name}] Mode changed to: {mode}");
     }
-
-    // ===== DEBUG =====
 
     private void OnDrawGizmosSelected()
     {
-        if (lightComponent == null)
-        {
-            lightComponent = GetComponent<Light>();
-        }
+        if (lightComponent == null) lightComponent = GetComponent<Light>();
 
-        // Draw sphere showing light range
         Gizmos.color = currentState == LightState.Emergency ? emergencyColor : normalColor;
         Gizmos.color = new Color(Gizmos.color.r, Gizmos.color.g, Gizmos.color.b, 0.3f);
         Gizmos.DrawWireSphere(transform.position, lightComponent.range);
 
-        // Draw icon based on mode
         Gizmos.color = lightMode == LightMode.Automatic ? Color.green : Color.yellow;
         Gizmos.DrawSphere(transform.position, 0.1f);
     }

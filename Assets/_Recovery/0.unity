@@ -1552,143 +1552,6 @@ CanvasRenderer:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 327495384}
   m_CullTransparentMesh: 1
---- !u!1 &330585543
-GameObject:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  serializedVersion: 6
-  m_Component:
-  - component: {fileID: 330585546}
-  - component: {fileID: 330585545}
-  - component: {fileID: 330585544}
-  - component: {fileID: 330585547}
-  m_Layer: 0
-  m_Name: Main Camera
-  m_TagString: MainCamera
-  m_Icon: {fileID: 0}
-  m_NavMeshLayer: 0
-  m_StaticEditorFlags: 0
-  m_IsActive: 0
---- !u!81 &330585544
-AudioListener:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 330585543}
-  m_Enabled: 1
---- !u!20 &330585545
-Camera:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 330585543}
-  m_Enabled: 1
-  serializedVersion: 2
-  m_ClearFlags: 1
-  m_BackGroundColor: {r: 0.19215687, g: 0.3019608, b: 0.4745098, a: 0}
-  m_projectionMatrixMode: 1
-  m_GateFitMode: 2
-  m_FOVAxisMode: 0
-  m_Iso: 200
-  m_ShutterSpeed: 0.005
-  m_Aperture: 16
-  m_FocusDistance: 10
-  m_FocalLength: 50
-  m_BladeCount: 5
-  m_Curvature: {x: 2, y: 11}
-  m_BarrelClipping: 0.25
-  m_Anamorphism: 0
-  m_SensorSize: {x: 36, y: 24}
-  m_LensShift: {x: 0, y: 0}
-  m_NormalizedViewPortRect:
-    serializedVersion: 2
-    x: 0
-    y: 0
-    width: 1
-    height: 1
-  near clip plane: 0.3
-  far clip plane: 1000
-  field of view: 60
-  orthographic: 0
-  orthographic size: 5
-  m_Depth: -1
-  m_CullingMask:
-    serializedVersion: 2
-    m_Bits: 4294967295
-  m_RenderingPath: -1
-  m_TargetTexture: {fileID: 0}
-  m_TargetDisplay: 0
-  m_TargetEye: 3
-  m_HDR: 1
-  m_AllowMSAA: 1
-  m_AllowDynamicResolution: 0
-  m_ForceIntoRT: 0
-  m_OcclusionCulling: 1
-  m_StereoConvergence: 10
-  m_StereoSeparation: 0.022
---- !u!4 &330585546
-Transform:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 330585543}
-  serializedVersion: 2
-  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 0, y: 1, z: -10}
-  m_LocalScale: {x: 1, y: 1, z: 1}
-  m_ConstrainProportionsScale: 0
-  m_Children: []
-  m_Father: {fileID: 0}
-  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
---- !u!114 &330585547
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 330585543}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: a79441f348de89743a2939f4d699eac1, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
-  m_RenderShadows: 1
-  m_RequiresDepthTextureOption: 2
-  m_RequiresOpaqueTextureOption: 2
-  m_CameraType: 0
-  m_Cameras: []
-  m_RendererIndex: -1
-  m_VolumeLayerMask:
-    serializedVersion: 2
-    m_Bits: 1
-  m_VolumeTrigger: {fileID: 0}
-  m_VolumeFrameworkUpdateModeOption: 2
-  m_RenderPostProcessing: 1
-  m_Antialiasing: 0
-  m_AntialiasingQuality: 2
-  m_StopNaN: 0
-  m_Dithering: 0
-  m_ClearDepth: 1
-  m_AllowXRRendering: 1
-  m_AllowHDROutput: 1
-  m_UseScreenCoordOverride: 0
-  m_ScreenSizeOverride: {x: 0, y: 0, z: 0, w: 0}
-  m_ScreenCoordScaleBias: {x: 0, y: 0, z: 0, w: 0}
-  m_RequiresDepthTexture: 0
-  m_RequiresColorTexture: 0
-  m_TaaSettings:
-    m_Quality: 3
-    m_FrameInfluence: 0.1
-    m_JitterScale: 1
-    m_MipBias: 0
-    m_VarianceClampScale: 0.9
-    m_ContrastAdaptiveSharpening: 0
-  m_Version: 2
 --- !u!1001 &335380580
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -2899,6 +2762,7 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 647866391}
+  - component: {fileID: 647866393}
   - component: {fileID: 647866392}
   m_Layer: 0
   m_Name: PowerManager
@@ -2934,16 +2798,38 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 62cc305e756271843a34c68071317593, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::PowerManager
+  ShowTopMostFoldoutHeaderGroup: 1
   maxPowerOutput: 1000
   currentReactorEfficiency: 1
   reactorDegradationRate: 0.01
-  currentPowerGeneration: 0
-  currentPowerConsumption: 0
-  powerReserve: 0
-  maxPowerReserve: 500
   criticalPowerThreshold: 0.75
   blackoutThreshold: 0.05
   requireManualRecovery: 1
+--- !u!114 &647866393
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 647866390}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: d5a57f767e5e46a458fc5d3c628d0cbb, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Unity.Netcode.Runtime::Unity.Netcode.NetworkObject
+  GlobalObjectIdHash: 1644020092
+  InScenePlacedSourceGlobalObjectIdHash: 0
+  DeferredDespawnTick: 0
+  Ownership: 1
+  AlwaysReplicateAsRoot: 0
+  SynchronizeTransform: 1
+  ActiveSceneSynchronization: 0
+  SceneMigrationSynchronization: 0
+  SpawnWithObservers: 1
+  DontDestroyWithOwner: 0
+  AutoObjectParentSync: 1
+  SyncOwnerTransformWhenParented: 1
+  AllowOwnerToParent: 0
 --- !u!1 &657799180
 GameObject:
   m_ObjectHideFlags: 0
@@ -3766,7 +3652,7 @@ MonoBehaviour:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 832575517}
-  m_Enabled: 0
+  m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 172515602e62fb746b5d573b38a5fe58, type: 3}
   m_Name: 
@@ -3775,7 +3661,7 @@ MonoBehaviour:
   priority: 0
   blendDistance: 0
   weight: 1
-  sharedProfile: {fileID: 11400000, guid: 10fc4df2da32a41aaa32d77bc913491c, type: 2}
+  sharedProfile: {fileID: 11400000, guid: e11d91c9c64bc8046868c3e1b2d4902e, type: 2}
 --- !u!4 &832575519
 Transform:
   m_ObjectHideFlags: 0
@@ -4806,12 +4692,12 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1161405571}
   serializedVersion: 2
-  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
+  m_LocalPosition: {x: -8.55446, y: 0, z: 1.3156}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
-  m_Father: {fileID: 1469751595}
+  m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!114 &1161405573
 MonoBehaviour:
@@ -6304,10 +6190,128 @@ Transform:
   m_ConstrainProportionsScale: 0
   m_Children:
   - {fileID: 647866391}
-  - {fileID: 1161405572}
   - {fileID: 1940381016}
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!1 &1517648636
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 1517648639}
+  - component: {fileID: 1517648638}
+  - component: {fileID: 1517648637}
+  - component: {fileID: 1517648640}
+  m_Layer: 0
+  m_Name: NetworkManager
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!114 &1517648637
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1517648636}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 6960e84d07fb87f47956e7a81d71c4e6, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Unity.Netcode.Runtime::Unity.Netcode.Transports.UTP.UnityTransport
+  m_ProtocolType: 0
+  m_UseWebSockets: 0
+  m_UseEncryption: 0
+  m_MaxPacketQueueSize: 128
+  m_MaxPayloadSize: 6144
+  m_HeartbeatTimeoutMS: 500
+  m_ConnectTimeoutMS: 1000
+  m_MaxConnectAttempts: 60
+  m_DisconnectTimeoutMS: 30000
+  ConnectionData:
+    Address: 127.0.0.1
+    Port: 7777
+    WebSocketPath: /
+    ServerListenAddress: 127.0.0.1
+    ClientBindPort: 0
+  DebugSimulator:
+    PacketDelayMS: 0
+    PacketJitterMS: 0
+    PacketDropRate: 0
+--- !u!114 &1517648638
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1517648636}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 593a2fe42fa9d37498c96f9a383b6521, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Unity.Netcode.Runtime::Unity.Netcode.NetworkManager
+  NetworkManagerExpanded: 0
+  NetworkConfig:
+    ProtocolVersion: 0
+    NetworkTransport: {fileID: 1517648637}
+    PlayerPrefab: {fileID: 0}
+    Prefabs:
+      NetworkPrefabsLists:
+      - {fileID: 11400000, guid: 747a4a523e8ad01468a8c9fd2def00c5, type: 2}
+    TickRate: 30
+    ClientConnectionBufferTimeout: 10
+    ConnectionApproval: 0
+    ConnectionData: 
+    EnableTimeResync: 0
+    TimeResyncInterval: 30
+    EnsureNetworkVariableLengthSafety: 0
+    EnableSceneManagement: 1
+    ForceSamePrefabs: 1
+    RecycleNetworkIds: 1
+    NetworkIdRecycleDelay: 120
+    RpcHashSize: 0
+    LoadSceneTimeOut: 120
+    SpawnTimeout: 10
+    EnableNetworkLogs: 1
+    NetworkTopology: 0
+    UseCMBService: 0
+    AutoSpawnPlayerPrefabClientSide: 1
+    NetworkProfilingMetrics: 1
+    OldPrefabList: []
+  RunInBackground: 1
+  LogLevel: 1
+--- !u!4 &1517648639
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1517648636}
+  serializedVersion: 2
+  m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
+  m_LocalPosition: {x: -8.55446, y: 0, z: 1.3156}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &1517648640
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1517648636}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: f7bff0e1038dc1d4693dddb5d7407308, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::AutoStartHost
 --- !u!1 &1533868816
 GameObject:
   m_ObjectHideFlags: 0
@@ -6917,7 +6921,6 @@ GameObject:
   - component: {fileID: 1732273767}
   - component: {fileID: 1732273766}
   - component: {fileID: 1732273765}
-  - component: {fileID: 1732273768}
   m_Layer: 0
   m_Name: Camera
   m_TagString: MainCamera
@@ -6963,7 +6966,7 @@ MonoBehaviour:
     m_Bits: 1
   m_VolumeTrigger: {fileID: 0}
   m_VolumeFrameworkUpdateModeOption: 2
-  m_RenderPostProcessing: 0
+  m_RenderPostProcessing: 1
   m_Antialiasing: 0
   m_AntialiasingQuality: 2
   m_StopNaN: 0
@@ -7043,23 +7046,6 @@ Camera:
   m_OcclusionCulling: 1
   m_StereoConvergence: 10
   m_StereoSeparation: 0.022
---- !u!114 &1732273768
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1732273763}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 172515602e62fb746b5d573b38a5fe58, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Unity.RenderPipelines.Core.Runtime::UnityEngine.Rendering.Volume
-  m_IsGlobal: 1
-  priority: 0
-  blendDistance: 0
-  weight: 1
-  sharedProfile: {fileID: 11400000, guid: 65b6642955bc12e4ca7c48fc39cc7215, type: 2}
 --- !u!1 &1732334130
 GameObject:
   m_ObjectHideFlags: 0
@@ -7956,6 +7942,7 @@ GameObject:
   m_Component:
   - component: {fileID: 1940381016}
   - component: {fileID: 1940381017}
+  - component: {fileID: 1940381018}
   m_Layer: 0
   m_Name: ElectricalDegradation
   m_TagString: Untagged
@@ -7990,10 +7977,36 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 3ba0c357e00d90846b141f925c675740, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::ElectricalDegradationManager
+  ShowTopMostFoldoutHeaderGroup: 1
   degradationEnabled: 0
   baseFaultChancePerHour: 0.005
   blackoutFaultBonusPerEvent: 0.01
   faultRollInterval: 60
+--- !u!114 &1940381018
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1940381015}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: d5a57f767e5e46a458fc5d3c628d0cbb, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Unity.Netcode.Runtime::Unity.Netcode.NetworkObject
+  GlobalObjectIdHash: 1745530202
+  InScenePlacedSourceGlobalObjectIdHash: 0
+  DeferredDespawnTick: 0
+  Ownership: 1
+  AlwaysReplicateAsRoot: 0
+  SynchronizeTransform: 1
+  ActiveSceneSynchronization: 0
+  SceneMigrationSynchronization: 0
+  SpawnWithObservers: 1
+  DontDestroyWithOwner: 0
+  AutoObjectParentSync: 1
+  SyncOwnerTransformWhenParented: 1
+  AllowOwnerToParent: 0
 --- !u!1001 &1954862949
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -208903,14 +208916,14 @@ MonoBehaviour:
   normalColor: {r: 1, g: 0.95, b: 0.9, a: 1}
   normalIntensity: 30
   emergencyColor: {r: 1, g: 0.1, b: 0.05, a: 1}
-  emergencyIntensity: 15
+  emergencyIntensity: 4.5
   enableFlickering: 1
-  flickerSpeed: 10
-  flickerAmount: 0.3
+  flickerSpeed: 3.23
+  flickerAmount: 6.28
   emissiveRenderers:
   - {fileID: 7214872595752283706}
-  normalEmissionIntensity: 2
-  emergencyEmissionIntensity: 1
+  normalEmissionIntensity: 3
+  emergencyEmissionIntensity: 1.56
   updateEmissiveMaterials: 1
   colorTransitionSpeed: 2
 --- !u!4 &2525972407264297419
@@ -269048,17 +269061,16 @@ MonoBehaviour:
   powerConsumption: 50
   priority: 3
   normalColor: {r: 1, g: 0.95, b: 0.9, a: 1}
-  normalIntensity: 1.5
+  normalIntensity: 15
   emergencyColor: {r: 1, g: 0.1, b: 0.05, a: 1}
-  emergencyIntensity: 0.5
+  emergencyIntensity: 15
   enableFlickering: 1
   flickerSpeed: 10
   flickerAmount: 0.3
   emissiveRenderers:
-  - {fileID: -8451413534653183515, guid: 6501805c02ec3744f8f0c356684b8d31, type: 3}
-  - {fileID: -8451413534653183515, guid: d454e476a2cd2e3428905b87a398eb3d, type: 3}
+  - {fileID: -7511558181221131132, guid: ce0250b2beab13f438d3ed15ec561bad, type: 3}
   normalEmissionIntensity: 2
-  emergencyEmissionIntensity: 1
+  emergencyEmissionIntensity: 2
   updateEmissiveMaterials: 1
   colorTransitionSpeed: 2
 --- !u!4 &3350876318720419164
@@ -348596,15 +348608,14 @@ MonoBehaviour:
   normalColor: {r: 1, g: 0.95, b: 0.9, a: 1}
   normalIntensity: 30
   emergencyColor: {r: 1, g: 0.1, b: 0.05, a: 1}
-  emergencyIntensity: 15
+  emergencyIntensity: 4.5
   enableFlickering: 1
-  flickerSpeed: 10
-  flickerAmount: 0.3
+  flickerSpeed: 3.23
+  flickerAmount: 6.28
   emissiveRenderers:
   - {fileID: 5346266191397083230}
-  - {fileID: 0}
-  normalEmissionIntensity: 2
-  emergencyEmissionIntensity: 1
+  normalEmissionIntensity: 3
+  emergencyEmissionIntensity: 1.56
   updateEmissiveMaterials: 1
   colorTransitionSpeed: 2
 --- !u!1 &4650169934091702700
@@ -387689,14 +387700,14 @@ MonoBehaviour:
   normalColor: {r: 1, g: 0.95, b: 0.9, a: 1}
   normalIntensity: 30
   emergencyColor: {r: 1, g: 0.1, b: 0.05, a: 1}
-  emergencyIntensity: 15
+  emergencyIntensity: 4.5
   enableFlickering: 1
-  flickerSpeed: 10
-  flickerAmount: 0.3
+  flickerSpeed: 3.23
+  flickerAmount: 6.28
   emissiveRenderers:
   - {fileID: 233158879316474758}
-  normalEmissionIntensity: 2
-  emergencyEmissionIntensity: 1
+  normalEmissionIntensity: 3
+  emergencyEmissionIntensity: 1.56
   updateEmissiveMaterials: 1
   colorTransitionSpeed: 2
 --- !u!1 &5172906815178182943
@@ -402107,14 +402118,14 @@ MonoBehaviour:
   normalColor: {r: 1, g: 0.95, b: 0.9, a: 1}
   normalIntensity: 30
   emergencyColor: {r: 1, g: 0.1, b: 0.05, a: 1}
-  emergencyIntensity: 15
+  emergencyIntensity: 4.5
   enableFlickering: 1
-  flickerSpeed: 10
-  flickerAmount: 0.3
+  flickerSpeed: 3.23
+  flickerAmount: 6.28
   emissiveRenderers:
   - {fileID: 984627737538852741}
-  normalEmissionIntensity: 2
-  emergencyEmissionIntensity: 1
+  normalEmissionIntensity: 3
+  emergencyEmissionIntensity: 1.56
   updateEmissiveMaterials: 1
   colorTransitionSpeed: 2
 --- !u!4 &5287470678601707690
@@ -416926,14 +416937,14 @@ MonoBehaviour:
   normalColor: {r: 1, g: 0.95, b: 0.9, a: 1}
   normalIntensity: 30
   emergencyColor: {r: 1, g: 0.1, b: 0.05, a: 1}
-  emergencyIntensity: 15
+  emergencyIntensity: 4.5
   enableFlickering: 1
-  flickerSpeed: 10
-  flickerAmount: 0.3
+  flickerSpeed: 3.23
+  flickerAmount: 6.28
   emissiveRenderers:
   - {fileID: 4947065310465905757}
-  normalEmissionIntensity: 2
-  emergencyEmissionIntensity: 1
+  normalEmissionIntensity: 3
+  emergencyEmissionIntensity: 1.56
   updateEmissiveMaterials: 1
   colorTransitionSpeed: 2
 --- !u!23 &5626008260304023453
@@ -417562,14 +417573,14 @@ MonoBehaviour:
   normalColor: {r: 1, g: 0.95, b: 0.9, a: 1}
   normalIntensity: 30
   emergencyColor: {r: 1, g: 0.1, b: 0.05, a: 1}
-  emergencyIntensity: 15
+  emergencyIntensity: 4.5
   enableFlickering: 1
-  flickerSpeed: 10
-  flickerAmount: 0.3
+  flickerSpeed: 3.23
+  flickerAmount: 6.28
   emissiveRenderers:
   - {fileID: 6486392695106089943}
-  normalEmissionIntensity: 2
-  emergencyEmissionIntensity: 1
+  normalEmissionIntensity: 3
+  emergencyEmissionIntensity: 1.56
   updateEmissiveMaterials: 1
   colorTransitionSpeed: 2
 --- !u!4 &5638866060569775738
@@ -423720,17 +423731,16 @@ MonoBehaviour:
   powerConsumption: 50
   priority: 3
   normalColor: {r: 1, g: 0.95, b: 0.9, a: 1}
-  normalIntensity: 1.5
+  normalIntensity: 15
   emergencyColor: {r: 1, g: 0.1, b: 0.05, a: 1}
-  emergencyIntensity: 0.5
+  emergencyIntensity: 15
   enableFlickering: 1
   flickerSpeed: 10
   flickerAmount: 0.3
   emissiveRenderers:
-  - {fileID: -8451413534653183515, guid: 6501805c02ec3744f8f0c356684b8d31, type: 3}
-  - {fileID: -8451413534653183515, guid: d454e476a2cd2e3428905b87a398eb3d, type: 3}
+  - {fileID: -7511558181221131132, guid: ce0250b2beab13f438d3ed15ec561bad, type: 3}
   normalEmissionIntensity: 2
-  emergencyEmissionIntensity: 1
+  emergencyEmissionIntensity: 2
   updateEmissiveMaterials: 1
   colorTransitionSpeed: 2
 --- !u!4 &5749325962400076678
@@ -507490,14 +507500,14 @@ MonoBehaviour:
   normalColor: {r: 1, g: 0.95, b: 0.9, a: 1}
   normalIntensity: 30
   emergencyColor: {r: 1, g: 0.1, b: 0.05, a: 1}
-  emergencyIntensity: 15
+  emergencyIntensity: 4.5
   enableFlickering: 1
-  flickerSpeed: 10
-  flickerAmount: 0.3
+  flickerSpeed: 3.23
+  flickerAmount: 6.28
   emissiveRenderers:
   - {fileID: 6550786735906697801}
-  normalEmissionIntensity: 2
-  emergencyEmissionIntensity: 1
+  normalEmissionIntensity: 3
+  emergencyEmissionIntensity: 1.56
   updateEmissiveMaterials: 1
   colorTransitionSpeed: 2
 --- !u!4 &7319623271474089870
@@ -511428,14 +511438,14 @@ MonoBehaviour:
   normalColor: {r: 1, g: 0.95, b: 0.9, a: 1}
   normalIntensity: 30
   emergencyColor: {r: 1, g: 0.1, b: 0.05, a: 1}
-  emergencyIntensity: 15
+  emergencyIntensity: 4.5
   enableFlickering: 1
-  flickerSpeed: 10
-  flickerAmount: 0.3
+  flickerSpeed: 3.23
+  flickerAmount: 6.28
   emissiveRenderers:
   - {fileID: 2468621545630462326}
-  normalEmissionIntensity: 2
-  emergencyEmissionIntensity: 1
+  normalEmissionIntensity: 3
+  emergencyEmissionIntensity: 1.56
   updateEmissiveMaterials: 1
   colorTransitionSpeed: 2
 --- !u!4 &7401522642345654988
@@ -516488,14 +516498,14 @@ MonoBehaviour:
   normalColor: {r: 1, g: 0.95, b: 0.9, a: 1}
   normalIntensity: 30
   emergencyColor: {r: 1, g: 0.1, b: 0.05, a: 1}
-  emergencyIntensity: 15
+  emergencyIntensity: 4.5
   enableFlickering: 1
-  flickerSpeed: 10
-  flickerAmount: 0.3
+  flickerSpeed: 3.23
+  flickerAmount: 6.28
   emissiveRenderers:
   - {fileID: 3230223606628810101}
-  normalEmissionIntensity: 2
-  emergencyEmissionIntensity: 1
+  normalEmissionIntensity: 3
+  emergencyEmissionIntensity: 1.56
   updateEmissiveMaterials: 1
   colorTransitionSpeed: 2
 --- !u!33 &7504591219454297800
@@ -572800,19 +572810,19 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::ShipLight
   lightMode: 1
-  powerConsumption: 600
+  powerConsumption: 50
   priority: 3
   normalColor: {r: 1, g: 0.95, b: 0.9, a: 1}
   normalIntensity: 30
   emergencyColor: {r: 1, g: 0.1, b: 0.05, a: 1}
-  emergencyIntensity: 15
+  emergencyIntensity: 4.5
   enableFlickering: 1
-  flickerSpeed: 10
-  flickerAmount: 0.3
+  flickerSpeed: 3.23
+  flickerAmount: 6.28
   emissiveRenderers:
   - {fileID: 1751022711246912584}
-  normalEmissionIntensity: 2
-  emergencyEmissionIntensity: 1
+  normalEmissionIntensity: 3
+  emergencyEmissionIntensity: 1.56
   updateEmissiveMaterials: 1
   colorTransitionSpeed: 2
 --- !u!4 &8429016751546700326
@@ -573067,17 +573077,16 @@ MonoBehaviour:
   powerConsumption: 50
   priority: 3
   normalColor: {r: 1, g: 0.95, b: 0.9, a: 1}
-  normalIntensity: 1.5
+  normalIntensity: 15
   emergencyColor: {r: 1, g: 0.1, b: 0.05, a: 1}
-  emergencyIntensity: 0.5
+  emergencyIntensity: 15
   enableFlickering: 1
   flickerSpeed: 10
   flickerAmount: 0.3
   emissiveRenderers:
-  - {fileID: -8451413534653183515, guid: 6501805c02ec3744f8f0c356684b8d31, type: 3}
-  - {fileID: -8451413534653183515, guid: d454e476a2cd2e3428905b87a398eb3d, type: 3}
+  - {fileID: -7511558181221131132, guid: ce0250b2beab13f438d3ed15ec561bad, type: 3}
   normalEmissionIntensity: 2
-  emergencyEmissionIntensity: 1
+  emergencyEmissionIntensity: 2
   updateEmissiveMaterials: 1
   colorTransitionSpeed: 2
 --- !u!4 &8433026324514133839
@@ -578147,17 +578156,16 @@ MonoBehaviour:
   powerConsumption: 50
   priority: 3
   normalColor: {r: 1, g: 0.95, b: 0.9, a: 1}
-  normalIntensity: 1.5
+  normalIntensity: 15
   emergencyColor: {r: 1, g: 0.1, b: 0.05, a: 1}
-  emergencyIntensity: 0.5
+  emergencyIntensity: 15
   enableFlickering: 1
   flickerSpeed: 10
   flickerAmount: 0.3
   emissiveRenderers:
-  - {fileID: -8451413534653183515, guid: 6501805c02ec3744f8f0c356684b8d31, type: 3}
-  - {fileID: -8451413534653183515, guid: d454e476a2cd2e3428905b87a398eb3d, type: 3}
+  - {fileID: -7511558181221131132, guid: ce0250b2beab13f438d3ed15ec561bad, type: 3}
   normalEmissionIntensity: 2
-  emergencyEmissionIntensity: 1
+  emergencyEmissionIntensity: 2
   updateEmissiveMaterials: 1
   colorTransitionSpeed: 2
 --- !u!1 &8538206581791305643
@@ -614259,7 +614267,6 @@ Transform:
 SceneRoots:
   m_ObjectHideFlags: 0
   m_Roots:
-  - {fileID: 330585546}
   - {fileID: 410087041}
   - {fileID: 832575519}
   - {fileID: 421017396}
@@ -614273,3 +614280,5 @@ SceneRoots:
   - {fileID: 1954862949}
   - {fileID: 223221085}
   - {fileID: 1590890663}
+  - {fileID: 1517648639}
+  - {fileID: 1161405572}
