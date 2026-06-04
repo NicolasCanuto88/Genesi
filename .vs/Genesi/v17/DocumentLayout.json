@@ -3,11 +3,19 @@
   "WorkspaceRootPath": "C:\\Users\\nicol\\Unity Project\\Git\\IsometricLesson\\Genesi\\",
   "Documents": [
     {
-      "AbsoluteMoniker": "D:0:0:{EB9752E4-F0FC-3B37-21EF-FD5A3DA1EB8F}|Assembly-CSharp.csproj|c:\\users\\nicol\\unity project\\git\\isometriclesson\\genesi\\assets\\project\\scripts\\autostarthost.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "AbsoluteMoniker": "D:0:0:{EB9752E4-F0FC-3B37-21EF-FD5A3DA1EB8F}|Assembly-CSharp.csproj|C:\\Users\\nicol\\Unity Project\\Git\\IsometricLesson\\Genesi\\assets\\project\\scripts\\ship\\core\\shiplight.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{EB9752E4-F0FC-3B37-21EF-FD5A3DA1EB8F}|Assembly-CSharp.csproj|solutionrelative:assets\\project\\scripts\\ship\\core\\shiplight.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{EB9752E4-F0FC-3B37-21EF-FD5A3DA1EB8F}|Assembly-CSharp.csproj|c:\\users\\nicol\\unity project\\git\\isometriclesson\\genesi\\assets\\project\\scripts\\ship\\components\\doubledooropenauto.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{EB9752E4-F0FC-3B37-21EF-FD5A3DA1EB8F}|Assembly-CSharp.csproj|solutionrelative:assets\\project\\scripts\\ship\\components\\doubledooropenauto.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{EB9752E4-F0FC-3B37-21EF-FD5A3DA1EB8F}|Assembly-CSharp.csproj|C:\\Users\\nicol\\Unity Project\\Git\\IsometricLesson\\Genesi\\assets\\project\\scripts\\autostarthost.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
       "RelativeMoniker": "D:0:0:{EB9752E4-F0FC-3B37-21EF-FD5A3DA1EB8F}|Assembly-CSharp.csproj|solutionrelative:assets\\project\\scripts\\autostarthost.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
     },
     {
-      "AbsoluteMoniker": "D:0:0:{EB9752E4-F0FC-3B37-21EF-FD5A3DA1EB8F}|Assembly-CSharp.csproj|c:\\users\\nicol\\unity project\\git\\isometriclesson\\genesi\\assets\\project\\scripts\\ui\\engineeringdashboardui.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "AbsoluteMoniker": "D:0:0:{EB9752E4-F0FC-3B37-21EF-FD5A3DA1EB8F}|Assembly-CSharp.csproj|C:\\Users\\nicol\\Unity Project\\Git\\IsometricLesson\\Genesi\\assets\\project\\scripts\\ui\\engineeringdashboardui.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
       "RelativeMoniker": "D:0:0:{EB9752E4-F0FC-3B37-21EF-FD5A3DA1EB8F}|Assembly-CSharp.csproj|solutionrelative:assets\\project\\scripts\\ui\\engineeringdashboardui.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
     },
     {
@@ -15,16 +23,8 @@
       "RelativeMoniker": "D:0:0:{EB9752E4-F0FC-3B37-21EF-FD5A3DA1EB8F}|Assembly-CSharp.csproj|solutionrelative:assets\\project\\scripts\\core\\managers\\powermanager.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
     },
     {
-      "AbsoluteMoniker": "D:0:0:{EB9752E4-F0FC-3B37-21EF-FD5A3DA1EB8F}|Assembly-CSharp.csproj|C:\\Users\\nicol\\Unity Project\\Git\\IsometricLesson\\Genesi\\assets\\project\\scripts\\ship\\core\\shiplight.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
-      "RelativeMoniker": "D:0:0:{EB9752E4-F0FC-3B37-21EF-FD5A3DA1EB8F}|Assembly-CSharp.csproj|solutionrelative:assets\\project\\scripts\\ship\\core\\shiplight.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
-    },
-    {
       "AbsoluteMoniker": "D:0:0:{EB9752E4-F0FC-3B37-21EF-FD5A3DA1EB8F}|Assembly-CSharp.csproj|C:\\Users\\nicol\\Unity Project\\Git\\IsometricLesson\\Genesi\\assets\\project\\scripts\\electricaldegradationmanager.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
       "RelativeMoniker": "D:0:0:{EB9752E4-F0FC-3B37-21EF-FD5A3DA1EB8F}|Assembly-CSharp.csproj|solutionrelative:assets\\project\\scripts\\electricaldegradationmanager.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
-    },
-    {
-      "AbsoluteMoniker": "D:0:0:{EB9752E4-F0FC-3B37-21EF-FD5A3DA1EB8F}|Assembly-CSharp.csproj|C:\\Users\\nicol\\Unity Project\\Git\\IsometricLesson\\Genesi\\assets\\project\\scripts\\ship\\components\\doubledooropenauto.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
-      "RelativeMoniker": "D:0:0:{EB9752E4-F0FC-3B37-21EF-FD5A3DA1EB8F}|Assembly-CSharp.csproj|solutionrelative:assets\\project\\scripts\\ship\\components\\doubledooropenauto.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
     },
     {
       "AbsoluteMoniker": "D:0:0:{EB9752E4-F0FC-3B37-21EF-FD5A3DA1EB8F}|Assembly-CSharp.csproj|C:\\Users\\nicol\\Unity Project\\Git\\IsometricLesson\\Genesi\\assets\\project\\scripts\\ambientshipaudio.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
@@ -58,24 +58,23 @@
       "DocumentGroups": [
         {
           "DockedWidth": 200,
-          "SelectedChildIndex": 0,
+          "SelectedChildIndex": 11,
           "Children": [
             {
               "$type": "Document",
-              "DocumentIndex": 0,
+              "DocumentIndex": 2,
               "Title": "AutoStartHost.cs",
               "DocumentMoniker": "C:\\Users\\nicol\\Unity Project\\Git\\IsometricLesson\\Genesi\\Assets\\Project\\Scripts\\AutoStartHost.cs",
               "RelativeDocumentMoniker": "Assets\\Project\\Scripts\\AutoStartHost.cs",
               "ToolTip": "C:\\Users\\nicol\\Unity Project\\Git\\IsometricLesson\\Genesi\\Assets\\Project\\Scripts\\AutoStartHost.cs",
               "RelativeToolTip": "Assets\\Project\\Scripts\\AutoStartHost.cs",
-              "ViewState": "AgIAAAAAAAAAAAAAAAAAABEAAAABAAAAAAAAAA==",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAABoAAAAtAAAAAAAAAA==",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
-              "WhenOpened": "2026-06-03T22:54:46.416Z",
-              "EditorCaption": ""
+              "WhenOpened": "2026-06-03T22:54:46.416Z"
             },
             {
               "$type": "Document",
-              "DocumentIndex": 1,
+              "DocumentIndex": 3,
               "Title": "EngineeringDashboardUI.cs",
               "DocumentMoniker": "C:\\Users\\nicol\\Unity Project\\Git\\IsometricLesson\\Genesi\\Assets\\Project\\Scripts\\UI\\EngineeringDashboardUI.cs",
               "RelativeDocumentMoniker": "Assets\\Project\\Scripts\\UI\\EngineeringDashboardUI.cs",
@@ -83,12 +82,11 @@
               "RelativeToolTip": "Assets\\Project\\Scripts\\UI\\EngineeringDashboardUI.cs",
               "ViewState": "AgIAAK4AAAAAAAAAAAArwMMAAABsAAAAAAAAAA==",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
-              "WhenOpened": "2026-06-03T22:41:20.416Z",
-              "EditorCaption": ""
+              "WhenOpened": "2026-06-03T22:41:20.416Z"
             },
             {
               "$type": "Document",
-              "DocumentIndex": 4,
+              "DocumentIndex": 5,
               "Title": "ElectricalDegradationManager.cs",
               "DocumentMoniker": "C:\\Users\\nicol\\Unity Project\\Git\\IsometricLesson\\Genesi\\Assets\\Project\\Scripts\\ElectricalDegradationManager.cs",
               "RelativeDocumentMoniker": "Assets\\Project\\Scripts\\ElectricalDegradationManager.cs",
@@ -112,7 +110,7 @@
             },
             {
               "$type": "Document",
-              "DocumentIndex": 2,
+              "DocumentIndex": 4,
               "Title": "PowerManager.cs",
               "DocumentMoniker": "C:\\Users\\nicol\\Unity Project\\Git\\IsometricLesson\\Genesi\\Assets\\Project\\Scripts\\Core\\Managers\\PowerManager.cs",
               "RelativeDocumentMoniker": "Assets\\Project\\Scripts\\Core\\Managers\\PowerManager.cs",
@@ -184,27 +182,29 @@
             },
             {
               "$type": "Document",
-              "DocumentIndex": 5,
+              "DocumentIndex": 1,
               "Title": "DoubleDoorOpenAuto.cs",
               "DocumentMoniker": "C:\\Users\\nicol\\Unity Project\\Git\\IsometricLesson\\Genesi\\Assets\\Project\\Scripts\\Ship\\Components\\DoubleDoorOpenAuto.cs",
               "RelativeDocumentMoniker": "Assets\\Project\\Scripts\\Ship\\Components\\DoubleDoorOpenAuto.cs",
               "ToolTip": "C:\\Users\\nicol\\Unity Project\\Git\\IsometricLesson\\Genesi\\Assets\\Project\\Scripts\\Ship\\Components\\DoubleDoorOpenAuto.cs",
               "RelativeToolTip": "Assets\\Project\\Scripts\\Ship\\Components\\DoubleDoorOpenAuto.cs",
-              "ViewState": "AgIAAJwAAAAAAAAAAAAwwMgAAAABAAAAAAAAAA==",
+              "ViewState": "AgIAAK0AAAAAAAAAAADgv8gAAAAyAAAAAAAAAA==",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
-              "WhenOpened": "2026-06-02T08:56:32.244Z"
+              "WhenOpened": "2026-06-02T08:56:32.244Z",
+              "EditorCaption": ""
             },
             {
               "$type": "Document",
-              "DocumentIndex": 3,
+              "DocumentIndex": 0,
               "Title": "ShipLight.cs",
               "DocumentMoniker": "C:\\Users\\nicol\\Unity Project\\Git\\IsometricLesson\\Genesi\\Assets\\Project\\Scripts\\Ship\\Core\\ShipLight.cs",
               "RelativeDocumentMoniker": "Assets\\Project\\Scripts\\Ship\\Core\\ShipLight.cs",
               "ToolTip": "C:\\Users\\nicol\\Unity Project\\Git\\IsometricLesson\\Genesi\\Assets\\Project\\Scripts\\Ship\\Core\\ShipLight.cs",
               "RelativeToolTip": "Assets\\Project\\Scripts\\Ship\\Core\\ShipLight.cs",
-              "ViewState": "AgIAAGQAAAAAAAAAAAAQwIAAAAAJAAAAAAAAAA==",
+              "ViewState": "AgIAACMBAAAAAAAAAAAswC8BAAAxAAAAAAAAAA==",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
-              "WhenOpened": "2026-06-02T08:52:53.453Z"
+              "WhenOpened": "2026-06-02T08:52:53.453Z",
+              "EditorCaption": ""
             }
           ]
         }

@@ -2,8 +2,11 @@
 
 /// <summary>
 /// Ship light system with power integration and emergency modes.
-/// Supports both automatic (always on) and manual (dashboard controlled) operation.
-/// Usa PowerManager.OnInstanceReady per gestire l'ordine di spawn NGO.
+/// Automatic: sempre accesa quando c'è corrente.
+/// Manual: stato controllato dalla dashboard via LightNetworkManager (NetworkList).
+///
+/// Non è un NetworkBehaviour — lo stato Manual è sincronizzato da LightNetworkManager
+/// che usa una NetworkList centralizzata (un solo NetworkObject per tutte le luci).
 /// </summary>
 [RequireComponent(typeof(Light))]
 public class ShipLight : MonoBehaviour, IPowerConsumer
@@ -49,6 +52,9 @@ public class ShipLight : MonoBehaviour, IPowerConsumer
     private Color targetColor = Color.white;
     private float flickerTimer = 0f;
 
+    // Indice nel LightNetworkManager — assegnato alla registrazione
+    private int networkIndex = -1;
+
     public enum LightMode { Automatic, Manual }
     public enum LightState { Off, Normal, Emergency }
 
@@ -67,10 +73,17 @@ public class ShipLight : MonoBehaviour, IPowerConsumer
     {
         isPowered = true;
 
+        // PowerManager
         if (PowerManager.Instance != null)
             InitWithPowerManager();
         else
             PowerManager.OnInstanceReady += InitWithPowerManager;
+
+        // LightNetworkManager
+        if (LightNetworkManager.Instance != null)
+            RegisterWithLightManager();
+        else
+            LightNetworkManager.OnInstanceReady += RegisterWithLightManager;
 
         UpdateLightState();
     }
@@ -83,20 +96,41 @@ public class ShipLight : MonoBehaviour, IPowerConsumer
         powerManager.OnPowerRestored += OnPowerRestoredEvent;
     }
 
+    private void RegisterWithLightManager()
+    {
+        LightNetworkManager.OnInstanceReady -= RegisterWithLightManager;
+
+        if (lightMode == LightMode.Manual)
+            networkIndex = LightNetworkManager.Instance.RegisterLight(this, manuallyEnabled);
+    }
+
     private void OnDestroy()
     {
         PowerManager.OnInstanceReady -= InitWithPowerManager;
+        LightNetworkManager.OnInstanceReady -= RegisterWithLightManager;
 
         if (powerManager != null)
         {
             powerManager.UnregisterPowerConsumer(this);
             powerManager.OnPowerRestored -= OnPowerRestoredEvent;
         }
+
+        if (networkIndex >= 0 && LightNetworkManager.Instance != null)
+            LightNetworkManager.Instance.UnregisterLight(networkIndex);
     }
 
     private void OnPowerRestoredEvent()
     {
         isPowered = true;
+    }
+
+    /// <summary>
+    /// Chiamato da LightNetworkManager quando la NetworkList cambia.
+    /// Aggiorna lo stato locale su tutti i client.
+    /// </summary>
+    public void OnNetworkManualStateChanged(bool isOn)
+    {
+        manuallyEnabled = isOn;
     }
 
     private void Update()
@@ -255,15 +289,37 @@ public class ShipLight : MonoBehaviour, IPowerConsumer
 
     // ===== Public API =====
 
+    /// <summary>
+    /// Imposta lo stato manual. In rete: passa per LightNetworkManager → ServerRpc.
+    /// In single player: aggiorna direttamente.
+    /// </summary>
     public void SetManualState(bool enabled)
     {
-        if (lightMode == LightMode.Manual)
-            manuallyEnabled = enabled;
-        else
+        if (lightMode != LightMode.Manual)
+        {
             Debug.LogWarning($"[ShipLight {gameObject.name}] Cannot manually control Automatic light!");
+            return;
+        }
+
+        if (networkIndex >= 0 && LightNetworkManager.Instance != null)
+        {
+            // Multiplayer: il server aggiorna la NetworkList → tutti i client ricevono il cambio
+            LightNetworkManager.Instance.SetManualState(networkIndex, enabled);
+        }
+        else
+        {
+            // Fallback single player senza LightNetworkManager
+            manuallyEnabled = enabled;
+        }
     }
 
-    public bool GetManualState() => manuallyEnabled;
+    public bool GetManualState()
+    {
+        if (networkIndex >= 0 && LightNetworkManager.Instance != null)
+            return LightNetworkManager.Instance.GetManualState(networkIndex);
+        return manuallyEnabled;
+    }
+
     public float PowerConsumption => powerConsumption;
     public LightMode GetLightMode() => lightMode;
     public LightState GetCurrentState() => currentState;

@@ -1,18 +1,30 @@
-using UnityEngine;
+﻿using UnityEngine;
 using Unity.Netcode;
 
+#if UNITY_EDITOR
+using ParrelSync;
+#endif
+
 /// <summary>
-/// Avvia automaticamente il NetworkManager come Host se nessuno lo ha gi� avviato.
-/// Garantisce che PowerManager.OnNetworkSpawn() venga chiamato anche in single player.
+/// Avvia automaticamente il NetworkManager.
+/// - Clone ParrelSync → Start Client (si connette all'Host originale)
+/// - Istanza originale o build → Start Host
 /// </summary>
 public class AutoStartHost : MonoBehaviour
 {
     private void Start()
     {
-        if (NetworkManager.Singleton != null && !NetworkManager.Singleton.IsListening)
+        if (NetworkManager.Singleton == null || NetworkManager.Singleton.IsListening) return;
+
+#if UNITY_EDITOR
+        if (ClonesManager.IsClone())
         {
-            NetworkManager.Singleton.StartHost();
-            Debug.Log("[AutoStartHost] Avviato automaticamente come Host (single player)");
+            NetworkManager.Singleton.StartClient();
+            Debug.Log("[AutoStartHost] Clone rilevato → Start Client");
+            return;
         }
+#endif
+        NetworkManager.Singleton.StartHost();
+        Debug.Log("[AutoStartHost] → Start Host");
     }
 }
