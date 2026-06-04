@@ -12,6 +12,11 @@ using UnityEngine.InputSystem;
 ///
 /// Pages are shown/hidden via CanvasGroup (not SetActive) so Monitor 1's live
 /// EngineeringDashboardUI keeps updating in the background.
+///
+/// PATCH M2: ogni CanvasGroup può avere opzionalmente un IDashboardPanel
+/// sullo stesso GameObject. ShowMonitor chiama Open() sul pannello attivo
+/// e Close() su quello precedente, così i dashboard aggiornano i dati
+/// solo quando sono visibili (InvokeRepeating parte/stop correttamente).
 /// </summary>
 public class MonitorSwitcher : MonoBehaviour
 {
@@ -41,6 +46,9 @@ public class MonitorSwitcher : MonoBehaviour
     private int currentIndex = 0;
     private bool dashboardWasActive = false;
 
+    // Cache dei pannelli IDashboardPanel — uno per monitor (null se assente)
+    private IDashboardPanel[] panels;
+
     public int CurrentIndex => currentIndex;
 
     private void Start()
@@ -51,13 +59,19 @@ public class MonitorSwitcher : MonoBehaviour
             nextAction = playerInput.actions.FindAction(nextActionName, throwIfNotFound: false);
 
             if (previousAction == null || nextAction == null)
-            {
                 Debug.LogWarning("[MonitorSwitcher] Action Previous/Next non trovate nel PlayerInput (map Player).");
-            }
         }
         else
         {
             Debug.LogWarning("[MonitorSwitcher] PlayerInput reference non assegnato.");
+        }
+
+        // Cerca IDashboardPanel su ogni CanvasGroup
+        panels = new IDashboardPanel[monitors != null ? monitors.Length : 0];
+        for (int i = 0; i < panels.Length; i++)
+        {
+            if (monitors[i] != null)
+                panels[i] = monitors[i].GetComponent<IDashboardPanel>();
         }
 
         ShowMonitor(defaultMonitorIndex, instant: true);
@@ -69,21 +83,16 @@ public class MonitorSwitcher : MonoBehaviour
 
         // On open: reset to the default monitor so reopening always starts on Monitor 1.
         if (dashboardActive && !dashboardWasActive)
-        {
             ShowMonitor(defaultMonitorIndex, instant: true);
-        }
+
         dashboardWasActive = dashboardActive;
 
         if (!dashboardActive) return;
 
         if (nextAction != null && nextAction.WasPressedThisFrame())
-        {
             Next();
-        }
         else if (previousAction != null && previousAction.WasPressedThisFrame())
-        {
             Previous();
-        }
     }
 
     public void Next() => Navigate(+1);
@@ -96,13 +105,9 @@ public class MonitorSwitcher : MonoBehaviour
         int target = currentIndex + direction;
 
         if (wrapAround)
-        {
             target = (target + monitors.Length) % monitors.Length;
-        }
         else
-        {
             target = Mathf.Clamp(target, 0, monitors.Length - 1);
-        }
 
         ShowMonitor(target);
     }
@@ -111,6 +116,7 @@ public class MonitorSwitcher : MonoBehaviour
     {
         if (monitors == null || monitors.Length == 0) return;
 
+        int previousIndex = currentIndex;
         currentIndex = Mathf.Clamp(index, 0, monitors.Length - 1);
 
         for (int i = 0; i < monitors.Length; i++)
@@ -122,6 +128,15 @@ public class MonitorSwitcher : MonoBehaviour
             cg.alpha = show ? 1f : 0f;
             cg.interactable = show;
             cg.blocksRaycasts = show;
+
+            // Notifica il pannello se implementa IDashboardPanel
+            if (panels != null && i < panels.Length && panels[i] != null)
+            {
+                if (show)
+                    panels[i].Open();
+                else if (i == previousIndex)   // chiudi solo quello che era aperto
+                    panels[i].Close();
+            }
         }
 
         // Anima la camera verso il monitor attivo

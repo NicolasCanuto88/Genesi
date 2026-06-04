@@ -242,6 +242,14 @@ public class PlayerController : MonoBehaviour
             crouchToggled = !crouchToggled;
         }
     }
+    public void OnDebug(InputValue value)
+    {
+        if (value.isPressed)
+        {
+            DeguAndTest deguAndTest = FindObjectOfType<DeguAndTest>();
+            deguAndTest.panel();
+        }
+    }
 
     // OnCancel is handled by EngineeringStation and other systems
     // Do NOT toggle cursor lock here - it conflicts with station exit

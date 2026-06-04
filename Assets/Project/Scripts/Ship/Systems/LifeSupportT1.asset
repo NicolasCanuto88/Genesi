@@ -1,0 +1,30 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 7d823e4a62d888b4b81b482ff69fb332, type: 3}
+  m_Name: LifeSupportT1
+  m_EditorClassIdentifier: Assembly-CSharp::SpaceSurvivor.Ship.LifeSupportUpgradeData
+  tier: 1
+  upgradeName: Upgrade
+  description: Upgrade description
+  purchaseCost: 0
+  installCost: 0
+  installTimeHours: 0
+  requiredEngineerTier: 1
+  requiresQuest: 0
+  questID: 
+  oxygenGenerationPerMinute: 3
+  maxCrewSupported: 3
+  powerDemandWatts: 50
+  powerPriority: 9
+  alarmThreshold: 0.2
+  alarmHysteresis: 0.05
+  deathCountdownSeconds: 60
