@@ -1,0 +1,20 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: c2fa3ba2c578ba44cba98a4f78651e1d, type: 3}
+  m_Name: HullT1
+  m_EditorClassIdentifier: Assembly-CSharp::SpaceSurvivor.Ship.HullUpgradeData
+  tier: 1
+  maxHP: 500
+  repairRatePerSecond: 50
+  purchaseCost: 0
+  criticalThreshold: 0.2
+  criticalHysteresis: 0.25

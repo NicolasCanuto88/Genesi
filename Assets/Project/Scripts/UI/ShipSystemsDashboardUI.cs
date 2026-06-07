@@ -6,30 +6,13 @@ using TMPro;
 /// Ship Systems Dashboard UI — Monitor 2, Engineering Station.
 /// Milestone 2 — Sezione A: stato subsystem con dati reali.
 ///
-/// LAYOUT ATTESO (costruito nell'Inspector):
-///   Canvas (CanvasGroup, gestito da MonitorSwitcher)
-///   └── Panel
-///       ├── Header ("SHIP SYSTEMS")
-///       ├── OxygenSection
-///       │   ├── LabelText        "LIFE SUPPORT / O₂"
-///       │   ├── StatusBadge      "ONLINE" / "OFFLINE" / "CRITICAL"
-///       │   ├── O2Bar            SciFiSegmentedBar
-///       │   ├── O2LevelText      "87.3%"
-///       │   ├── O2RateText       "+2.4 / min"
-///       │   └── O2AutonText      "Autonomia: ∞ / 43 min"
-///       ├── Divider
-///       ├── [ShieldsSection]     stub — dipende da: ShieldSystem (M2)
-///       ├── [HullSection]        stub — dipende da: HullSystem (M2)
-///       ├── [PropulsionSection]  stub — dipende da: PropulsionSystem (M2)
-///       ├── [FTLSection]         stub — dipende da: FTLSystem (M2)
-///       └── [ReactorSection]     stub — dati da PowerManager (già disponibile, M2)
-///
-/// Pattern Open()/Close() — identico a EngineeringDashboardUI.
-/// Pattern OnInstanceReady — si collega a OxygenSystem senza GetComponent a catena.
+/// PATCH HullSystem:
+///   - HullSection collegata a HullSystem.OnHullChanged (evento, no polling)
+///   - hullBar e hullStatusBadge aggiornati in tempo reale
+///   - Si sottoscrive a HullSystem.OnInstanceReady se non ancora pronto
 ///
 /// ⚠️  SEZIONE B (Repair): dipende da RepairSystem + InventorySystem (M2)
-/// ⚠️  SEZIONE C (Diagnostica Elettrica): dati già parzialmente disponibili
-///     in ElectricalDegradationManager — collegabile in M2 step successivo.
+/// ⚠️  SEZIONE C (Diagnostica Elettrica): collegabile in M2 step successivo.
 /// </summary>
 public class ShipSystemsDashboardUI : MonoBehaviour, IDashboardPanel
 {
@@ -42,15 +25,18 @@ public class ShipSystemsDashboardUI : MonoBehaviour, IDashboardPanel
     [SerializeField] private TextMeshProUGUI o2RateText;
     [SerializeField] private TextMeshProUGUI o2AutonText;
 
-    // ── Stub sections (abilitate man mano che i sistemi vengono implementati) ──
+    // ── Hull (dati reali da HullSystem) ──────────────────────────────────────
+
+    [Header("Hull (HullSystem M2)")]
+    [SerializeField] private TextMeshProUGUI hullStatusBadge;
+    [SerializeField] private SciFiSegmentedBar hullBar;
+    [SerializeField] private TextMeshProUGUI hullLevelText;
+
+    // ── Stub sections ────────────────────────────────────────────────────────
 
     [Header("Shields (stub — dipende da: ShieldSystem M2)")]
     [SerializeField] private TextMeshProUGUI shieldsStatusBadge;
     [SerializeField] private SciFiSegmentedBar shieldsBar;
-
-    [Header("Hull (stub — dipende da: HullSystem M2)")]
-    [SerializeField] private TextMeshProUGUI hullStatusBadge;
-    [SerializeField] private SciFiSegmentedBar hullBar;
 
     [Header("Propulsion (stub — dipende da: PropulsionSystem M2)")]
     [SerializeField] private TextMeshProUGUI propulsionStatusBadge;
@@ -58,11 +44,11 @@ public class ShipSystemsDashboardUI : MonoBehaviour, IDashboardPanel
     [Header("FTL (stub — dipende da: FTLSystem M2)")]
     [SerializeField] private TextMeshProUGUI ftlStatusBadge;
 
-    [Header("Reactor (stub — dati PowerManager disponibili M2)")]
+    [Header("Reactor (dati PowerManager)")]
     [SerializeField] private TextMeshProUGUI reactorStatusBadge;
     [SerializeField] private SciFiSegmentedBar reactorBar;
 
-    // ── Colori stato ─────────────────────────────────────────────────────────
+    // ── Colori stato ──────────────────────────────────────────────────────────
 
     [Header("Status Colors")]
     [SerializeField] private Color colorOnline = new Color(0.2f, 1f, 0.4f);
@@ -73,8 +59,12 @@ public class ShipSystemsDashboardUI : MonoBehaviour, IDashboardPanel
     // ── Stato interno ─────────────────────────────────────────────────────────
 
     private SpaceSurvivor.Ship.OxygenSystem oxygenSystem;
+    private SpaceSurvivor.Ship.HullSystem hullSystem;
+    private SpaceSurvivor.Ship.ShieldSystem shieldSystem;
     private PowerManager powerManager;
-    private bool isOpen = false;
+
+    // Cache hull per aggiornamento badge senza polling
+    private float cachedHullPercent = 1f;
 
     // ── Lifecycle ─────────────────────────────────────────────────────────────
 
@@ -86,13 +76,24 @@ public class ShipSystemsDashboardUI : MonoBehaviour, IDashboardPanel
         else
             SpaceSurvivor.Ship.OxygenSystem.OnInstanceReady += InitWithOxygenSystem;
 
-        // PowerManager (per sezione Reactor)
+        // HullSystem
+        if (SpaceSurvivor.Ship.HullSystem.Instance != null)
+            InitWithHullSystem();
+        else
+            SpaceSurvivor.Ship.HullSystem.OnInstanceReady += InitWithHullSystem;
+
+        // ShieldSystem
+        if (SpaceSurvivor.Ship.ShieldSystem.Instance != null)
+            InitWithShieldSystem();
+        else
+            SpaceSurvivor.Ship.ShieldSystem.OnInstanceReady += InitWithShieldSystem;
+
+        // PowerManager
         if (PowerManager.Instance != null)
             InitWithPowerManager();
         else
             PowerManager.OnInstanceReady += InitWithPowerManager;
 
-        // Stub statics finché i sistemi non sono pronti
         SetStubBadges();
     }
 
@@ -100,6 +101,31 @@ public class ShipSystemsDashboardUI : MonoBehaviour, IDashboardPanel
     {
         SpaceSurvivor.Ship.OxygenSystem.OnInstanceReady -= InitWithOxygenSystem;
         oxygenSystem = SpaceSurvivor.Ship.OxygenSystem.Instance;
+    }
+
+    private void InitWithHullSystem()
+    {
+        SpaceSurvivor.Ship.HullSystem.OnInstanceReady -= InitWithHullSystem;
+        hullSystem = SpaceSurvivor.Ship.HullSystem.Instance;
+
+        // Sottoscrivi all'evento: aggiorna cache e badge immediatamente
+        hullSystem.OnHullChanged += HandleHullChanged;
+
+        // Aggiorna subito con i valori attuali
+        HandleHullChanged(hullSystem.CurrentHP, hullSystem.MaxHP, hullSystem.HullPercent);
+    }
+
+    private void InitWithShieldSystem()
+    {
+        SpaceSurvivor.Ship.ShieldSystem.OnInstanceReady -= InitWithShieldSystem;
+        shieldSystem = SpaceSurvivor.Ship.ShieldSystem.Instance;
+
+        shieldSystem.OnShieldHPChanged += HandleShieldHPChanged;
+        shieldSystem.OnStateChanged += HandleShieldStateChanged;
+
+        // Aggiorna subito
+        HandleShieldHPChanged(shieldSystem.CurrentHP, shieldSystem.MaxHP, shieldSystem.ShieldPercent);
+        HandleShieldStateChanged(shieldSystem.State);
     }
 
     private void InitWithPowerManager()
@@ -111,19 +137,72 @@ public class ShipSystemsDashboardUI : MonoBehaviour, IDashboardPanel
     private void OnDestroy()
     {
         SpaceSurvivor.Ship.OxygenSystem.OnInstanceReady -= InitWithOxygenSystem;
+        SpaceSurvivor.Ship.HullSystem.OnInstanceReady -= InitWithHullSystem;
+        SpaceSurvivor.Ship.ShieldSystem.OnInstanceReady -= InitWithShieldSystem;
         PowerManager.OnInstanceReady -= InitWithPowerManager;
+
+        if (hullSystem != null)
+            hullSystem.OnHullChanged -= HandleHullChanged;
+
+        if (shieldSystem != null)
+        {
+            shieldSystem.OnShieldHPChanged -= HandleShieldHPChanged;
+            shieldSystem.OnStateChanged -= HandleShieldStateChanged;
+        }
+
         CancelInvoke(nameof(UpdateUI));
     }
 
-    // ── Open / Close (pattern VirtualCursor) ─────────────────────────────────
+    // ── Hull event handler (fired da HullSystem su tutti i client) ────────────
+
+    private void HandleHullChanged(float currentHP, float maxHP, float percent)
+    {
+        cachedHullPercent = percent;
+
+        if (hullBar != null)
+            hullBar.SetValue(percent);
+
+        if (hullLevelText != null)
+            hullLevelText.text = $"{currentHP:F0} / {maxHP:F0} HP";
+
+        UpdateHullBadge(percent);
+    }
+
+    private void UpdateHullBadge(float percent)
+    {
+        if (hullStatusBadge == null) return;
+
+        if (percent <= 0f)
+        {
+            SetBadge(hullStatusBadge, "DESTROYED", colorCritical);
+        }
+        else if (percent < 0.20f)
+        {
+            SetBadge(hullStatusBadge, "CRITICAL", colorCritical);
+        }
+        else if (percent < 0.50f)
+        {
+            SetBadge(hullStatusBadge, "DAMAGED", colorDegraded);
+        }
+        else
+        {
+            SetBadge(hullStatusBadge, "INTACT", colorOnline);
+        }
+    }
+
+    // ── Open / Close ──────────────────────────────────────────────────────────
 
     public void Open()
     {
-        isOpen = true;
-
-        // Fallback nel caso lo spawn sia avvenuto prima di Start()
+        // Fallback se lo spawn è avvenuto dopo Start()
         if (oxygenSystem == null && SpaceSurvivor.Ship.OxygenSystem.Instance != null)
             oxygenSystem = SpaceSurvivor.Ship.OxygenSystem.Instance;
+
+        if (hullSystem == null && SpaceSurvivor.Ship.HullSystem.Instance != null)
+            InitWithHullSystem();
+
+        if (shieldSystem == null && SpaceSurvivor.Ship.ShieldSystem.Instance != null)
+            InitWithShieldSystem();
 
         if (powerManager == null && PowerManager.Instance != null)
             powerManager = PowerManager.Instance;
@@ -134,38 +213,31 @@ public class ShipSystemsDashboardUI : MonoBehaviour, IDashboardPanel
 
     public void Close()
     {
-        isOpen = false;
         CancelInvoke(nameof(UpdateUI));
     }
 
-    // ── Aggiornamento UI ──────────────────────────────────────────────────────
+    // ── Aggiornamento UI (polling per O2 e Reactor) ───────────────────────────
 
     private void UpdateUI()
     {
         UpdateO2Section();
         UpdateReactorSection();
-        // Le altre sezioni rimangono stub finché i sistemi non esistono
+        // Hull aggiornato via evento — nessun polling necessario
     }
 
-    // ── O₂ Section ───────────────────────────────────────────────────────────
+    // ── O₂ Section ────────────────────────────────────────────────────────────
 
     private void UpdateO2Section()
     {
         if (oxygenSystem == null) return;
 
-        float level = oxygenSystem.O2Level;          // 0-100
-        float percent = oxygenSystem.O2Percentage;     // 0-1
-        float netRate = oxygenSystem.NetRatePerMinute; // +/- per minuto
+        float level = oxygenSystem.O2Level;
+        float percent = oxygenSystem.O2Percentage;
+        float netRate = oxygenSystem.NetRatePerMinute;
 
-        // Barra
-        if (o2Bar != null)
-            o2Bar.SetValue(percent);
+        if (o2Bar != null) o2Bar.SetValue(percent);
+        if (o2LevelText != null) o2LevelText.text = $"{level:F1}%";
 
-        // Livello testo
-        if (o2LevelText != null)
-            o2LevelText.text = $"{level:F1}%";
-
-        // Rate testo
         if (o2RateText != null)
         {
             string sign = netRate >= 0f ? "+" : "";
@@ -173,11 +245,9 @@ public class ShipSystemsDashboardUI : MonoBehaviour, IDashboardPanel
             o2RateText.color = netRate >= 0f ? colorOnline : colorCritical;
         }
 
-        // Autonomia stimata
         if (o2AutonText != null)
             o2AutonText.text = ComputeAutonomy(level, netRate);
 
-        // Status badge
         if (o2StatusBadge != null)
             SetO2Badge(level, oxygenSystem.IsAlarmActive);
     }
@@ -185,87 +255,86 @@ public class ShipSystemsDashboardUI : MonoBehaviour, IDashboardPanel
     private void SetO2Badge(float level, bool alarmActive)
     {
         if (alarmActive || level < 20f)
-        {
-            o2StatusBadge.text = "CRITICAL";
-            o2StatusBadge.color = colorCritical;
-        }
+            SetBadge(o2StatusBadge, "CRITICAL", colorCritical);
         else if (level < 50f)
-        {
-            o2StatusBadge.text = "WARNING";
-            o2StatusBadge.color = colorDegraded;
-        }
+            SetBadge(o2StatusBadge, "WARNING", colorDegraded);
         else if (oxygenSystem.GenerationRatePerMinute <= 0f)
-        {
-            o2StatusBadge.text = "OFFLINE";
-            o2StatusBadge.color = colorOffline;
-        }
+            SetBadge(o2StatusBadge, "OFFLINE", colorOffline);
         else
-        {
-            o2StatusBadge.text = "ONLINE";
-            o2StatusBadge.color = colorOnline;
-        }
+            SetBadge(o2StatusBadge, "ONLINE", colorOnline);
     }
 
-    /// <summary>
-    /// Calcola autonomia O2 restante in base al net rate corrente.
-    /// Ritorna "∞" se rate positivo (livello in risalita), minuti se negativo.
-    /// </summary>
     private string ComputeAutonomy(float currentLevel, float netRatePerMinute)
     {
-        if (netRatePerMinute >= 0f)
-            return "Autonomia: ∞";
+        if (netRatePerMinute >= 0f) return "Autonomia: ∞";
 
-        // tempo = livello / |rate| (in minuti)
         float minutes = currentLevel / Mathf.Abs(netRatePerMinute);
-
-        if (minutes > 999f)
-            return "Autonomia: ∞";
+        if (minutes > 999f) return "Autonomia: ∞";
 
         int mins = Mathf.FloorToInt(minutes);
         int secs = Mathf.FloorToInt((minutes - mins) * 60f);
         return $"Autonomia: {mins:D2}:{secs:D2}";
     }
 
-    // ── Reactor Section (PowerManager) ───────────────────────────────────────
+    // ── Reactor Section ───────────────────────────────────────────────────────
 
     private void UpdateReactorSection()
     {
         if (powerManager == null) return;
 
         if (reactorBar != null)
-            reactorBar.SetValue(1f - powerManager.PowerPercentage); // carico inverso = headroom
+            reactorBar.SetValue(powerManager.PowerPercentage);
 
         if (reactorStatusBadge != null)
         {
             if (powerManager.IsInBlackout)
-            {
-                reactorStatusBadge.text = "BLACKOUT";
-                reactorStatusBadge.color = colorCritical;
-            }
+                SetBadge(reactorStatusBadge, "BLACKOUT", colorCritical);
             else if (powerManager.IsInCriticalState)
-            {
-                reactorStatusBadge.text = "CRITICAL";
-                reactorStatusBadge.color = colorCritical;
-            }
+                SetBadge(reactorStatusBadge, "CRITICAL", colorCritical);
             else
-            {
-                reactorStatusBadge.text = "ONLINE";
-                reactorStatusBadge.color = colorOnline;
-            }
+                SetBadge(reactorStatusBadge, "ONLINE", colorOnline);
         }
     }
 
-    // ── Stub badges (sistemi non ancora implementati) ────────────────────────
+    // ── Shield event handlers ─────────────────────────────────────────────────
+
+    private void HandleShieldHPChanged(float currentHP, float maxHP, float percent)
+    {
+        if (shieldsBar != null)
+            shieldsBar.SetValue(percent);
+    }
+
+    private void HandleShieldStateChanged(SpaceSurvivor.Ship.ShieldSystem.ShieldState state)
+    {
+        if (shieldsStatusBadge == null) return;
+
+        switch (state)
+        {
+            case SpaceSurvivor.Ship.ShieldSystem.ShieldState.On:
+                SetBadge(shieldsStatusBadge, "ONLINE", colorOnline);
+                break;
+            case SpaceSurvivor.Ship.ShieldSystem.ShieldState.Charging:
+                SetBadge(shieldsStatusBadge, "CHARGING", colorDegraded);
+                break;
+            case SpaceSurvivor.Ship.ShieldSystem.ShieldState.Off:
+                SetBadge(shieldsStatusBadge, "OFFLINE", colorOffline);
+                break;
+        }
+    }
+
+    // ── Stub badges ───────────────────────────────────────────────────────────
 
     private void SetStubBadges()
     {
-        SetBadge(shieldsStatusBadge, "OFFLINE", colorOffline);
-        SetBadge(hullStatusBadge, "INTACT", colorOnline);
+        // Shields gestiti da eventi — solo init se ShieldSystem non è ancora pronto
+        if (shieldSystem == null)
+        {
+            SetBadge(shieldsStatusBadge, "OFFLINE", colorOffline);
+            if (shieldsBar != null) shieldsBar.SetValue(0f);
+        }
+
         SetBadge(propulsionStatusBadge, "ONLINE", colorOnline);
         SetBadge(ftlStatusBadge, "ONLINE", colorOnline);
-
-        if (shieldsBar != null) shieldsBar.SetValue(0f);
-        if (hullBar != null) hullBar.SetValue(1f);
     }
 
     private void SetBadge(TextMeshProUGUI badge, string text, Color color)
