@@ -24,33 +24,33 @@ public class SciFiSegmentedBar : MonoBehaviour
     [SerializeField] private GameObject segmentPrefab;
 
     [Tooltip("Numero totale di segmenti")]
-    [SerializeField] [Range(5, 40)] private int segmentCount = 20;
+    [SerializeField][Range(5, 40)] private int segmentCount = 20;
 
     [Header("Colori per stato")]
     [Tooltip("Colore normale (es. ciano per generazione, verde per riserva)")]
-    [SerializeField] private Color colorNormal   = new Color(0f,   0.9f, 1f,   1f); // ciano
-    [SerializeField] private Color colorWarning  = new Color(1f,   0.67f, 0f,  1f); // arancio
-    [SerializeField] private Color colorCritical = new Color(1f,   0.2f, 0f,   1f); // rosso
-    [SerializeField] private Color colorOff      = new Color(1f,   1f,   1f,   0.07f);
+    [SerializeField] private Color colorNormal = new Color(0f, 0.9f, 1f, 1f); // ciano
+    [SerializeField] private Color colorWarning = new Color(1f, 0.67f, 0f, 1f); // arancio
+    [SerializeField] private Color colorCritical = new Color(1f, 0.2f, 0f, 1f); // rosso
+    [SerializeField] private Color colorOff = new Color(1f, 1f, 1f, 0.07f);
 
     [Header("Soglie (0–1) — mirror di PowerManager")]
     [Tooltip("Sotto questa soglia il colore diventa rosso (corrisponde a blackout 5%)")]
-    [SerializeField] [Range(0f, 1f)] private float thresholdCritical = 0.05f;
+    [SerializeField][Range(0f, 1f)] private float thresholdCritical = 0.05f;
 
     [Tooltip("Sotto questa soglia il colore diventa arancio (corrisponde a critical 25%)")]
-    [SerializeField] [Range(0f, 1f)] private float thresholdWarning  = 0.25f;
+    [SerializeField][Range(0f, 1f)] private float thresholdWarning = 0.25f;
 
     [Header("Marker divisore")]
     [Tooltip("Aggiunge un marker visivo a questa percentuale (0 = nessun marker)")]
-    [SerializeField] [Range(0f, 1f)] private float markerAt = 0.75f;
+    [SerializeField][Range(0f, 1f)] private float markerAt = 0.75f;
 
     [SerializeField] private Color markerColor = new Color(1f, 1f, 1f, 0.45f);
 
     // ── Stato interno ────────────────────────────────────────────────────────
 
-    private Image[]  _segments;
-    private float    _currentValue; // 0–1
-    private bool     _initialized;
+    private Image[] _segments;
+    private float _currentValue; // 0–1
+    private bool _initialized;
 
     // ── API pubblica ─────────────────────────────────────────────────────────
 
@@ -116,27 +116,29 @@ public class SciFiSegmentedBar : MonoBehaviour
                 return;
             }
 
-            // Marker divisore: tinta leggermente diversa sull'ultimo segmento
-            // prima della soglia (visibile a occhio come una "riga" più chiara)
+            // Marker divisore: istanzia lo stesso segmentPrefab con colore e larghezza dedicati
             if (i == markerIndex)
             {
-                // Aggiungiamo un Image fratello ultra-sottile come linea divisoria
-                GameObject marker = new GameObject("Marker", typeof(RectTransform), typeof(Image));
-                marker.transform.SetParent(segmentsContainer, false);
+                GameObject marker = Instantiate(segmentPrefab, segmentsContainer);
+                marker.name = "Marker";
                 marker.transform.SetSiblingIndex(i + 1); // subito dopo questo segmento
 
-                RectTransform mrt = marker.GetComponent<RectTransform>();
-                mrt.sizeDelta = new Vector2(2f, 0f); // larghezza fissa 2px, altezza dal layout
+                // Sovrascrive LayoutElement per larghezza fissa
+                LayoutElement mle = marker.GetComponent<LayoutElement>();
+                if (mle == null) mle = marker.AddComponent<LayoutElement>();
+                mle.minWidth = 4f;
+                mle.preferredWidth = 4f;
+                mle.flexibleWidth = 0f;
 
-                LayoutElement mle = marker.AddComponent<LayoutElement>();
-                mle.minWidth        = 2f;
-                mle.preferredWidth  = 2f;
-                mle.flexibleWidth   = 0f;
-
-                marker.GetComponent<Image>().color = markerColor;
+                Image markerImg = marker.GetComponent<Image>();
+                if (markerImg != null)
+                {
+                    markerImg.color = markerColor;
+                    markerImg.raycastTarget = false;
+                }
             }
 
-            img.color    = colorOff;
+            img.color = colorOff;
             _segments[i] = img;
         }
 
@@ -163,7 +165,7 @@ public class SciFiSegmentedBar : MonoBehaviour
     private Color GetActiveColor(float value)
     {
         if (value <= thresholdCritical) return colorCritical;
-        if (value <= thresholdWarning)  return colorWarning;
+        if (value <= thresholdWarning) return colorWarning;
         return colorNormal;
     }
 }
