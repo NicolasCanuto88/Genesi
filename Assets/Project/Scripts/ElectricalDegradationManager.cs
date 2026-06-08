@@ -293,4 +293,41 @@ public class ElectricalDegradationManager : NetworkBehaviour
         if (!IsServer) return;
         netBlackoutFaultBonus.Value += blackoutFaultBonusPerEvent;
     }
+
+    // ===== DEBUG GUI =====
+
+    [Header("Debug")]
+    [SerializeField] private bool showDebugGUI = true;
+
+    private void OnGUI()
+    {
+        if (!showDebugGUI) return;
+
+        int y = 500;
+        GUI.Label(new Rect(10, y, 500, 20),
+            $"=== DEGRADATION: enabled={degradationEnabled} | Hull\u00d7{netHullMultiplier.Value:0.00} EM\u00d7{netEMMultiplier.Value:0.00} Ballast\u00d7{netBallastMultiplier.Value:0.00} Tot\u00d7{GetTotalMultiplier():0.00} ===");
+        y += 20;
+
+        if (!IsServer) return;
+
+        if (GUI.Button(new Rect(10, y, 160, 22), degradationEnabled ? "Degrado: ON" : "Degrado: OFF"))
+            EnableDegradation(!degradationEnabled);
+
+        if (GUI.Button(new Rect(180, y, 160, 22), "Trigger Ballast Fault"))
+            TriggerBallastFault();
+
+        if (GUI.Button(new Rect(350, y, 130, 22), "Repair Ballast"))
+            RepairBallastInternal();
+        y += 28;
+
+        GUI.Label(new Rect(10, y, 300, 20), $"Ballast: {CurrentBallastState} | Faulted: {netBallastFaulted.Value}");
+        y += 20;
+
+        if (GUI.Button(new Rect(10, y, 110, 22), "EM: None"))
+            SetEMIntensityInternal(EMIntensity.None);
+        if (GUI.Button(new Rect(130, y, 110, 22), "EM: Moderate"))
+            SetEMIntensityInternal(EMIntensity.Moderate);
+        if (GUI.Button(new Rect(250, y, 110, 22), "EM: Extreme"))
+            SetEMIntensityInternal(EMIntensity.Extreme);
+    }
 }
