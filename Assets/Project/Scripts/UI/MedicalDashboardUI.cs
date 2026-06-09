@@ -1,6 +1,7 @@
 using UnityEngine;
 using UnityEngine.UI;
 using TMPro;
+using SpaceSurvivor.Ship;
 
 /// <summary>
 /// MedicalDashboardUI — Milestone 2
@@ -17,8 +18,8 @@ using TMPro;
 ///   Life Support status: ONLINE / DEGRADED / OFFLINE.
 ///
 /// SEZIONE C — Scorte mediche:
-///   Stub con valori fissi.
-///   ⚠️ Dipende da: InventorySystem (M2) per dati reali.
+///   Dati reali da InventorySystem (M2).
+///   Aggiornamento event-driven via InventorySystem.OnQuantityChanged.
 ///
 /// Pattern Open()/Close() via IDashboardPanel — chiamato da MedicalStation.
 /// </summary>
@@ -34,69 +35,103 @@ public class MedicalDashboardUI : MonoBehaviour, IDashboardPanel
 
     [Header("Sezione B — O₂ & Life Support")]
     [SerializeField] private SciFiSegmentedBar o2Bar;
-    [SerializeField] private TextMeshProUGUI   o2LevelText;
-    [SerializeField] private TextMeshProUGUI   o2RateText;
-    [SerializeField] private TextMeshProUGUI   o2AutonText;
-    [SerializeField] private TextMeshProUGUI   o2StatusBadge;
-    [SerializeField] private TextMeshProUGUI   lifeSupportBadge;
+    [SerializeField] private TextMeshProUGUI o2LevelText;
+    [SerializeField] private TextMeshProUGUI o2RateText;
+    [SerializeField] private TextMeshProUGUI o2AutonText;
+    [SerializeField] private TextMeshProUGUI o2StatusBadge;
+    [SerializeField] private TextMeshProUGUI lifeSupportBadge;
 
-    // ── SEZIONE C — Scorte mediche (stub) ─────────────────────────────────────
+    // ── SEZIONE C — Scorte mediche ────────────────────────────────────────────
 
-    [Header("Sezione C — Medical Supplies (stub M2)")]
+    [Header("Sezione C — Medical Supplies")]
     [SerializeField] private SciFiSegmentedBar medkitBasicBar;
     [SerializeField] private SciFiSegmentedBar medkitAdvancedBar;
     [SerializeField] private SciFiSegmentedBar o2TankBar;
     [SerializeField] private SciFiSegmentedBar antidoteBar;
-    [SerializeField] private TextMeshProUGUI   medkitBasicText;
-    [SerializeField] private TextMeshProUGUI   medkitAdvancedText;
-    [SerializeField] private TextMeshProUGUI   o2TankText;
-    [SerializeField] private TextMeshProUGUI   antidoteText;
+    [SerializeField] private TextMeshProUGUI medkitBasicText;
+    [SerializeField] private TextMeshProUGUI medkitAdvancedText;
+    [SerializeField] private TextMeshProUGUI o2TankText;
+    [SerializeField] private TextMeshProUGUI antidoteText;
 
     // ── COLORI ────────────────────────────────────────────────────────────────
 
     [Header("Status Colors")]
-    [SerializeField] private Color colorOnline   = new Color(0.2f, 1f, 0.4f);
-    [SerializeField] private Color colorWarning  = new Color(1f, 0.67f, 0f);
+    [SerializeField] private Color colorOnline = new Color(0.2f, 1f, 0.4f);
+    [SerializeField] private Color colorWarning = new Color(1f, 0.67f, 0f);
     [SerializeField] private Color colorCritical = new Color(1f, 0.2f, 0f);
-    [SerializeField] private Color colorOffline  = new Color(0.5f, 0.5f, 0.5f);
+    [SerializeField] private Color colorOffline = new Color(0.5f, 0.5f, 0.5f);
 
     // ── RIFERIMENTI SISTEMI ───────────────────────────────────────────────────
 
-    private SpaceSurvivor.Ship.OxygenSystem oxygenSystem;
+    private OxygenSystem oxygenSystem;
+    private InventorySystem inventorySystem;
 
     // ── LIFECYCLE ─────────────────────────────────────────────────────────────
 
     private void Start()
     {
-        if (SpaceSurvivor.Ship.OxygenSystem.Instance != null)
-            oxygenSystem = SpaceSurvivor.Ship.OxygenSystem.Instance;
+        // OxygenSystem
+        if (OxygenSystem.Instance != null)
+            oxygenSystem = OxygenSystem.Instance;
         else
-            SpaceSurvivor.Ship.OxygenSystem.OnInstanceReady += OnOxygenReady;
+            OxygenSystem.OnInstanceReady += OnOxygenReady;
+
+        // InventorySystem
+        if (InventorySystem.Instance != null)
+            ConnectInventory();
+        else
+            InventorySystem.OnInstanceReady += OnInventoryReady;
 
         SetCrewStub();
-        SetMedicalSuppliesStub();
+        UpdateMedicalSupplies();
     }
 
     private void OnDestroy()
     {
-        SpaceSurvivor.Ship.OxygenSystem.OnInstanceReady -= OnOxygenReady;
+        OxygenSystem.OnInstanceReady -= OnOxygenReady;
+        InventorySystem.OnInstanceReady -= OnInventoryReady;
+        InventorySystem.OnQuantityChanged -= OnInventoryQuantityChanged;
         CancelInvoke(nameof(UpdateUI));
     }
 
     private void OnOxygenReady()
     {
-        SpaceSurvivor.Ship.OxygenSystem.OnInstanceReady -= OnOxygenReady;
-        oxygenSystem = SpaceSurvivor.Ship.OxygenSystem.Instance;
+        OxygenSystem.OnInstanceReady -= OnOxygenReady;
+        oxygenSystem = OxygenSystem.Instance;
+    }
+
+    private void OnInventoryReady()
+    {
+        InventorySystem.OnInstanceReady -= OnInventoryReady;
+        ConnectInventory();
+    }
+
+    private void ConnectInventory()
+    {
+        inventorySystem = InventorySystem.Instance;
+        InventorySystem.OnQuantityChanged += OnInventoryQuantityChanged;
+        UpdateMedicalSupplies();
+    }
+
+    private void OnInventoryQuantityChanged(ItemType type, int _)
+    {
+        // Aggiorna Sezione C solo per item medici
+        if (type >= ItemType.MedkitBase)
+            UpdateMedicalSupplies();
     }
 
     // ── OPEN / CLOSE ──────────────────────────────────────────────────────────
 
     public void Open()
     {
-        if (oxygenSystem == null && SpaceSurvivor.Ship.OxygenSystem.Instance != null)
-            oxygenSystem = SpaceSurvivor.Ship.OxygenSystem.Instance;
+        if (oxygenSystem == null && OxygenSystem.Instance != null)
+            oxygenSystem = OxygenSystem.Instance;
+
+        if (inventorySystem == null && InventorySystem.Instance != null)
+            ConnectInventory();
 
         UpdateUI();
+        UpdateMedicalSupplies();
         InvokeRepeating(nameof(UpdateUI), 0f, 0.2f);
     }
 
@@ -110,7 +145,6 @@ public class MedicalDashboardUI : MonoBehaviour, IDashboardPanel
     private void UpdateUI()
     {
         UpdateO2Section();
-        // Crew e Medical Supplies sono stub — nessun polling necessario
     }
 
     // ── SEZIONE B — O₂ ───────────────────────────────────────────────────────
@@ -119,34 +153,27 @@ public class MedicalDashboardUI : MonoBehaviour, IDashboardPanel
     {
         if (oxygenSystem == null) return;
 
-        float level      = oxygenSystem.O2Level;
-        float percent    = oxygenSystem.O2Percentage;
-        float netRate    = oxygenSystem.NetRatePerMinute;
-        float genRate    = oxygenSystem.GenerationRatePerMinute;
+        float level = oxygenSystem.O2Level;
+        float percent = oxygenSystem.O2Percentage;
+        float netRate = oxygenSystem.NetRatePerMinute;
+        float genRate = oxygenSystem.GenerationRatePerMinute;
 
-        // Barra O₂
         if (o2Bar != null) o2Bar.SetValue(percent);
 
-        // Percentuale
         if (o2LevelText != null)
             o2LevelText.text = $"{level:F1}%";
 
-        // Rate netto
         if (o2RateText != null)
         {
-            string sign  = netRate >= 0f ? "+" : "";
-            o2RateText.text  = $"{sign}{netRate:F1} / min";
+            string sign = netRate >= 0f ? "+" : "";
+            o2RateText.text = $"{sign}{netRate:F1} / min";
             o2RateText.color = netRate >= 0f ? colorOnline : colorCritical;
         }
 
-        // Autonomia
         if (o2AutonText != null)
             o2AutonText.text = ComputeAutonomy(level, netRate);
 
-        // Badge O₂
         UpdateO2Badge(level, percent);
-
-        // Badge Life Support
         UpdateLifeSupportBadge(genRate);
     }
 
@@ -168,7 +195,7 @@ public class MedicalDashboardUI : MonoBehaviour, IDashboardPanel
 
         if (genRate <= 0f)
             SetBadge(lifeSupportBadge, "OFFLINE", colorOffline);
-        else if (genRate < 2.0f)   // meno della metà del T1 → degradato
+        else if (genRate < 2.0f)
             SetBadge(lifeSupportBadge, "DEGRADATO", colorWarning);
         else
             SetBadge(lifeSupportBadge, "ONLINE", colorOnline);
@@ -188,7 +215,6 @@ public class MedicalDashboardUI : MonoBehaviour, IDashboardPanel
 
     private void SetCrewStub()
     {
-        // M2: 1 crew visibile, HP pieni. Dati reali in M3 con PlayerHealthSystem.
         if (crewEntries == null) return;
 
         for (int i = 0; i < crewEntries.Length; i++)
@@ -197,27 +223,45 @@ public class MedicalDashboardUI : MonoBehaviour, IDashboardPanel
 
             if (i == 0)
             {
-                // Slot 0 — host placeholder
                 crewEntries[i].SetData("CREW 01", 100f, 100f, colorOnline);
                 crewEntries[i].gameObject.SetActive(true);
             }
             else
             {
-                // Slot 1–4 — vuoti in M2
                 crewEntries[i].gameObject.SetActive(false);
             }
         }
     }
 
-    // ── SEZIONE C — MEDICAL SUPPLIES (stub M2) ────────────────────────────────
+    // ── SEZIONE C — MEDICAL SUPPLIES ─────────────────────────────────────────
 
-    private void SetMedicalSuppliesStub()
+    private void UpdateMedicalSupplies()
     {
-        // Valori fissi finché InventorySystem non è implementato (M2)
-        SetSupplyEntry(medkitBasicBar,    medkitBasicText,    "Medikit Base",     3, 10);
-        SetSupplyEntry(medkitAdvancedBar, medkitAdvancedText, "Medikit Avanzato", 1, 5);
-        SetSupplyEntry(o2TankBar,         o2TankText,         "O₂ Tank",          2, 5);
-        SetSupplyEntry(antidoteBar,       antidoteText,       "Antidoto",         0, 5);
+        if (inventorySystem == null)
+        {
+            // Fallback stub finché InventorySystem non è pronto
+            SetSupplyEntry(medkitBasicBar, medkitBasicText, "Medikit Base", 0, 10);
+            SetSupplyEntry(medkitAdvancedBar, medkitAdvancedText, "Medikit Avanzato", 0, 5);
+            SetSupplyEntry(o2TankBar, o2TankText, "O₂ Tank", 0, 5);
+            SetSupplyEntry(antidoteBar, antidoteText, "Antidoto", 0, 5);
+            return;
+        }
+
+        SetSupplyEntry(medkitBasicBar, medkitBasicText, "Medikit Base",
+            inventorySystem.GetQuantity(ItemType.MedkitBase),
+            inventorySystem.GetMaxStack(ItemType.MedkitBase));
+
+        SetSupplyEntry(medkitAdvancedBar, medkitAdvancedText, "Medikit Avanzato",
+            inventorySystem.GetQuantity(ItemType.MedkitAdvanced),
+            inventorySystem.GetMaxStack(ItemType.MedkitAdvanced));
+
+        SetSupplyEntry(o2TankBar, o2TankText, "O₂ Tank",
+            inventorySystem.GetQuantity(ItemType.O2EmergencyTank),
+            inventorySystem.GetMaxStack(ItemType.O2EmergencyTank));
+
+        SetSupplyEntry(antidoteBar, antidoteText, "Antidoto",
+            inventorySystem.GetQuantity(ItemType.Antidote),
+            inventorySystem.GetMaxStack(ItemType.Antidote));
     }
 
     private void SetSupplyEntry(SciFiSegmentedBar bar, TextMeshProUGUI label,
@@ -244,7 +288,7 @@ public class MedicalDashboardUI : MonoBehaviour, IDashboardPanel
     private void SetBadge(TextMeshProUGUI badge, string text, Color color)
     {
         if (badge == null) return;
-        badge.text  = text;
+        badge.text = text;
         badge.color = color;
     }
 }
