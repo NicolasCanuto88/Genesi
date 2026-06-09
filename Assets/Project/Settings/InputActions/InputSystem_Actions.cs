@@ -190,6 +190,51 @@ public partial class @InputSystem_Actions: IInputActionCollection2, IDisposable
                     ""processors"": """",
                     ""interactions"": """",
                     ""initialStateCheck"": false
+                },
+                {
+                    ""name"": ""RepairMash"",
+                    ""type"": ""Button"",
+                    ""id"": ""36dbf256-79f5-44b4-a3e6-b7caba711f90"",
+                    ""expectedControlType"": """",
+                    ""processors"": """",
+                    ""interactions"": """",
+                    ""initialStateCheck"": false
+                },
+                {
+                    ""name"": ""RepairKey_0"",
+                    ""type"": ""Button"",
+                    ""id"": ""200bf319-d18c-4fd1-a7a5-eb4c04e6167d"",
+                    ""expectedControlType"": """",
+                    ""processors"": """",
+                    ""interactions"": """",
+                    ""initialStateCheck"": false
+                },
+                {
+                    ""name"": ""RepairKey_1"",
+                    ""type"": ""Button"",
+                    ""id"": ""245dc498-409c-4002-aa1c-293d10dec43b"",
+                    ""expectedControlType"": """",
+                    ""processors"": """",
+                    ""interactions"": """",
+                    ""initialStateCheck"": false
+                },
+                {
+                    ""name"": ""RepairKey_2"",
+                    ""type"": ""Button"",
+                    ""id"": ""022ecfce-8ffe-425e-a1f7-79f5e57cde43"",
+                    ""expectedControlType"": """",
+                    ""processors"": """",
+                    ""interactions"": """",
+                    ""initialStateCheck"": false
+                },
+                {
+                    ""name"": ""RepairKey_3"",
+                    ""type"": ""Button"",
+                    ""id"": ""7101a9cd-0f66-43b4-b07f-8fbb3830bef5"",
+                    ""expectedControlType"": """",
+                    ""processors"": """",
+                    ""interactions"": """",
+                    ""initialStateCheck"": false
                 }
             ],
             ""bindings"": [
@@ -608,6 +653,116 @@ public partial class @InputSystem_Actions: IInputActionCollection2, IDisposable
                     ""processors"": """",
                     ""groups"": """",
                     ""action"": ""Debug"",
+                    ""isComposite"": false,
+                    ""isPartOfComposite"": false
+                },
+                {
+                    ""name"": """",
+                    ""id"": ""06f5756e-c8ed-411a-92a9-8913d8e7debd"",
+                    ""path"": ""<Keyboard>/e"",
+                    ""interactions"": """",
+                    ""processors"": """",
+                    ""groups"": """",
+                    ""action"": ""RepairMash"",
+                    ""isComposite"": false,
+                    ""isPartOfComposite"": false
+                },
+                {
+                    ""name"": """",
+                    ""id"": ""ca630203-56e2-4527-a4c8-3e8c96b47851"",
+                    ""path"": ""<Gamepad>/buttonSouth"",
+                    ""interactions"": """",
+                    ""processors"": """",
+                    ""groups"": """",
+                    ""action"": ""RepairMash"",
+                    ""isComposite"": false,
+                    ""isPartOfComposite"": false
+                },
+                {
+                    ""name"": """",
+                    ""id"": ""8acbb852-78a3-4523-bb52-0f69eaa85546"",
+                    ""path"": ""<Keyboard>/q"",
+                    ""interactions"": """",
+                    ""processors"": """",
+                    ""groups"": """",
+                    ""action"": ""RepairKey_0"",
+                    ""isComposite"": false,
+                    ""isPartOfComposite"": false
+                },
+                {
+                    ""name"": """",
+                    ""id"": ""b8cd7c5c-b784-472b-9067-8de3a71adbd1"",
+                    ""path"": ""<Gamepad>/buttonWest"",
+                    ""interactions"": """",
+                    ""processors"": """",
+                    ""groups"": """",
+                    ""action"": ""RepairKey_0"",
+                    ""isComposite"": false,
+                    ""isPartOfComposite"": false
+                },
+                {
+                    ""name"": """",
+                    ""id"": ""4a5dcd08-f527-4d98-b899-847574a3d3ba"",
+                    ""path"": ""<Keyboard>/r"",
+                    ""interactions"": """",
+                    ""processors"": """",
+                    ""groups"": """",
+                    ""action"": ""RepairKey_1"",
+                    ""isComposite"": false,
+                    ""isPartOfComposite"": false
+                },
+                {
+                    ""name"": """",
+                    ""id"": ""bdf97976-f249-4bc7-8385-68a55453c66d"",
+                    ""path"": ""<Gamepad>/buttonNorth"",
+                    ""interactions"": """",
+                    ""processors"": """",
+                    ""groups"": """",
+                    ""action"": ""RepairKey_1"",
+                    ""isComposite"": false,
+                    ""isPartOfComposite"": false
+                },
+                {
+                    ""name"": """",
+                    ""id"": ""34485d8e-843a-4340-83c5-0ea5ca2f04e8"",
+                    ""path"": ""<Keyboard>/f"",
+                    ""interactions"": """",
+                    ""processors"": """",
+                    ""groups"": """",
+                    ""action"": ""RepairKey_2"",
+                    ""isComposite"": false,
+                    ""isPartOfComposite"": false
+                },
+                {
+                    ""name"": """",
+                    ""id"": ""80ae8ead-afe9-4dd8-9f48-8be7221b7486"",
+                    ""path"": ""<Gamepad>/leftShoulder"",
+                    ""interactions"": """",
+                    ""processors"": """",
+                    ""groups"": """",
+                    ""action"": ""RepairKey_2"",
+                    ""isComposite"": false,
+                    ""isPartOfComposite"": false
+                },
+                {
+                    ""name"": """",
+                    ""id"": ""d933a26a-752f-44fc-90da-b11b83490be2"",
+                    ""path"": ""<Keyboard>/g"",
+                    ""interactions"": """",
+                    ""processors"": """",
+                    ""groups"": """",
+                    ""action"": ""RepairKey_3"",
+                    ""isComposite"": false,
+                    ""isPartOfComposite"": false
+                },
+                {
+                    ""name"": """",
+                    ""id"": ""46402c6d-5779-4da8-8784-8b7f8bb86529"",
+                    ""path"": ""<Gamepad>/rightShoulder"",
+                    ""interactions"": """",
+                    ""processors"": """",
+                    ""groups"": """",
+                    ""action"": ""RepairKey_3"",
                     ""isComposite"": false,
                     ""isPartOfComposite"": false
                 }
@@ -1217,6 +1372,11 @@ public partial class @InputSystem_Actions: IInputActionCollection2, IDisposable
         m_Player_Sprint = m_Player.FindAction("Sprint", throwIfNotFound: true);
         m_Player_Shield = m_Player.FindAction("Shield", throwIfNotFound: true);
         m_Player_Debug = m_Player.FindAction("Debug", throwIfNotFound: true);
+        m_Player_RepairMash = m_Player.FindAction("RepairMash", throwIfNotFound: true);
+        m_Player_RepairKey_0 = m_Player.FindAction("RepairKey_0", throwIfNotFound: true);
+        m_Player_RepairKey_1 = m_Player.FindAction("RepairKey_1", throwIfNotFound: true);
+        m_Player_RepairKey_2 = m_Player.FindAction("RepairKey_2", throwIfNotFound: true);
+        m_Player_RepairKey_3 = m_Player.FindAction("RepairKey_3", throwIfNotFound: true);
         // UI
         m_UI = asset.FindActionMap("UI", throwIfNotFound: true);
         m_UI_Navigate = m_UI.FindAction("Navigate", throwIfNotFound: true);
@@ -1321,6 +1481,11 @@ public partial class @InputSystem_Actions: IInputActionCollection2, IDisposable
     private readonly InputAction m_Player_Sprint;
     private readonly InputAction m_Player_Shield;
     private readonly InputAction m_Player_Debug;
+    private readonly InputAction m_Player_RepairMash;
+    private readonly InputAction m_Player_RepairKey_0;
+    private readonly InputAction m_Player_RepairKey_1;
+    private readonly InputAction m_Player_RepairKey_2;
+    private readonly InputAction m_Player_RepairKey_3;
     /// <summary>
     /// Provides access to input actions defined in input action map "Player".
     /// </summary>
@@ -1376,6 +1541,26 @@ public partial class @InputSystem_Actions: IInputActionCollection2, IDisposable
         /// Provides access to the underlying input action "Player/Debug".
         /// </summary>
         public InputAction @Debug => m_Wrapper.m_Player_Debug;
+        /// <summary>
+        /// Provides access to the underlying input action "Player/RepairMash".
+        /// </summary>
+        public InputAction @RepairMash => m_Wrapper.m_Player_RepairMash;
+        /// <summary>
+        /// Provides access to the underlying input action "Player/RepairKey_0".
+        /// </summary>
+        public InputAction @RepairKey_0 => m_Wrapper.m_Player_RepairKey_0;
+        /// <summary>
+        /// Provides access to the underlying input action "Player/RepairKey_1".
+        /// </summary>
+        public InputAction @RepairKey_1 => m_Wrapper.m_Player_RepairKey_1;
+        /// <summary>
+        /// Provides access to the underlying input action "Player/RepairKey_2".
+        /// </summary>
+        public InputAction @RepairKey_2 => m_Wrapper.m_Player_RepairKey_2;
+        /// <summary>
+        /// Provides access to the underlying input action "Player/RepairKey_3".
+        /// </summary>
+        public InputAction @RepairKey_3 => m_Wrapper.m_Player_RepairKey_3;
         /// <summary>
         /// Provides access to the underlying input action map instance.
         /// </summary>
@@ -1435,6 +1620,21 @@ public partial class @InputSystem_Actions: IInputActionCollection2, IDisposable
             @Debug.started += instance.OnDebug;
             @Debug.performed += instance.OnDebug;
             @Debug.canceled += instance.OnDebug;
+            @RepairMash.started += instance.OnRepairMash;
+            @RepairMash.performed += instance.OnRepairMash;
+            @RepairMash.canceled += instance.OnRepairMash;
+            @RepairKey_0.started += instance.OnRepairKey_0;
+            @RepairKey_0.performed += instance.OnRepairKey_0;
+            @RepairKey_0.canceled += instance.OnRepairKey_0;
+            @RepairKey_1.started += instance.OnRepairKey_1;
+            @RepairKey_1.performed += instance.OnRepairKey_1;
+            @RepairKey_1.canceled += instance.OnRepairKey_1;
+            @RepairKey_2.started += instance.OnRepairKey_2;
+            @RepairKey_2.performed += instance.OnRepairKey_2;
+            @RepairKey_2.canceled += instance.OnRepairKey_2;
+            @RepairKey_3.started += instance.OnRepairKey_3;
+            @RepairKey_3.performed += instance.OnRepairKey_3;
+            @RepairKey_3.canceled += instance.OnRepairKey_3;
         }
 
         /// <summary>
@@ -1479,6 +1679,21 @@ public partial class @InputSystem_Actions: IInputActionCollection2, IDisposable
             @Debug.started -= instance.OnDebug;
             @Debug.performed -= instance.OnDebug;
             @Debug.canceled -= instance.OnDebug;
+            @RepairMash.started -= instance.OnRepairMash;
+            @RepairMash.performed -= instance.OnRepairMash;
+            @RepairMash.canceled -= instance.OnRepairMash;
+            @RepairKey_0.started -= instance.OnRepairKey_0;
+            @RepairKey_0.performed -= instance.OnRepairKey_0;
+            @RepairKey_0.canceled -= instance.OnRepairKey_0;
+            @RepairKey_1.started -= instance.OnRepairKey_1;
+            @RepairKey_1.performed -= instance.OnRepairKey_1;
+            @RepairKey_1.canceled -= instance.OnRepairKey_1;
+            @RepairKey_2.started -= instance.OnRepairKey_2;
+            @RepairKey_2.performed -= instance.OnRepairKey_2;
+            @RepairKey_2.canceled -= instance.OnRepairKey_2;
+            @RepairKey_3.started -= instance.OnRepairKey_3;
+            @RepairKey_3.performed -= instance.OnRepairKey_3;
+            @RepairKey_3.canceled -= instance.OnRepairKey_3;
         }
 
         /// <summary>
@@ -1856,6 +2071,41 @@ public partial class @InputSystem_Actions: IInputActionCollection2, IDisposable
         /// <seealso cref="UnityEngine.InputSystem.InputAction.performed" />
         /// <seealso cref="UnityEngine.InputSystem.InputAction.canceled" />
         void OnDebug(InputAction.CallbackContext context);
+        /// <summary>
+        /// Method invoked when associated input action "RepairMash" is either <see cref="UnityEngine.InputSystem.InputAction.started" />, <see cref="UnityEngine.InputSystem.InputAction.performed" /> or <see cref="UnityEngine.InputSystem.InputAction.canceled" />.
+        /// </summary>
+        /// <seealso cref="UnityEngine.InputSystem.InputAction.started" />
+        /// <seealso cref="UnityEngine.InputSystem.InputAction.performed" />
+        /// <seealso cref="UnityEngine.InputSystem.InputAction.canceled" />
+        void OnRepairMash(InputAction.CallbackContext context);
+        /// <summary>
+        /// Method invoked when associated input action "RepairKey_0" is either <see cref="UnityEngine.InputSystem.InputAction.started" />, <see cref="UnityEngine.InputSystem.InputAction.performed" /> or <see cref="UnityEngine.InputSystem.InputAction.canceled" />.
+        /// </summary>
+        /// <seealso cref="UnityEngine.InputSystem.InputAction.started" />
+        /// <seealso cref="UnityEngine.InputSystem.InputAction.performed" />
+        /// <seealso cref="UnityEngine.InputSystem.InputAction.canceled" />
+        void OnRepairKey_0(InputAction.CallbackContext context);
+        /// <summary>
+        /// Method invoked when associated input action "RepairKey_1" is either <see cref="UnityEngine.InputSystem.InputAction.started" />, <see cref="UnityEngine.InputSystem.InputAction.performed" /> or <see cref="UnityEngine.InputSystem.InputAction.canceled" />.
+        /// </summary>
+        /// <seealso cref="UnityEngine.InputSystem.InputAction.started" />
+        /// <seealso cref="UnityEngine.InputSystem.InputAction.performed" />
+        /// <seealso cref="UnityEngine.InputSystem.InputAction.canceled" />
+        void OnRepairKey_1(InputAction.CallbackContext context);
+        /// <summary>
+        /// Method invoked when associated input action "RepairKey_2" is either <see cref="UnityEngine.InputSystem.InputAction.started" />, <see cref="UnityEngine.InputSystem.InputAction.performed" /> or <see cref="UnityEngine.InputSystem.InputAction.canceled" />.
+        /// </summary>
+        /// <seealso cref="UnityEngine.InputSystem.InputAction.started" />
+        /// <seealso cref="UnityEngine.InputSystem.InputAction.performed" />
+        /// <seealso cref="UnityEngine.InputSystem.InputAction.canceled" />
+        void OnRepairKey_2(InputAction.CallbackContext context);
+        /// <summary>
+        /// Method invoked when associated input action "RepairKey_3" is either <see cref="UnityEngine.InputSystem.InputAction.started" />, <see cref="UnityEngine.InputSystem.InputAction.performed" /> or <see cref="UnityEngine.InputSystem.InputAction.canceled" />.
+        /// </summary>
+        /// <seealso cref="UnityEngine.InputSystem.InputAction.started" />
+        /// <seealso cref="UnityEngine.InputSystem.InputAction.performed" />
+        /// <seealso cref="UnityEngine.InputSystem.InputAction.canceled" />
+        void OnRepairKey_3(InputAction.CallbackContext context);
     }
     /// <summary>
     /// Interface to implement callback methods for all input action callbacks associated with input actions defined by "UI" which allows adding and removing callbacks.
