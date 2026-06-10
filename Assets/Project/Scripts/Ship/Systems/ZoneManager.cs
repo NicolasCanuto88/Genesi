@@ -1,6 +1,7 @@
 ﻿using Unity.Netcode;
 using UnityEngine;
 using UnityEngine.Events;
+using SpaceSurvivor.Ship;                  // ← AGGIUNTO: PropulsionSystem
 using static ElectricalDegradationManager;
 using static SpaceSurvivor.Ship.ShieldSystem;
 
@@ -29,7 +30,8 @@ namespace SpaceSurvivor.Ship.Systems
 
     /// <summary>
     /// Gestisce zona spaziale corrente ed eventi ambientali.
-    /// Authority: server. Propaga a ElectricalDegradationManager e ShieldSystem.
+    /// Authority: server. Propaga a ElectricalDegradationManager, ShieldSystem
+    /// e PropulsionSystem (disponibilità autopilota).
     /// Milestone 2.
     /// </summary>
     public class ZoneManager : NetworkBehaviour
@@ -68,7 +70,6 @@ namespace SpaceSurvivor.Ship.Systems
             _netZone.OnValueChanged += (_, _) => ApplyCurrentState();
             _netEvent.OnValueChanged += (_, _) => ApplyCurrentState();
 
-            // Push stato iniziale (tutti i client lo applicano per UI/audio)
             ApplyCurrentState();
 
             OnInstanceReady?.Invoke();
@@ -83,27 +84,21 @@ namespace SpaceSurvivor.Ship.Systems
 
         // ── API pubblica ──────────────────────────────────────────────────
 
-        /// <summary>
-        /// Cambia zona. Azzera automaticamente l'evento attivo.
-        /// Chiamabile da qualsiasi client.
-        /// </summary>
+        /// <summary>Cambia zona. Azzera automaticamente l'evento attivo.</summary>
         public void SetZone(ZoneType zone)
         {
             if (IsServer) SetZoneInternal(zone);
             else SetZoneServerRpc(zone);
         }
 
-        /// <summary>
-        /// Attiva un evento ambientale (RadiationStorm, AsteroidField…).
-        /// Chiamabile da qualsiasi client.
-        /// </summary>
+        /// <summary>Attiva un evento ambientale. NON attiva protezioni automaticamente.</summary>
         public void TriggerEvent(ZoneEvent evt)
         {
             if (IsServer) SetEventInternal(evt);
             else SetEventServerRpc(evt);
         }
 
-        /// <summary>Termina l'evento attivo. Chiamabile da qualsiasi client.</summary>
+        /// <summary>Termina l'evento attivo.</summary>
         public void ClearEvent() => TriggerEvent(ZoneEvent.None);
 
         // ── RPCs ──────────────────────────────────────────────────────────
@@ -117,7 +112,7 @@ namespace SpaceSurvivor.Ship.Systems
         private void SetZoneInternal(ZoneType zone)
         {
             _netZone.Value = zone;
-            _netEvent.Value = ZoneEvent.None; // reset evento al cambio zona
+            _netEvent.Value = ZoneEvent.None;
         }
 
         private void SetEventInternal(ZoneEvent evt)
@@ -126,9 +121,8 @@ namespace SpaceSurvivor.Ship.Systems
         }
 
         /// <summary>
-        /// Propaga lo stato corrente a tutti i sistemi dipendenti.
-        /// Push downstream → solo server (evita doppi RPC).
-        /// Unity Event → tutti i client (UI, audio).
+        /// Propaga lo stato ambientale corrente ai sistemi dipendenti.
+        /// Aggiorna SOLO parametri passivi — non attiva mai protezioni.
         /// </summary>
         private void ApplyCurrentState()
         {
@@ -137,29 +131,48 @@ namespace SpaceSurvivor.Ship.Systems
 
             if (IsServer)
             {
+                // Moltiplicatore EM → degrado elettrico (effetto ambientale passivo)
                 if (ElectricalDegradationManager.Instance != null)
                     ElectricalDegradationManager.Instance.SetEMIntensity(em);
                 else
-                    Debug.LogWarning("[ZoneManager] ElectricalDegradationManager non trovato — verrà applicato al prossimo cambio zona.");
+                    Debug.LogWarning("[ZoneManager] ElectricalDegradationManager non trovato.");
 
+                // Cost tier scudi → solo il costo W se già attivi (non attiva gli scudi)
                 if (ShieldSystem.Instance != null)
                     ShieldSystem.Instance.SetZoneContext(ctx);
                 else
-                    Debug.LogWarning("[ZoneManager] ShieldSystem non trovato — verrà applicato al prossimo cambio zona.");
+                    Debug.LogWarning("[ZoneManager] ShieldSystem non trovato.");
+
+                // Disponibilità autopilota → disabilitato in AsteroidField   ← AGGIUNTO
+                UpdateAutopilotAvailability(ActiveEvent);
             }
 
-            // UI e audio su tutti i client
             OnZoneChanged?.Invoke(CurrentZone, ActiveEvent);
 
             Debug.Log($"[ZoneManager] Zona:{CurrentZone} Evento:{ActiveEvent} → EM:{em} Ctx:{ctx}");
         }
 
-        // ── Mapping GDD §9.7 ─────────────────────────────────────────────
+        // ── Autopilota (AGGIUNTO) ─────────────────────────────────────────
 
         /// <summary>
-        /// Zona + evento → EMIntensity.
-        /// L'evento sovrascrive la baseline della zona se più alto (Mathf.Max sugli int).
+        /// Comunica a PropulsionSystem se il pilota automatico è disponibile.
+        /// Durante AsteroidField il campo richiede guida manuale.
+        ///
+        /// Regola invariante ZoneManager: aggiorna un parametro passivo,
+        /// NON forza lo stato di navigazione. È il Pilota a decidere.
         /// </summary>
+        private void UpdateAutopilotAvailability(ZoneEvent evt)
+        {
+            bool available = evt != ZoneEvent.AsteroidField;
+
+            if (PropulsionSystem.Instance != null)
+                PropulsionSystem.Instance.SetAutopilotAvailable(available);
+            // Se PropulsionSystem non è ancora in scena: nessun warning —
+            // verrà aggiornato alla prossima variazione di evento.
+        }
+
+        // ── Mapping GDD §9.7 ─────────────────────────────────────────────
+
         public static EMIntensity ResolveEMIntensity(ZoneType zone, ZoneEvent evt)
         {
             EMIntensity baseline = zone switch
@@ -172,28 +185,23 @@ namespace SpaceSurvivor.Ship.Systems
 
             EMIntensity eventEM = evt switch
             {
-                ZoneEvent.RadiationStorm => EMIntensity.Strong,   // ×1.45
-                ZoneEvent.SolarStorm => EMIntensity.Strong,   // ×1.45
-                ZoneEvent.EMAnomaly => EMIntensity.Extreme,  // ×1.80
-                ZoneEvent.AsteroidField => EMIntensity.None,     // hazard fisico, no EM
+                ZoneEvent.RadiationStorm => EMIntensity.Strong,
+                ZoneEvent.SolarStorm => EMIntensity.Strong,
+                ZoneEvent.EMAnomaly => EMIntensity.Extreme,
+                ZoneEvent.AsteroidField => EMIntensity.None,
                 _ => EMIntensity.None
             };
 
-            // Se l'evento porta meno EM della zona baseline, vince la baseline
             return (EMIntensity)Mathf.Max((int)baseline, (int)eventEM);
         }
 
-        /// <summary>
-        /// Evento attivo → ZoneContext per ShieldSystem (determina consumo W).
-        /// Combat context è gestito da M3 (CombatSystem), non da ZoneManager.
-        /// </summary>
         public static ZoneContext ResolveZoneContext(ZoneEvent evt)
         {
             return evt switch
             {
-                ZoneEvent.RadiationStorm => ZoneContext.RadiationStorm, // 87W
-                ZoneEvent.AsteroidField => ZoneContext.AsteroidStorm,  // 60W
-                _ => ZoneContext.Normal           // 25W
+                ZoneEvent.RadiationStorm => ZoneContext.RadiationStorm,
+                ZoneEvent.AsteroidField => ZoneContext.AsteroidStorm,
+                _ => ZoneContext.Normal
             };
         }
 
@@ -204,14 +212,15 @@ namespace SpaceSurvivor.Ship.Systems
             var em = ResolveEMIntensity(CurrentZone, ActiveEvent);
             var ctx = ResolveZoneContext(ActiveEvent);
 
-            GUILayout.BeginArea(new Rect(Screen.width - 235, 400, 225, 300));
+            GUILayout.BeginArea(new Rect(Screen.width - 235, 400, 225, 310));
             GUILayout.BeginVertical("box");
 
             GUILayout.Label($"[ZoneManager] {(IsServer ? "SERVER" : "CLIENT")}");
-            GUILayout.Label($"Zona:   {CurrentZone}");
-            GUILayout.Label($"Evento: {ActiveEvent}");
-            GUILayout.Label($"EM:     {em}");
-            GUILayout.Label($"Ctx:    {ctx}");
+            GUILayout.Label($"Zona:     {CurrentZone}");
+            GUILayout.Label($"Evento:   {ActiveEvent}");
+            GUILayout.Label($"EM:       {em}");
+            GUILayout.Label($"Ctx:      {ctx}");
+            GUILayout.Label($"Autopilot:{(ActiveEvent != ZoneEvent.AsteroidField ? "OK" : "DISABLED")}");
 
             GUILayout.Space(4);
             GUILayout.Label("─ Zona ─");
