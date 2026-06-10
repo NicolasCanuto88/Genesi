@@ -1294,6 +1294,138 @@ public partial class @InputSystem_Actions: IInputActionCollection2, IDisposable
                     ""isPartOfComposite"": false
                 }
             ]
+        },
+        {
+            ""name"": ""Pilot"",
+            ""id"": ""fc17418b-3efd-4f83-bf6b-14f90ef5768e"",
+            ""actions"": [
+                {
+                    ""name"": ""PilotAutopilot"",
+                    ""type"": ""Button"",
+                    ""id"": ""661865b8-53fd-4ecc-9eb6-840abb9259ce"",
+                    ""expectedControlType"": """",
+                    ""processors"": """",
+                    ""interactions"": """",
+                    ""initialStateCheck"": false
+                },
+                {
+                    ""name"": ""PilotManual"",
+                    ""type"": ""Button"",
+                    ""id"": ""30da5b7a-a802-4cae-a5bb-6e1c4be567a2"",
+                    ""expectedControlType"": """",
+                    ""processors"": """",
+                    ""interactions"": """",
+                    ""initialStateCheck"": false
+                },
+                {
+                    ""name"": ""PilotShieldToggle"",
+                    ""type"": ""Button"",
+                    ""id"": ""45919655-ab83-4f48-aaa2-022ec45bf9bb"",
+                    ""expectedControlType"": """",
+                    ""processors"": """",
+                    ""interactions"": """",
+                    ""initialStateCheck"": false
+                },
+                {
+                    ""name"": ""PilotFTLJump"",
+                    ""type"": ""Button"",
+                    ""id"": ""7fafc98b-901e-4c45-8934-3581b4ecc010"",
+                    ""expectedControlType"": """",
+                    ""processors"": """",
+                    ""interactions"": """",
+                    ""initialStateCheck"": false
+                }
+            ],
+            ""bindings"": [
+                {
+                    ""name"": """",
+                    ""id"": ""53cd7958-353b-4ea0-ae54-691b65cec9ff"",
+                    ""path"": ""<Keyboard>/a"",
+                    ""interactions"": """",
+                    ""processors"": """",
+                    ""groups"": """",
+                    ""action"": ""PilotAutopilot"",
+                    ""isComposite"": false,
+                    ""isPartOfComposite"": false
+                },
+                {
+                    ""name"": """",
+                    ""id"": ""b295521b-0f9d-4ab9-b462-4bb1fbdb5258"",
+                    ""path"": ""<Gamepad>/leftStickPress"",
+                    ""interactions"": """",
+                    ""processors"": """",
+                    ""groups"": """",
+                    ""action"": ""PilotAutopilot"",
+                    ""isComposite"": false,
+                    ""isPartOfComposite"": false
+                },
+                {
+                    ""name"": """",
+                    ""id"": ""5f524329-1936-424f-bd2d-c35e8815e04e"",
+                    ""path"": ""<Keyboard>/q"",
+                    ""interactions"": """",
+                    ""processors"": """",
+                    ""groups"": """",
+                    ""action"": ""PilotManual"",
+                    ""isComposite"": false,
+                    ""isPartOfComposite"": false
+                },
+                {
+                    ""name"": """",
+                    ""id"": ""3e4b2f49-0edb-40be-93f5-6b8ddda806f3"",
+                    ""path"": ""<Gamepad>/rightStickPress"",
+                    ""interactions"": """",
+                    ""processors"": """",
+                    ""groups"": """",
+                    ""action"": ""PilotManual"",
+                    ""isComposite"": false,
+                    ""isPartOfComposite"": false
+                },
+                {
+                    ""name"": """",
+                    ""id"": ""f3de22f6-cff3-4b3e-a3f7-f3bb0ec084a4"",
+                    ""path"": ""<Keyboard>/f"",
+                    ""interactions"": """",
+                    ""processors"": """",
+                    ""groups"": """",
+                    ""action"": ""PilotShieldToggle"",
+                    ""isComposite"": false,
+                    ""isPartOfComposite"": false
+                },
+                {
+                    ""name"": """",
+                    ""id"": ""abee4c29-0572-4310-a963-80eb532dcfde"",
+                    ""path"": ""<Gamepad>/leftShoulder"",
+                    ""interactions"": """",
+                    ""processors"": """",
+                    ""groups"": """",
+                    ""action"": ""PilotShieldToggle"",
+                    ""isComposite"": false,
+                    ""isPartOfComposite"": false
+                },
+                {
+                    ""name"": """",
+                    ""id"": ""b1886f20-01ac-4338-b4d7-146c586615f2"",
+                    ""path"": ""<Keyboard>/g"",
+                    ""interactions"": """",
+                    ""processors"": """",
+                    ""groups"": """",
+                    ""action"": ""PilotFTLJump"",
+                    ""isComposite"": false,
+                    ""isPartOfComposite"": false
+                },
+                {
+                    ""name"": """",
+                    ""id"": ""fa08beb8-0ee5-4ba4-8fbe-399a2dc48623"",
+                    ""path"": ""<Gamepad>/buttonNorth"",
+                    ""interactions"": """",
+                    ""processors"": """",
+                    ""groups"": """",
+                    ""action"": ""PilotFTLJump"",
+                    ""isComposite"": false,
+                    ""isPartOfComposite"": false
+                }
+            ]
         }
     ],
     ""controlSchemes"": [
@@ -1389,12 +1521,19 @@ public partial class @InputSystem_Actions: IInputActionCollection2, IDisposable
         m_UI_ScrollWheel = m_UI.FindAction("ScrollWheel", throwIfNotFound: true);
         m_UI_TrackedDevicePosition = m_UI.FindAction("TrackedDevicePosition", throwIfNotFound: true);
         m_UI_TrackedDeviceOrientation = m_UI.FindAction("TrackedDeviceOrientation", throwIfNotFound: true);
+        // Pilot
+        m_Pilot = asset.FindActionMap("Pilot", throwIfNotFound: true);
+        m_Pilot_PilotAutopilot = m_Pilot.FindAction("PilotAutopilot", throwIfNotFound: true);
+        m_Pilot_PilotManual = m_Pilot.FindAction("PilotManual", throwIfNotFound: true);
+        m_Pilot_PilotShieldToggle = m_Pilot.FindAction("PilotShieldToggle", throwIfNotFound: true);
+        m_Pilot_PilotFTLJump = m_Pilot.FindAction("PilotFTLJump", throwIfNotFound: true);
     }
 
     ~@InputSystem_Actions()
     {
         UnityEngine.Debug.Assert(!m_Player.enabled, "This will cause a leak and performance issues, InputSystem_Actions.Player.Disable() has not been called.");
         UnityEngine.Debug.Assert(!m_UI.enabled, "This will cause a leak and performance issues, InputSystem_Actions.UI.Disable() has not been called.");
+        UnityEngine.Debug.Assert(!m_Pilot.enabled, "This will cause a leak and performance issues, InputSystem_Actions.Pilot.Disable() has not been called.");
     }
 
     /// <summary>
@@ -1922,6 +2061,135 @@ public partial class @InputSystem_Actions: IInputActionCollection2, IDisposable
     /// Provides a new <see cref="UIActions" /> instance referencing this action map.
     /// </summary>
     public UIActions @UI => new UIActions(this);
+
+    // Pilot
+    private readonly InputActionMap m_Pilot;
+    private List<IPilotActions> m_PilotActionsCallbackInterfaces = new List<IPilotActions>();
+    private readonly InputAction m_Pilot_PilotAutopilot;
+    private readonly InputAction m_Pilot_PilotManual;
+    private readonly InputAction m_Pilot_PilotShieldToggle;
+    private readonly InputAction m_Pilot_PilotFTLJump;
+    /// <summary>
+    /// Provides access to input actions defined in input action map "Pilot".
+    /// </summary>
+    public struct PilotActions
+    {
+        private @InputSystem_Actions m_Wrapper;
+
+        /// <summary>
+        /// Construct a new instance of the input action map wrapper class.
+        /// </summary>
+        public PilotActions(@InputSystem_Actions wrapper) { m_Wrapper = wrapper; }
+        /// <summary>
+        /// Provides access to the underlying input action "Pilot/PilotAutopilot".
+        /// </summary>
+        public InputAction @PilotAutopilot => m_Wrapper.m_Pilot_PilotAutopilot;
+        /// <summary>
+        /// Provides access to the underlying input action "Pilot/PilotManual".
+        /// </summary>
+        public InputAction @PilotManual => m_Wrapper.m_Pilot_PilotManual;
+        /// <summary>
+        /// Provides access to the underlying input action "Pilot/PilotShieldToggle".
+        /// </summary>
+        public InputAction @PilotShieldToggle => m_Wrapper.m_Pilot_PilotShieldToggle;
+        /// <summary>
+        /// Provides access to the underlying input action "Pilot/PilotFTLJump".
+        /// </summary>
+        public InputAction @PilotFTLJump => m_Wrapper.m_Pilot_PilotFTLJump;
+        /// <summary>
+        /// Provides access to the underlying input action map instance.
+        /// </summary>
+        public InputActionMap Get() { return m_Wrapper.m_Pilot; }
+        /// <inheritdoc cref="UnityEngine.InputSystem.InputActionMap.Enable()" />
+        public void Enable() { Get().Enable(); }
+        /// <inheritdoc cref="UnityEngine.InputSystem.InputActionMap.Disable()" />
+        public void Disable() { Get().Disable(); }
+        /// <inheritdoc cref="UnityEngine.InputSystem.InputActionMap.enabled" />
+        public bool enabled => Get().enabled;
+        /// <summary>
+        /// Implicitly converts an <see ref="PilotActions" /> to an <see ref="InputActionMap" /> instance.
+        /// </summary>
+        public static implicit operator InputActionMap(PilotActions set) { return set.Get(); }
+        /// <summary>
+        /// Adds <see cref="InputAction.started"/>, <see cref="InputAction.performed"/> and <see cref="InputAction.canceled"/> callbacks provided via <param cref="instance" /> on all input actions contained in this map.
+        /// </summary>
+        /// <param name="instance">Callback instance.</param>
+        /// <remarks>
+        /// If <paramref name="instance" /> is <c>null</c> or <paramref name="instance"/> have already been added this method does nothing.
+        /// </remarks>
+        /// <seealso cref="PilotActions" />
+        public void AddCallbacks(IPilotActions instance)
+        {
+            if (instance == null || m_Wrapper.m_PilotActionsCallbackInterfaces.Contains(instance)) return;
+            m_Wrapper.m_PilotActionsCallbackInterfaces.Add(instance);
+            @PilotAutopilot.started += instance.OnPilotAutopilot;
+            @PilotAutopilot.performed += instance.OnPilotAutopilot;
+            @PilotAutopilot.canceled += instance.OnPilotAutopilot;
+            @PilotManual.started += instance.OnPilotManual;
+            @PilotManual.performed += instance.OnPilotManual;
+            @PilotManual.canceled += instance.OnPilotManual;
+            @PilotShieldToggle.started += instance.OnPilotShieldToggle;
+            @PilotShieldToggle.performed += instance.OnPilotShieldToggle;
+            @PilotShieldToggle.canceled += instance.OnPilotShieldToggle;
+            @PilotFTLJump.started += instance.OnPilotFTLJump;
+            @PilotFTLJump.performed += instance.OnPilotFTLJump;
+            @PilotFTLJump.canceled += instance.OnPilotFTLJump;
+        }
+
+        /// <summary>
+        /// Removes <see cref="InputAction.started"/>, <see cref="InputAction.performed"/> and <see cref="InputAction.canceled"/> callbacks provided via <param cref="instance" /> on all input actions contained in this map.
+        /// </summary>
+        /// <remarks>
+        /// Calling this method when <paramref name="instance" /> have not previously been registered has no side-effects.
+        /// </remarks>
+        /// <seealso cref="PilotActions" />
+        private void UnregisterCallbacks(IPilotActions instance)
+        {
+            @PilotAutopilot.started -= instance.OnPilotAutopilot;
+            @PilotAutopilot.performed -= instance.OnPilotAutopilot;
+            @PilotAutopilot.canceled -= instance.OnPilotAutopilot;
+            @PilotManual.started -= instance.OnPilotManual;
+            @PilotManual.performed -= instance.OnPilotManual;
+            @PilotManual.canceled -= instance.OnPilotManual;
+            @PilotShieldToggle.started -= instance.OnPilotShieldToggle;
+            @PilotShieldToggle.performed -= instance.OnPilotShieldToggle;
+            @PilotShieldToggle.canceled -= instance.OnPilotShieldToggle;
+            @PilotFTLJump.started -= instance.OnPilotFTLJump;
+            @PilotFTLJump.performed -= instance.OnPilotFTLJump;
+            @PilotFTLJump.canceled -= instance.OnPilotFTLJump;
+        }
+
+        /// <summary>
+        /// Unregisters <param cref="instance" /> and unregisters all input action callbacks via <see cref="PilotActions.UnregisterCallbacks(IPilotActions)" />.
+        /// </summary>
+        /// <seealso cref="PilotActions.UnregisterCallbacks(IPilotActions)" />
+        public void RemoveCallbacks(IPilotActions instance)
+        {
+            if (m_Wrapper.m_PilotActionsCallbackInterfaces.Remove(instance))
+                UnregisterCallbacks(instance);
+        }
+
+        /// <summary>
+        /// Replaces all existing callback instances and previously registered input action callbacks associated with them with callbacks provided via <param cref="instance" />.
+        /// </summary>
+        /// <remarks>
+        /// If <paramref name="instance" /> is <c>null</c>, calling this method will only unregister all existing callbacks but not register any new callbacks.
+        /// </remarks>
+        /// <seealso cref="PilotActions.AddCallbacks(IPilotActions)" />
+        /// <seealso cref="PilotActions.RemoveCallbacks(IPilotActions)" />
+        /// <seealso cref="PilotActions.UnregisterCallbacks(IPilotActions)" />
+        public void SetCallbacks(IPilotActions instance)
+        {
+            foreach (var item in m_Wrapper.m_PilotActionsCallbackInterfaces)
+                UnregisterCallbacks(item);
+            m_Wrapper.m_PilotActionsCallbackInterfaces.Clear();
+            AddCallbacks(instance);
+        }
+    }
+    /// <summary>
+    /// Provides a new <see cref="PilotActions" /> instance referencing this action map.
+    /// </summary>
+    public PilotActions @Pilot => new PilotActions(this);
     private int m_KeyboardMouseSchemeIndex = -1;
     /// <summary>
     /// Provides access to the input control scheme.
@@ -2184,5 +2452,41 @@ public partial class @InputSystem_Actions: IInputActionCollection2, IDisposable
         /// <seealso cref="UnityEngine.InputSystem.InputAction.performed" />
         /// <seealso cref="UnityEngine.InputSystem.InputAction.canceled" />
         void OnTrackedDeviceOrientation(InputAction.CallbackContext context);
+    }
+    /// <summary>
+    /// Interface to implement callback methods for all input action callbacks associated with input actions defined by "Pilot" which allows adding and removing callbacks.
+    /// </summary>
+    /// <seealso cref="PilotActions.AddCallbacks(IPilotActions)" />
+    /// <seealso cref="PilotActions.RemoveCallbacks(IPilotActions)" />
+    public interface IPilotActions
+    {
+        /// <summary>
+        /// Method invoked when associated input action "PilotAutopilot" is either <see cref="UnityEngine.InputSystem.InputAction.started" />, <see cref="UnityEngine.InputSystem.InputAction.performed" /> or <see cref="UnityEngine.InputSystem.InputAction.canceled" />.
+        /// </summary>
+        /// <seealso cref="UnityEngine.InputSystem.InputAction.started" />
+        /// <seealso cref="UnityEngine.InputSystem.InputAction.performed" />
+        /// <seealso cref="UnityEngine.InputSystem.InputAction.canceled" />
+        void OnPilotAutopilot(InputAction.CallbackContext context);
+        /// <summary>
+        /// Method invoked when associated input action "PilotManual" is either <see cref="UnityEngine.InputSystem.InputAction.started" />, <see cref="UnityEngine.InputSystem.InputAction.performed" /> or <see cref="UnityEngine.InputSystem.InputAction.canceled" />.
+        /// </summary>
+        /// <seealso cref="UnityEngine.InputSystem.InputAction.started" />
+        /// <seealso cref="UnityEngine.InputSystem.InputAction.performed" />
+        /// <seealso cref="UnityEngine.InputSystem.InputAction.canceled" />
+        void OnPilotManual(InputAction.CallbackContext context);
+        /// <summary>
+        /// Method invoked when associated input action "PilotShieldToggle" is either <see cref="UnityEngine.InputSystem.InputAction.started" />, <see cref="UnityEngine.InputSystem.InputAction.performed" /> or <see cref="UnityEngine.InputSystem.InputAction.canceled" />.
+        /// </summary>
+        /// <seealso cref="UnityEngine.InputSystem.InputAction.started" />
+        /// <seealso cref="UnityEngine.InputSystem.InputAction.performed" />
+        /// <seealso cref="UnityEngine.InputSystem.InputAction.canceled" />
+        void OnPilotShieldToggle(InputAction.CallbackContext context);
+        /// <summary>
+        /// Method invoked when associated input action "PilotFTLJump" is either <see cref="UnityEngine.InputSystem.InputAction.started" />, <see cref="UnityEngine.InputSystem.InputAction.performed" /> or <see cref="UnityEngine.InputSystem.InputAction.canceled" />.
+        /// </summary>
+        /// <seealso cref="UnityEngine.InputSystem.InputAction.started" />
+        /// <seealso cref="UnityEngine.InputSystem.InputAction.performed" />
+        /// <seealso cref="UnityEngine.InputSystem.InputAction.canceled" />
+        void OnPilotFTLJump(InputAction.CallbackContext context);
     }
 }
