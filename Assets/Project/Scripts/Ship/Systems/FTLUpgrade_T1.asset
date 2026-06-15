@@ -24,7 +24,7 @@ MonoBehaviour:
   rangeAU: 50
   powerPriority: 10
   repairThresholds:
-  - progress: 0
+  - progress: 0.5
     materials:
     - itemType: 2
       amount: 1

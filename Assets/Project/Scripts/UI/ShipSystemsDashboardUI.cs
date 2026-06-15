@@ -1,6 +1,8 @@
+using System.Collections;
 using UnityEngine;
 using UnityEngine.UI;
 using TMPro;
+using SpaceSurvivor.Ship;
 
 /// <summary>
 /// Ship Systems Dashboard UI — Monitor 2, Engineering Station.
@@ -8,7 +10,9 @@ using TMPro;
 ///
 /// Sezione A — Subsystem status: O2, Reactor, Hull, Shields (dati reali)
 ///             Propulsion, FTL (stub)
-/// Sezione B — Repair: dipende da RepairSystem + InventorySystem (M2)
+/// Sezione B — Repair: lista sistemi IRepairable (PropulsionSystem, FTLDrive)
+///             con stato, HP%, materiali richiesti per la prossima soglia
+///             e pulsante AVVIA → "Recati al pannello [SISTEMA]"
 /// Sezione C — Diagnostica Elettrica: dati reali ElectricalDegradationManager
 ///             Hull ×, EM ×, Ballast stato/×, Totale ×
 ///             Aggiornata via evento OnDegradationChanged (no polling)
@@ -50,6 +54,23 @@ public class ShipSystemsDashboardUI : MonoBehaviour, IDashboardPanel
     [Header("Reactor (PowerManager)")]
     [SerializeField] private TextMeshProUGUI reactorStatusBadge;
     [SerializeField] private SciFiSegmentedBar reactorBar;
+
+    // ── Sezione B — Repair ─────────────────────────────────────────────────────
+
+    [Header("Sezione B — Repair (PropulsionSystem + FTLDrive)")]
+    [Tooltip("Riga repair per PropulsionSystem. Assegna RepairEntry component.")]
+    [SerializeField] private RepairEntry repairEntryPropulsion;
+
+    [Tooltip("Riga repair per FTLDrive. Assegna RepairEntry component.")]
+    [SerializeField] private RepairEntry repairEntryFTL;
+
+    [Tooltip("Messaggio mostrato dopo click AVVIA: 'Recati al pannello [SISTEMA]'.")]
+    [SerializeField] private TextMeshProUGUI repairStatusMessageText;
+
+    [Tooltip("Secondi prima che il messaggio 'Recati al pannello...' si nasconda.")]
+    [SerializeField] private float repairStatusClearDelay = 4f;
+
+    private Coroutine _repairStatusRoutine;
 
     // ── Sezione C — Diagnostica Elettrica ─────────────────────────────────────
 
@@ -96,6 +117,10 @@ public class ShipSystemsDashboardUI : MonoBehaviour, IDashboardPanel
     private PowerManager powerManager;
     private ElectricalDegradationManager degradationManager;
 
+    // Sezione B — riferimenti IRepairable
+    private IRepairable propulsionRepairable;
+    private IRepairable ftlRepairable;
+
     private float cachedHullPercent = 1f;
 
     // ── Lifecycle ─────────────────────────────────────────────────────────────
@@ -127,7 +152,22 @@ public class ShipSystemsDashboardUI : MonoBehaviour, IDashboardPanel
         else
             ElectricalDegradationManager.OnInstanceReady += InitWithDegradationManager;
 
+        // Sezione B — PropulsionSystem
+        if (SpaceSurvivor.Ship.PropulsionSystem.Instance != null)
+            InitWithPropulsionSystem();
+        else
+            SpaceSurvivor.Ship.PropulsionSystem.OnInstanceReady += InitWithPropulsionSystem;
+
+        // Sezione B — FTLDrive
+        if (SpaceSurvivor.Ship.FTLDrive.Instance != null)
+            InitWithFTLDrive();
+        else
+            SpaceSurvivor.Ship.FTLDrive.OnInstanceReady += InitWithFTLDrive;
+
         SetStubBadges();
+
+        if (repairStatusMessageText != null)
+            repairStatusMessageText.text = "";
     }
 
     private void InitWithOxygenSystem()
@@ -172,6 +212,31 @@ public class ShipSystemsDashboardUI : MonoBehaviour, IDashboardPanel
         UpdateDegradationSection();
     }
 
+    /// <summary>
+    /// Sezione B — collega PropulsionSystem alla riga repair corrispondente.
+    /// PropulsionSystem implementa IRepairable in modo esplicito → cast via interfaccia.
+    /// </summary>
+    private void InitWithPropulsionSystem()
+    {
+        SpaceSurvivor.Ship.PropulsionSystem.OnInstanceReady -= InitWithPropulsionSystem;
+        propulsionRepairable = SpaceSurvivor.Ship.PropulsionSystem.Instance as IRepairable;
+
+        if (repairEntryPropulsion != null && propulsionRepairable != null)
+            repairEntryPropulsion.Bind(propulsionRepairable, HandleRepairAvviaClicked);
+    }
+
+    /// <summary>
+    /// Sezione B — collega FTLDrive alla riga repair corrispondente.
+    /// </summary>
+    private void InitWithFTLDrive()
+    {
+        SpaceSurvivor.Ship.FTLDrive.OnInstanceReady -= InitWithFTLDrive;
+        ftlRepairable = SpaceSurvivor.Ship.FTLDrive.Instance as IRepairable;
+
+        if (repairEntryFTL != null && ftlRepairable != null)
+            repairEntryFTL.Bind(ftlRepairable, HandleRepairAvviaClicked);
+    }
+
     private void OnDestroy()
     {
         SpaceSurvivor.Ship.OxygenSystem.OnInstanceReady -= InitWithOxygenSystem;
@@ -179,6 +244,8 @@ public class ShipSystemsDashboardUI : MonoBehaviour, IDashboardPanel
         SpaceSurvivor.Ship.ShieldSystem.OnInstanceReady -= InitWithShieldSystem;
         PowerManager.OnInstanceReady -= InitWithPowerManager;
         ElectricalDegradationManager.OnInstanceReady -= InitWithDegradationManager;
+        SpaceSurvivor.Ship.PropulsionSystem.OnInstanceReady -= InitWithPropulsionSystem;
+        SpaceSurvivor.Ship.FTLDrive.OnInstanceReady -= InitWithFTLDrive;
 
         if (hullSystem != null)
             hullSystem.OnHullChanged -= HandleHullChanged;
@@ -193,6 +260,9 @@ public class ShipSystemsDashboardUI : MonoBehaviour, IDashboardPanel
             degradationManager.OnDegradationChanged -= HandleDegradationChanged;
 
         CancelInvoke(nameof(UpdateUI));
+
+        if (_repairStatusRoutine != null)
+            StopCoroutine(_repairStatusRoutine);
     }
 
     // ── Open / Close ──────────────────────────────────────────────────────────
@@ -214,6 +284,12 @@ public class ShipSystemsDashboardUI : MonoBehaviour, IDashboardPanel
         if (degradationManager == null && ElectricalDegradationManager.Instance != null)
             InitWithDegradationManager();
 
+        if (propulsionRepairable == null && SpaceSurvivor.Ship.PropulsionSystem.Instance != null)
+            InitWithPropulsionSystem();
+
+        if (ftlRepairable == null && SpaceSurvivor.Ship.FTLDrive.Instance != null)
+            InitWithFTLDrive();
+
         UpdateUI();
         InvokeRepeating(nameof(UpdateUI), 0f, 0.2f);
     }
@@ -221,14 +297,24 @@ public class ShipSystemsDashboardUI : MonoBehaviour, IDashboardPanel
     public void Close()
     {
         CancelInvoke(nameof(UpdateUI));
+
+        if (_repairStatusRoutine != null)
+        {
+            StopCoroutine(_repairStatusRoutine);
+            _repairStatusRoutine = null;
+        }
+
+        if (repairStatusMessageText != null)
+            repairStatusMessageText.text = "";
     }
 
-    // ── Update (polling per O2 e Reactor, tutto il resto via eventi) ──────────
+    // ── Update (polling per O2, Reactor e Sezione B; resto via eventi) ────────
 
     private void UpdateUI()
     {
         UpdateO2Section();
         UpdateReactorSection();
+        UpdateRepairSection();
         // Hull, Shields, Degradation → aggiornati via evento
     }
 
@@ -339,6 +425,46 @@ public class ShipSystemsDashboardUI : MonoBehaviour, IDashboardPanel
             case SpaceSurvivor.Ship.ShieldSystem.ShieldState.Off:
                 SetBadge(shieldsStatusBadge, "OFFLINE", colorOffline); break;
         }
+    }
+
+    // ── Sezione B — Repair ─────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Aggiorna le righe repair di PropulsionSystem e FTLDrive.
+    /// Chiamato dal polling 0.2s (stesso ciclo di O2/Reactor) — la disponibilità
+    /// materiali e lo stato HP cambiano nel tempo, quindi serve refresh continuo.
+    /// </summary>
+    private void UpdateRepairSection()
+    {
+        if (repairEntryPropulsion != null && propulsionRepairable != null)
+            repairEntryPropulsion.Refresh();
+
+        if (repairEntryFTL != null && ftlRepairable != null)
+            repairEntryFTL.Refresh();
+    }
+
+    /// <summary>
+    /// Callback invocata da RepairEntry quando il giocatore preme AVVIA.
+    /// Non avvia direttamente il minigame (richiede di essere fisicamente
+    /// al RepairPanel) — mostra solo l'indicazione di dove andare.
+    /// </summary>
+    private void HandleRepairAvviaClicked(IRepairable target)
+    {
+        if (repairStatusMessageText == null || target == null) return;
+
+        repairStatusMessageText.text = $"➜ RECATI AL PANNELLO: {target.GetSystemName().ToUpperInvariant()}";
+        repairStatusMessageText.color = colorDegraded;
+
+        if (_repairStatusRoutine != null) StopCoroutine(_repairStatusRoutine);
+        _repairStatusRoutine = StartCoroutine(ClearRepairStatusAfter(repairStatusClearDelay));
+    }
+
+    private IEnumerator ClearRepairStatusAfter(float delay)
+    {
+        yield return new WaitForSeconds(delay);
+        if (repairStatusMessageText != null)
+            repairStatusMessageText.text = "";
+        _repairStatusRoutine = null;
     }
 
     // ── Sezione C — Diagnostica Elettrica ─────────────────────────────────────
