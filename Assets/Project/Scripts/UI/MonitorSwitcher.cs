@@ -51,6 +51,16 @@ public class MonitorSwitcher : MonoBehaviour
 
     public int CurrentIndex => currentIndex;
 
+    /// <summary>
+    /// AGGIUNTA (Tablet support): espone il pannello IDashboardPanel del monitor/tab
+    /// attualmente visibile, così chi possiede questo switcher (es. TabletDashboardUI)
+    /// può chiamarne Close() esplicitamente quando l'intero contenitore si chiude —
+    /// MonitorSwitcher di per sé chiama Open()/Close() solo AL CAMBIO di pagina.
+    /// Puramente additivo: nessun comportamento esistente modificato.
+    /// </summary>
+    public IDashboardPanel GetCurrentPanel()
+        => (panels != null && currentIndex >= 0 && currentIndex < panels.Length) ? panels[currentIndex] : null;
+
     private void Start()
     {
         if (playerInput != null)

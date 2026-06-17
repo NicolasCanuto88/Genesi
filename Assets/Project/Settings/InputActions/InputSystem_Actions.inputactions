@@ -149,6 +149,15 @@
                     "processors": "",
                     "interactions": "",
                     "initialStateCheck": false
+                },
+                {
+                    "name": "ToggleTablet",
+                    "type": "Button",
+                    "id": "b68f040e-bb1e-4ad9-8941-39cf6971c486",
+                    "expectedControlType": "",
+                    "processors": "",
+                    "interactions": "",
+                    "initialStateCheck": false
                 }
             ],
             "bindings": [
@@ -562,7 +571,7 @@
                 {
                     "name": "",
                     "id": "b5baf218-91c8-40dc-b095-2c9188b22eb2",
-                    "path": "<Keyboard>/escape",
+                    "path": "<Keyboard>/space",
                     "interactions": "",
                     "processors": "",
                     "groups": "",
@@ -677,6 +686,28 @@
                     "processors": "",
                     "groups": "",
                     "action": "RepairKey_3",
+                    "isComposite": false,
+                    "isPartOfComposite": false
+                },
+                {
+                    "name": "",
+                    "id": "347dcad4-e8b5-489d-85d8-409e1af071a9",
+                    "path": "<Keyboard>/tab",
+                    "interactions": "",
+                    "processors": "",
+                    "groups": "",
+                    "action": "ToggleTablet",
+                    "isComposite": false,
+                    "isPartOfComposite": false
+                },
+                {
+                    "name": "",
+                    "id": "b31c5218-6bd3-4044-a766-5dd2837952d4",
+                    "path": "<Gamepad>/select",
+                    "interactions": "",
+                    "processors": "",
+                    "groups": "",
+                    "action": "ToggleTablet",
                     "isComposite": false,
                     "isPartOfComposite": false
                 }

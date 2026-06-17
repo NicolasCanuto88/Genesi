@@ -235,6 +235,15 @@ public partial class @InputSystem_Actions: IInputActionCollection2, IDisposable
                     ""processors"": """",
                     ""interactions"": """",
                     ""initialStateCheck"": false
+                },
+                {
+                    ""name"": ""ToggleTablet"",
+                    ""type"": ""Button"",
+                    ""id"": ""b68f040e-bb1e-4ad9-8941-39cf6971c486"",
+                    ""expectedControlType"": """",
+                    ""processors"": """",
+                    ""interactions"": """",
+                    ""initialStateCheck"": false
                 }
             ],
             ""bindings"": [
@@ -648,7 +657,7 @@ public partial class @InputSystem_Actions: IInputActionCollection2, IDisposable
                 {
                     ""name"": """",
                     ""id"": ""b5baf218-91c8-40dc-b095-2c9188b22eb2"",
-                    ""path"": ""<Keyboard>/escape"",
+                    ""path"": ""<Keyboard>/space"",
                     ""interactions"": """",
                     ""processors"": """",
                     ""groups"": """",
@@ -763,6 +772,28 @@ public partial class @InputSystem_Actions: IInputActionCollection2, IDisposable
                     ""processors"": """",
                     ""groups"": """",
                     ""action"": ""RepairKey_3"",
+                    ""isComposite"": false,
+                    ""isPartOfComposite"": false
+                },
+                {
+                    ""name"": """",
+                    ""id"": ""347dcad4-e8b5-489d-85d8-409e1af071a9"",
+                    ""path"": ""<Keyboard>/tab"",
+                    ""interactions"": """",
+                    ""processors"": """",
+                    ""groups"": """",
+                    ""action"": ""ToggleTablet"",
+                    ""isComposite"": false,
+                    ""isPartOfComposite"": false
+                },
+                {
+                    ""name"": """",
+                    ""id"": ""b31c5218-6bd3-4044-a766-5dd2837952d4"",
+                    ""path"": ""<Gamepad>/select"",
+                    ""interactions"": """",
+                    ""processors"": """",
+                    ""groups"": """",
+                    ""action"": ""ToggleTablet"",
                     ""isComposite"": false,
                     ""isPartOfComposite"": false
                 }
@@ -1509,6 +1540,7 @@ public partial class @InputSystem_Actions: IInputActionCollection2, IDisposable
         m_Player_RepairKey_1 = m_Player.FindAction("RepairKey_1", throwIfNotFound: true);
         m_Player_RepairKey_2 = m_Player.FindAction("RepairKey_2", throwIfNotFound: true);
         m_Player_RepairKey_3 = m_Player.FindAction("RepairKey_3", throwIfNotFound: true);
+        m_Player_ToggleTablet = m_Player.FindAction("ToggleTablet", throwIfNotFound: true);
         // UI
         m_UI = asset.FindActionMap("UI", throwIfNotFound: true);
         m_UI_Navigate = m_UI.FindAction("Navigate", throwIfNotFound: true);
@@ -1625,6 +1657,7 @@ public partial class @InputSystem_Actions: IInputActionCollection2, IDisposable
     private readonly InputAction m_Player_RepairKey_1;
     private readonly InputAction m_Player_RepairKey_2;
     private readonly InputAction m_Player_RepairKey_3;
+    private readonly InputAction m_Player_ToggleTablet;
     /// <summary>
     /// Provides access to input actions defined in input action map "Player".
     /// </summary>
@@ -1701,6 +1734,10 @@ public partial class @InputSystem_Actions: IInputActionCollection2, IDisposable
         /// </summary>
         public InputAction @RepairKey_3 => m_Wrapper.m_Player_RepairKey_3;
         /// <summary>
+        /// Provides access to the underlying input action "Player/ToggleTablet".
+        /// </summary>
+        public InputAction @ToggleTablet => m_Wrapper.m_Player_ToggleTablet;
+        /// <summary>
         /// Provides access to the underlying input action map instance.
         /// </summary>
         public InputActionMap Get() { return m_Wrapper.m_Player; }
@@ -1774,6 +1811,9 @@ public partial class @InputSystem_Actions: IInputActionCollection2, IDisposable
             @RepairKey_3.started += instance.OnRepairKey_3;
             @RepairKey_3.performed += instance.OnRepairKey_3;
             @RepairKey_3.canceled += instance.OnRepairKey_3;
+            @ToggleTablet.started += instance.OnToggleTablet;
+            @ToggleTablet.performed += instance.OnToggleTablet;
+            @ToggleTablet.canceled += instance.OnToggleTablet;
         }
 
         /// <summary>
@@ -1833,6 +1873,9 @@ public partial class @InputSystem_Actions: IInputActionCollection2, IDisposable
             @RepairKey_3.started -= instance.OnRepairKey_3;
             @RepairKey_3.performed -= instance.OnRepairKey_3;
             @RepairKey_3.canceled -= instance.OnRepairKey_3;
+            @ToggleTablet.started -= instance.OnToggleTablet;
+            @ToggleTablet.performed -= instance.OnToggleTablet;
+            @ToggleTablet.canceled -= instance.OnToggleTablet;
         }
 
         /// <summary>
@@ -2374,6 +2417,13 @@ public partial class @InputSystem_Actions: IInputActionCollection2, IDisposable
         /// <seealso cref="UnityEngine.InputSystem.InputAction.performed" />
         /// <seealso cref="UnityEngine.InputSystem.InputAction.canceled" />
         void OnRepairKey_3(InputAction.CallbackContext context);
+        /// <summary>
+        /// Method invoked when associated input action "ToggleTablet" is either <see cref="UnityEngine.InputSystem.InputAction.started" />, <see cref="UnityEngine.InputSystem.InputAction.performed" /> or <see cref="UnityEngine.InputSystem.InputAction.canceled" />.
+        /// </summary>
+        /// <seealso cref="UnityEngine.InputSystem.InputAction.started" />
+        /// <seealso cref="UnityEngine.InputSystem.InputAction.performed" />
+        /// <seealso cref="UnityEngine.InputSystem.InputAction.canceled" />
+        void OnToggleTablet(InputAction.CallbackContext context);
     }
     /// <summary>
     /// Interface to implement callback methods for all input action callbacks associated with input actions defined by "UI" which allows adding and removing callbacks.

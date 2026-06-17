@@ -302,6 +302,41 @@ public class VirtualCursor : MonoBehaviour
 
     // ===== PUBLIC CONTROL =====
 
+    /// <summary>
+    /// MODIFICA (v0.9.6+ — Tablet support): overload retrocompatibile.
+    /// Chiamare Activate() senza argomenti mantiene il comportamento ORIGINALE
+    /// al 100% (canvasRect/cursorImage/scrollRect restano quelli assegnati
+    /// nell'Inspector — nessun cambiamento per EngineeringStation/MedicalStation).
+    ///
+    /// Chiamare Activate(canvas, cursorImage, scrollRect) con almeno uno dei primi
+    /// due parametri non-null permette a un NUOVO consumer (es. TabletStation) di
+    /// puntare il cursore virtuale al proprio Canvas World Space senza che le
+    /// altre postazioni debbano essere modificate.
+    /// </summary>
+    public void Activate(RectTransform targetCanvas, RectTransform targetCursorImage, ScrollRect targetScrollRect)
+    {
+        bool usingExplicitContext = targetCanvas != null || targetCursorImage != null;
+
+        if (usingExplicitContext)
+        {
+            if (targetCanvas != null)
+                canvasRect = targetCanvas;
+
+            if (targetCursorImage != null)
+            {
+                cursorImage = targetCursorImage;
+                cursorImageComponent = cursorImage.GetComponent<Image>();
+            }
+
+            // scrollRect viene sempre sovrascritto in questo ramo (anche a null):
+            // un nuovo contesto esplicito che non ha uno scroll non deve "ereditare"
+            // quello lasciato dal contesto precedente (es. Engineering → Tablet).
+            scrollRect = targetScrollRect;
+        }
+
+        Activate();
+    }
+
     public void Activate()
     {
         if (canvasRect == null)
