@@ -1,6 +1,7 @@
 using UnityEngine;
 using UnityEngine.UI;
 using TMPro;
+using Unity.Netcode;
 using SpaceSurvivor.Ship;
 
 /// <summary>
@@ -8,11 +9,16 @@ using SpaceSurvivor.Ship;
 /// Monitor unico della Medical Station. Tre sezioni verticali (GDD §9.4).
 ///
 /// SEZIONE A — Stato equipaggio:
-///   HP real-time per ogni membro.
-///   In M2: placeholder 1 crew a HP pieni (PlayerHealthSystem non ancora implementato).
-///   ⚠️ Dipende da: PlayerHealthSystem (M3) per dati reali multiplayer.
+///   HP real-time per ogni membro connesso, da PlayerHealthSystem (NUOVO,
+///   agganciato in questa sessione — prima era placeholder fisso 1 crew/100HP).
+///   Enumera NetworkManager.ConnectedClientsIds, stesso pattern già usato da
+///   ShipTabUI.RefreshCrewList()/CrewCreditEntry, e cerca l'istanza HP di
+///   ciascun client via PlayerHealthSystem.TryGetByClientId(). Nomi reali non
+///   ancora disponibili (vedi nota sotto) — stessa limitazione già accettata
+///   in ShipTabUI/CrewCreditEntry.
+///   ⚠️ Dipende da: PlayerIdentity (M3) per nomi reali al posto di "Player [clientId]".
 ///
-/// SEZIONE B — O₂ & Life Support:
+/// SEZIONE B — O₂ &amp; Life Support:
 ///   Dati reali da OxygenSystem (già live).
 ///   Livello O₂, generazione, consumo, bilancio, autonomia stimata.
 ///   Life Support status: ONLINE / DEGRADED / OFFLINE.
@@ -27,7 +33,7 @@ public class MedicalDashboardUI : MonoBehaviour, IDashboardPanel
 {
     // ── SEZIONE A — Equipaggio ────────────────────────────────────────────────
 
-    [Header("Sezione A — Crew HP (stub M2, reale M3)")]
+    [Header("Sezione A — Crew HP (reale, PlayerHealthSystem)")]
     [Tooltip("Un elemento per ogni slot crew (massimo 5). Disattiva quelli non usati.")]
     [SerializeField] private CrewHPEntry[] crewEntries;
 
@@ -82,7 +88,7 @@ public class MedicalDashboardUI : MonoBehaviour, IDashboardPanel
         else
             InventorySystem.OnInstanceReady += OnInventoryReady;
 
-        SetCrewStub();
+        UpdateCrewSection();
         UpdateMedicalSupplies();
     }
 
@@ -145,6 +151,7 @@ public class MedicalDashboardUI : MonoBehaviour, IDashboardPanel
     private void UpdateUI()
     {
         UpdateO2Section();
+        UpdateCrewSection();
     }
 
     // ── SEZIONE B — O₂ ───────────────────────────────────────────────────────
@@ -211,19 +218,70 @@ public class MedicalDashboardUI : MonoBehaviour, IDashboardPanel
         return $"Autonomia: {mins:D2}:{secs:D2}";
     }
 
-    // ── SEZIONE A — CREW (stub M2) ────────────────────────────────────────────
+    // ── SEZIONE A — CREW (reale, PlayerHealthSystem) ──────────────────────────
 
-    private void SetCrewStub()
+    /// <summary>
+    /// Popola crewEntries[] con l'HP reale di ogni client connesso.
+    /// Stesso pattern di enumerazione di ShipTabUI.RefreshCrewList() (stesso
+    /// array NetworkManager.ConnectedClientsIds), ma su slot fissi invece di
+    /// Instantiate dinamico — l'array crewEntries è già dimensionato in Inspector.
+    ///
+    /// Nomi: "Tu" per il client locale, "Player [clientId]" per gli altri —
+    /// identica limitazione di CrewCreditEntry/ShipTabUI, in attesa di
+    /// PlayerIdentity (M3).
+    /// </summary>
+    private void UpdateCrewSection()
     {
-        if (crewEntries == null) return;
+        if (crewEntries == null || crewEntries.Length == 0) return;
 
+        if (NetworkManager.Singleton == null || !NetworkManager.Singleton.IsListening)
+        {
+            // Nessuna sessione di rete attiva (es. test in Editor senza Host/Client
+            // avviato) — fallback minimale per non lasciare il pannello vuoto.
+            SetCrewOfflineFallback();
+            return;
+        }
+
+        var connectedIds = NetworkManager.Singleton.ConnectedClientsIds;
+        int count = Mathf.Min(connectedIds.Count, crewEntries.Length);
+
+        for (int i = 0; i < count; i++)
+        {
+            if (crewEntries[i] == null) continue;
+
+            ulong clientId = connectedIds[i];
+            bool isLocalPlayer = clientId == NetworkManager.Singleton.LocalClientId;
+            string label = isLocalPlayer ? "Tu" : $"Player {clientId}";
+
+            if (PlayerHealthSystem.TryGetByClientId(clientId, out var health))
+            {
+                crewEntries[i].SetData(label, health.CurrentHP, health.MaxHP, colorOnline);
+            }
+            else
+            {
+                // PlayerHealthSystem non ancora spawnato per questo client (breve
+                // finestra all'avvio sessione, o Player prefab non ancora configurato
+                // come Player Prefab di NGO — vedi nota in PlayerHealthSystem.cs).
+                // Placeholder HP piena, non un dato reale.
+                crewEntries[i].SetData($"{label} (in attesa...)", 100f, 100f, colorOffline);
+            }
+
+            crewEntries[i].gameObject.SetActive(true);
+        }
+
+        for (int i = count; i < crewEntries.Length; i++)
+            crewEntries[i]?.gameObject.SetActive(false);
+    }
+
+    private void SetCrewOfflineFallback()
+    {
         for (int i = 0; i < crewEntries.Length; i++)
         {
             if (crewEntries[i] == null) continue;
 
             if (i == 0)
             {
-                crewEntries[i].SetData("CREW 01", 100f, 100f, colorOnline);
+                crewEntries[i].SetData("Player (sessione non attiva)", 100f, 100f, colorOffline);
                 crewEntries[i].gameObject.SetActive(true);
             }
             else
