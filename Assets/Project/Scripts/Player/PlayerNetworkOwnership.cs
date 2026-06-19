@@ -1,58 +1,44 @@
 using Unity.Netcode;
 using UnityEngine;
 using UnityEngine.InputSystem;
+using UnityEngine.SceneManagement;
 
 /// <summary>
-/// PlayerNetworkOwnership — Milestone 2.
-/// Disabilita le componenti locali (camera, audio listener, controller, input)
-/// su ogni istanza spawnata del Player che NON appartiene al client locale.
+/// PlayerNetworkOwnership — Rev O (aggiornato Blocco 1 M3).
 ///
-/// CONTESTO: prima di questa sessione il Player non era mai stato un
-/// NetworkObject spawnato da NGO — viveva come singolo GameObject piazzato a
-/// mano in scena (Game.unity), copia indipendente per ogni istanza Unity, mai
-/// sincronizzata. Configurando Player come Player Prefab di NetworkManager
-/// (richiesto da PlayerHealthSystem), NGO spawna ORA un'istanza per ogni
-/// client connesso SU TUTTI I CLIENT — quindi ogni macchina vede sia il
-/// proprio Player sia quello degli altri.
+/// Gestisce la visibilità e il controllo del Player locale vs remoto,
+/// con consapevolezza della scena in cui ci si trova.
 ///
-/// PROBLEMA: PlayerController, PlayerInput, Camera e AudioListener non hanno
-/// alcuna nozione di ownership di rete. Senza questo script, ogni istanza
-/// spawnata (anche quelle remote) avrebbe: PlayerInput che ascolta lo stesso
-/// dispositivo locale (quindi WASD muoverebbe TUTTI i Player presenti nella
-/// scena, non solo il proprio); una Camera attiva in competizione con quella
-/// del proprio Player; un secondo AudioListener (Unity stampa il warning
-/// "There are 2 audio listeners in the scene").
+/// PROBLEMA RISOLTO (doppio):
 ///
-/// SOLUZIONE: su OnNetworkSpawn, se !IsOwner, disabilita Camera, AudioListener,
-/// PlayerController e PlayerInput su QUESTA istanza. L'istanza posseduta dal
-/// client locale (IsOwner == true) non viene toccata — comportamento identico
-/// a oggi su singolo giocatore.
+/// 1. COMPONENTI DISATTIVATE IN GAME
+///    OnNetworkSpawn scatta UNA sola volta — quando il Player spawna in
+///    MainMenu. Se l'oggetto sopravvive al cambio scena, non viene mai
+///    rieabilitato. Fix: quando in MainMenu ci sottoscriviamo a
+///    SceneManager.sceneLoaded; quando Game.unity carica, riabilitiamo
+///    Camera/Audio/Input/Controller per il proprietario locale.
 ///
-/// ⚠️ Cosa NON risolve questo script: la posizione/rotazione del Player
-/// remoto non è sincronizzata in rete (nessun NetworkTransform ancora) — un
-/// Player remoto resta visivamente fermo nel punto di spawn. Sincronizzare il
-/// movimento è lavoro di M3 ("Sessione multiplayer reale (2+ client)", già in
-/// roadmap) — qui ci si limita a evitare i problemi di camera/input/audio
-/// duplicati, senza introdurre alcun sync di trasformazione.
+/// 2. CURSORE CHE SI BLOCCA IN MAINMENU
+///    PlayerController.Awake() può bloccare il cursore prima che
+///    OnNetworkSpawn lo sblocchi. Gestito in MainMenuManager.Update()
+///    (non qui), che forza CursorLockMode.None finché il canvas è attivo.
 ///
-/// ⚠️ TabletStation/InteractionSystem/FootstepController non vengono
-/// disabilitati esplicitamente qui: TabletStation dipende dal SendMessages di
-/// PlayerInput, che viene già disabilitato sopra — quindi smette comunque di
-/// reagire all'input su un'istanza remota senza bisogno di toccarla.
-/// InteractionSystem e FootstepController restano tecnicamente attivi ma
-/// inerti (nessun movimento da rilevare, eventuale raycast dalla camera
-/// disabilitata ma comunque valida come Transform) — non causano errori,
-/// semplicemente non producono alcun effetto visibile.
+/// LOGICA SCENA:
 ///
-/// ⚠️ Setup Editor: aggiungere questo componente sullo stesso GameObject
-/// radice di Player.prefab (dove vivono già PlayerController, PlayerInput,
-/// NetworkObject, PlayerHealthSystem). Nessun campo da assegnare in
-/// Inspector — Camera e AudioListener vengono trovati automaticamente in
-/// Awake, stesso pattern già usato da TabletStation per playerCamera.
+///   Spawn in MainMenu → disabilita tutto (anche IsOwner) + unlock cursor
+///                      → sottoscrive sceneLoaded per rieabilitare in Game
+///
+///   Spawn in Game + IsOwner  → non tocca nulla (tutto già attivo)
+///   Spawn in Game + !IsOwner → disabilita Camera/Audio/Input/Controller
+///
+/// La costante GAME_SCENE_NAME deve corrispondere esattamente al nome del
+/// file Game.unity in Build Settings (uguale a MainMenuManager).
 /// </summary>
 [RequireComponent(typeof(PlayerController))]
 public class PlayerNetworkOwnership : NetworkBehaviour
 {
+    private const string GAME_SCENE_NAME = "Game";
+
     private PlayerController playerController;
     private PlayerInput playerInput;
     private Camera playerCamera;
@@ -63,15 +49,62 @@ public class PlayerNetworkOwnership : NetworkBehaviour
         playerController = GetComponent<PlayerController>();
         playerInput = GetComponent<PlayerInput>();
         playerCamera = GetComponentInChildren<Camera>();
-
         if (playerCamera != null)
             audioListener = playerCamera.GetComponent<AudioListener>();
     }
 
     public override void OnNetworkSpawn()
     {
-        if (IsOwner) return; // Il proprio Player resta intatto — nessun cambiamento per il single-player.
+        bool inGame = SceneManager.GetActiveScene().name == GAME_SCENE_NAME;
 
+        if (!inGame)
+        {
+            // Spawn in MainMenu: disabilita tutto indipendentemente dall'ownership.
+            // Il cursore viene sbloccato qui come prima misura; MainMenuManager.Update()
+            // lo mantiene libero ogni frame come protezione aggiuntiva.
+            DisabilitaComponenti();
+            Cursor.lockState = CursorLockMode.None;
+            Cursor.visible = true;
+
+            // Ascolta il caricamento di Game per rieabilitare i componenti del
+            // giocatore locale quando la partita davvero inizia.
+            if (IsOwner)
+                SceneManager.sceneLoaded += OnSceneLoaded;
+
+            return;
+        }
+
+        // Spawn in Game.unity — comportamento normale.
+        if (IsOwner) return; // il proprio Player resta intatto
+
+        DisabilitaComponenti();
+    }
+
+    public override void OnNetworkDespawn()
+    {
+        // Pulizia: deregistra sempre per evitare memory leak se il Player
+        // viene despawnato prima che Game.unity carichi.
+        SceneManager.sceneLoaded -= OnSceneLoaded;
+    }
+
+    private void OnSceneLoaded(Scene scene, LoadSceneMode mode)
+    {
+        if (scene.name != GAME_SCENE_NAME) return;
+
+        // Ci siamo: Game.unity è caricata. Deregistra subito (fired una volta sola).
+        SceneManager.sceneLoaded -= OnSceneLoaded;
+
+        if (!IsOwner) return;
+
+        // Riabilita tutti i componenti per il giocatore locale.
+        if (playerController != null) playerController.enabled = true;
+        if (playerInput != null) playerInput.enabled = true;
+        if (playerCamera != null) playerCamera.enabled = true;
+        if (audioListener != null) audioListener.enabled = true;
+    }
+
+    private void DisabilitaComponenti()
+    {
         if (playerController != null) playerController.enabled = false;
         if (playerInput != null) playerInput.enabled = false;
         if (playerCamera != null) playerCamera.enabled = false;

@@ -1,175 +1,335 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using UnityEngine;
 
 /// <summary>
-/// LocalCharacterProfile — Milestone 2.
+/// LocalCharacterProfile — Milestone 3, Blocco 1 (rewrite multi-personaggio).
 ///
-/// Dati del personaggio del GIOCATORE, persistenti SUL SUO DISPOSITIVO,
-/// indipendenti da qualsiasi lobby/sessione (GDD §2B "Personal Account").
+/// PRIMA (v0.9.7): un solo personaggio per dispositivo, SaveData piatto con
+/// characterName/role/personalCredits. Il commento di classe stesso lo marcava
+/// "STUB — un solo slot".
 ///
-/// REGOLA DI DESIGN (decisa dall'utente in questa sessione):
-///   I crediti personali non sono mai proprietà del server di UNA sessione —
-///   sono proprietà del personaggio. Un host può solo CHIEDERE di aggiungerne
-///   (tramite EconomyManager.RequestTransferToPlayerRpc → ReceiveFleetPaymentRpc),
-///   ma non può mai leggerli o sottrarli direttamente da remoto.
+/// ORA: lista di personaggi (CharacterData[]) + activeCharacterId. Stessa API
+/// pubblica (CharacterName, Role, PersonalCredits, AddPersonalCredits,
+/// TrySpendPersonalCredits, SetCharacterInfo) — ora delega al personaggio attivo
+/// invece che all'unico esistente. Nessuna modifica richiesta in EconomyManager,
+/// ProfileTabUI o nel resto del codice che la usava.
 ///
-///   Conseguenza pratica: un giocatore può unirsi alla sessione di un host
-///   qualsiasi, ricevere un pagamento, lasciare quella sessione e ritrovare
-///   lo stesso saldo entrando nella sessione di un host diverso — perché il
-///   saldo non vive mai sul server di nessuno dei due, vive qui.
+/// MIGRAZIONE AUTOMATICA: se sul disco esiste il vecchio file formato v0.9.7
+/// (oggetto piatto, nessun array "characters"), viene riconosciuto e convertito
+/// in automatico al primo avvio — il personaggio precedente diventa il primo
+/// elemento della nuova lista.
 ///
-/// PERSISTENZA: file JSON in Application.persistentDataPath. Scelta minima per
-/// sbloccare la feature subito; sostituibile in futuro con Steam Cloud o un
-/// backend dedicato senza toccare il resto del codice (stesso debito tecnico
-/// già segnalato in Rev M per il Fleet Account: "tecnologia da scegliere in M3").
+/// CharacterData è una classe pubblica (non privata) così CharacterEntryUI e
+/// MainMenuManager possono referenziarla direttamente senza casting o DTO intermedi.
 ///
-/// ⚠️ STUB — un solo "slot" personaggio per dispositivo. La selezione/creazione
-/// di personaggi multipli con ruoli diversi (GDD §2B) non è ancora implementata:
-/// dipende da un futuro sistema di character creation (GDD §10, da completare).
-/// Quando esisterà, questo componente dovrà diventare "il profilo CARICATO",
-/// non più l'unico esistente — l'API pubblica (CharacterName/Role/PersonalCredits/
-/// AddPersonalCredits/TrySpendPersonalCredits) può restare la stessa.
+/// ⚠️ Stesso comportamento DontDestroyOnLoad di prima — posizionato in
+/// MainMenu.unity (dal Blocco 1 in poi), persiste in Game.unity senza bisogno
+/// di essere ricreato nella scena di gioco.
 ///
-/// ⚠️ Da posizionare su un GameObject persistente in scena (es. lo stesso
-/// "Bootstrap"/Managers che contiene InputDeviceManager) — non è un NetworkBehaviour,
-/// non va spawnato in rete, esiste indipendentemente da qualunque sessione NGO.
+/// ⚠️ Dipende da: nessuno — è il livello più basso della catena di profilo.
 /// </summary>
 public class LocalCharacterProfile : MonoBehaviour
 {
     private const string SAVE_FILE_NAME = "character_save.json";
 
+    // ── SINGLETON ─────────────────────────────────────────────────────────────
     public static LocalCharacterProfile Instance { get; private set; }
 
-    /// <summary>Fired localmente ogni volta che il saldo personale cambia (guadagno o spesa).</summary>
+    // ── EVENTI ────────────────────────────────────────────────────────────────
+
+    /// <summary>Fired quando il saldo del personaggio attivo cambia (guadagno o spesa).</summary>
     public static event Action<int> OnPersonalCreditsChanged;
 
+    /// <summary>Fired quando cambia il personaggio attivo (selezione, creazione, eliminazione).</summary>
+    public static event Action OnActiveCharacterChanged;
+
+    // ── TIPI DATI PUBBLICI ────────────────────────────────────────────────────
+
     [Serializable]
-    private class SaveData
+    public class CharacterData
     {
-        public string characterId;
+        public string characterId = "";
         public string characterName = "Senza nome";
         public string role = "Non assegnato";
         public int personalCredits = 0;
     }
 
-    private SaveData data;
+    // ── SAVE DATA (nuovo formato) ─────────────────────────────────────────────
 
-    public string CharacterId     => data.characterId;
-    public string CharacterName   => data.characterName;
-    public string Role            => data.role;
-    public int    PersonalCredits => data.personalCredits;
+    [Serializable]
+    private class SaveData
+    {
+        public List<CharacterData> characters = new List<CharacterData>();
+        public string activeCharacterId = "";
+    }
 
+    // Formato legacy v0.9.7 (struttura piatta, un solo personaggio) — solo per migrazione.
+    [Serializable]
+    private class LegacySaveData
+    {
+        public string characterId;
+        public string characterName;
+        public string role;
+        public int personalCredits;
+    }
+
+    // ── STATO INTERNO ─────────────────────────────────────────────────────────
+
+    private SaveData _data;
+    private CharacterData _activeCharacter;
     private string SavePath => Path.Combine(Application.persistentDataPath, SAVE_FILE_NAME);
+
+    // ── API — LETTURA (STESSA API DI PRIMA, ora delega al personaggio attivo) ─
+
+    public string CharacterId => _activeCharacter?.characterId ?? "";
+    public string CharacterName => _activeCharacter?.characterName ?? "Senza nome";
+    public string Role => _activeCharacter?.role ?? "Non assegnato";
+    public int PersonalCredits => _activeCharacter?.personalCredits ?? 0;
+
+    /// <summary>True se esiste almeno un personaggio creato.</summary>
+    public bool HasAnyCharacter => _data?.characters?.Count > 0;
+
+    /// <summary>True se c'è un personaggio attivo selezionato.</summary>
+    public bool HasActiveCharacter => _activeCharacter != null;
+
+    /// <summary>Lista read-only di tutti i personaggi creati su questo dispositivo.</summary>
+    public IReadOnlyList<CharacterData> GetAllCharacters() =>
+        _data?.characters ?? (IReadOnlyList<CharacterData>)Array.Empty<CharacterData>();
+
+    // ── LIFECYCLE ─────────────────────────────────────────────────────────────
 
     private void Awake()
     {
-        if (Instance != null)
-        {
-            Destroy(gameObject);
-            return;
-        }
-
+        if (Instance != null) { Destroy(gameObject); return; }
         Instance = this;
         DontDestroyOnLoad(gameObject);
-
         Load();
     }
+
+    // ── PERSISTENZA ───────────────────────────────────────────────────────────
 
     private void Load()
     {
         try
         {
-            if (File.Exists(SavePath))
+            if (!File.Exists(SavePath))
             {
-                string json = File.ReadAllText(SavePath);
-                data = JsonUtility.FromJson<SaveData>(json);
-                if (data == null) data = CreateNew();
+                _data = new SaveData();
+                return;
             }
-            else
+
+            string json = File.ReadAllText(SavePath);
+            _data = JsonUtility.FromJson<SaveData>(json);
+
+            // ── Migrazione dal formato v0.9.7 (struttura piatta) ──────────────
+            // Il formato legacy aveva "characterName" come campo radice, quello
+            // nuovo ha un array "characters". Se la lista è vuota o null, proviamo
+            // a leggere il file come legacy e convertiamo.
+            bool needsMigration = _data == null
+                               || _data.characters == null
+                               || _data.characters.Count == 0;
+
+            if (needsMigration)
             {
-                data = CreateNew();
+                var legacy = JsonUtility.FromJson<LegacySaveData>(json);
+
+                if (legacy != null && !string.IsNullOrEmpty(legacy.characterName)
+                    && legacy.characterName != "Senza nome")
+                {
+                    Debug.Log("[LocalCharacterProfile] Migrazione dal formato v0.9.7.");
+                    _data = new SaveData();
+                    var migrated = new CharacterData
+                    {
+                        characterId = string.IsNullOrEmpty(legacy.characterId)
+                                          ? Guid.NewGuid().ToString()
+                                          : legacy.characterId,
+                        characterName = legacy.characterName,
+                        role = legacy.role ?? "Non assegnato",
+                        personalCredits = legacy.personalCredits
+                    };
+                    _data.characters.Add(migrated);
+                    _data.activeCharacterId = migrated.characterId;
+                    Save();
+                }
+                else
+                {
+                    _data = new SaveData();
+                }
+            }
+
+            // ── Risolve personaggio attivo ────────────────────────────────────
+            _activeCharacter = FindById(_data.activeCharacterId);
+
+            // Fallback: se l'id salvato non corrisponde più a nessun personaggio
+            // (es. personaggio cancellato tra sessioni), usa il primo della lista.
+            if (_activeCharacter == null && _data.characters.Count > 0)
+            {
+                _activeCharacter = _data.characters[0];
+                _data.activeCharacterId = _activeCharacter.characterId;
                 Save();
             }
         }
         catch (Exception e)
         {
-            Debug.LogError($"[LocalCharacterProfile] Errore caricamento salvataggio: {e.Message}. Creo un profilo nuovo.");
-            data = CreateNew();
+            Debug.LogError($"[LocalCharacterProfile] Errore caricamento: {e.Message}. Reset.");
+            _data = new SaveData();
+            _activeCharacter = null;
         }
-    }
-
-    private SaveData CreateNew()
-    {
-        return new SaveData
-        {
-            characterId = Guid.NewGuid().ToString(),
-            characterName = "Senza nome",
-            role = "Non assegnato",
-            personalCredits = 0
-        };
     }
 
     private void Save()
     {
-        try
+        try { File.WriteAllText(SavePath, JsonUtility.ToJson(_data, true)); }
+        catch (Exception e) { Debug.LogError($"[LocalCharacterProfile] Errore salvataggio: {e.Message}"); }
+    }
+
+    private CharacterData FindById(string id)
+    {
+        if (string.IsNullOrEmpty(id) || _data?.characters == null) return null;
+        return _data.characters.Find(c => c.characterId == id);
+    }
+
+    // ── API — CRUD PERSONAGGI ─────────────────────────────────────────────────
+
+    /// <summary>
+    /// Crea un nuovo personaggio. Se makeActive è true (default) diventa subito quello corrente.
+    /// Fires OnActiveCharacterChanged se viene attivato.
+    /// </summary>
+    public CharacterData CreateCharacter(string characterName, string role, bool makeActive = true)
+    {
+        var character = new CharacterData
         {
-            string json = JsonUtility.ToJson(data, true);
-            File.WriteAllText(SavePath, json);
-        }
-        catch (Exception e)
+            characterId = Guid.NewGuid().ToString(),
+            characterName = characterName,
+            role = role,
+            personalCredits = 0
+        };
+
+        _data.characters.Add(character);
+
+        if (makeActive)
         {
-            Debug.LogError($"[LocalCharacterProfile] Errore salvataggio: {e.Message}");
+            _activeCharacter = character;
+            _data.activeCharacterId = character.characterId;
         }
+
+        Save();
+
+        if (makeActive)
+        {
+            OnActiveCharacterChanged?.Invoke();
+            OnPersonalCreditsChanged?.Invoke(PersonalCredits);
+        }
+
+        return character;
     }
 
     /// <summary>
-    /// Aggiunge crediti personali e salva immediatamente su disco.
-    /// Chiamato da EconomyManager.ReceiveFleetPaymentRpc quando l'host trasferisce
-    /// crediti dal Fleet Account, oppure (M3+) da vendite personali / shop in stazione.
+    /// Rende attivo il personaggio con l'id indicato.
+    /// Fires OnActiveCharacterChanged e OnPersonalCreditsChanged.
+    /// </summary>
+    public void SelectCharacter(string characterId)
+    {
+        var character = FindById(characterId);
+        if (character == null)
+        {
+            Debug.LogWarning($"[LocalCharacterProfile] SelectCharacter: id '{characterId}' non trovato.");
+            return;
+        }
+
+        _activeCharacter = character;
+        _data.activeCharacterId = characterId;
+        Save();
+
+        OnActiveCharacterChanged?.Invoke();
+        OnPersonalCreditsChanged?.Invoke(PersonalCredits);
+    }
+
+    /// <summary>
+    /// Elimina il personaggio con l'id indicato.
+    /// Se era quello attivo, attiva il primo rimasto (o null se lista vuota).
+    /// </summary>
+    public void DeleteCharacter(string characterId)
+    {
+        var character = FindById(characterId);
+        if (character == null) return;
+
+        _data.characters.Remove(character);
+
+        if (_data.activeCharacterId == characterId)
+        {
+            _activeCharacter = _data.characters.Count > 0 ? _data.characters[0] : null;
+            _data.activeCharacterId = _activeCharacter?.characterId ?? "";
+            OnActiveCharacterChanged?.Invoke();
+            OnPersonalCreditsChanged?.Invoke(PersonalCredits);
+        }
+
+        Save();
+    }
+
+    // ── API — SCRITTURA (STESSA API DI PRIMA) ────────────────────────────────
+
+    /// <summary>
+    /// Aggiorna nome e ruolo del personaggio attivo. Usato da CharacterCreationPanel.
+    /// Backward-compatible: stessa firma di prima.
+    /// </summary>
+    public void SetCharacterInfo(string characterName, string role)
+    {
+        if (_activeCharacter == null) return;
+        _activeCharacter.characterName = characterName;
+        _activeCharacter.role = role;
+        Save();
+        OnActiveCharacterChanged?.Invoke();
+    }
+
+    /// <summary>
+    /// Aggiunge crediti al personaggio attivo e salva.
+    /// Chiamato da EconomyManager.ReceiveFleetPaymentRpc. API invariata.
     /// </summary>
     public void AddPersonalCredits(int amount)
     {
-        if (amount == 0) return;
-
-        data.personalCredits = Mathf.Max(0, data.personalCredits + amount);
+        if (amount == 0 || _activeCharacter == null) return;
+        _activeCharacter.personalCredits = Mathf.Max(0, _activeCharacter.personalCredits + amount);
         Save();
-        OnPersonalCreditsChanged?.Invoke(data.personalCredits);
+        OnPersonalCreditsChanged?.Invoke(PersonalCredits);
     }
 
     /// <summary>
-    /// Spende crediti personali (shop in stazione, assicurazione — vedi GDD §7, M3+).
-    /// Nessun server coinvolto: sono soldi del giocatore, non della sessione.
+    /// Spende crediti del personaggio attivo (shop, assicurazione — M3+).
+    /// API invariata.
     /// </summary>
     public bool TrySpendPersonalCredits(int amount)
     {
         if (amount <= 0) return true;
-        if (data.personalCredits < amount) return false;
+        if (_activeCharacter == null || _activeCharacter.personalCredits < amount) return false;
 
-        data.personalCredits -= amount;
+        _activeCharacter.personalCredits -= amount;
         Save();
-        OnPersonalCreditsChanged?.Invoke(data.personalCredits);
+        OnPersonalCreditsChanged?.Invoke(PersonalCredits);
         return true;
     }
 
-    /// <summary>Da richiamare quando esisterà la UI di character creation/selection (GDD §10).</summary>
-    public void SetCharacterInfo(string characterName, string role)
-    {
-        data.characterName = characterName;
-        data.role = role;
-        Save();
-    }
-
+    // ── DEBUG GUI ─────────────────────────────────────────────────────────────
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
     private void OnGUI()
     {
-        GUILayout.BeginArea(new Rect(10, 550, 260, 70));
+        GUILayout.BeginArea(new Rect(10, 550, 280, 90));
         GUILayout.BeginVertical("box");
-        GUILayout.Label($"[LocalCharacterProfile] {CharacterName} ({Role})");
+        int count = _data?.characters?.Count ?? 0;
+        GUILayout.Label($"[Profile] {CharacterName} ({Role}) | {count} personaggi");
         GUILayout.Label($"Personal Credits: {PersonalCredits} cr");
         GUILayout.BeginHorizontal();
-        if (GUILayout.Button("+100 (debug)")) AddPersonalCredits(100);
-        if (GUILayout.Button("Reset save")) { File.Delete(SavePath); data = CreateNew(); Save(); OnPersonalCreditsChanged?.Invoke(data.personalCredits); }
+        if (GUILayout.Button("+100")) AddPersonalCredits(100);
+        if (GUILayout.Button("Reset"))
+        {
+            try { File.Delete(SavePath); } catch { }
+            _data = new SaveData();
+            _activeCharacter = null;
+            OnActiveCharacterChanged?.Invoke();
+            OnPersonalCreditsChanged?.Invoke(0);
+        }
         GUILayout.EndHorizontal();
         GUILayout.EndVertical();
         GUILayout.EndArea();
