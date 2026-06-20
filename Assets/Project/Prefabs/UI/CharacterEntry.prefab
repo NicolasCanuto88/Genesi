@@ -274,6 +274,9 @@ MonoBehaviour:
   nameLabel: {fileID: 6238248162926414662}
   roleLabel: {fileID: 3020861349218999928}
   background: {fileID: 5393610950286252147}
+  leftStripe: {fileID: 7559611050900295365}
+  creditsLabel: {fileID: 2134924349357985802}
+  checkmarkObject: {fileID: 7271334969741635313}
   colorNormale: {r: 0.12, g: 0.14, b: 0.18, a: 1}
   colorSelezionato: {r: 0.18, g: 0.72, b: 0.36, a: 1}
 --- !u!1 &1994258669358176140
@@ -376,7 +379,7 @@ RectTransform:
   m_AnchorMin: {x: 0.5, y: 0.5}
   m_AnchorMax: {x: 0.5, y: 0.5}
   m_AnchoredPosition: {x: 0, y: 0}
-  m_SizeDelta: {x: 593, y: 75}
+  m_SizeDelta: {x: 1180, y: 75}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!222 &5600906100056858999
 CanvasRenderer:
@@ -942,7 +945,7 @@ RectTransform:
   m_AnchorMin: {x: 0.5, y: 0.5}
   m_AnchorMax: {x: 0.5, y: 0.5}
   m_AnchoredPosition: {x: 0, y: 0}
-  m_SizeDelta: {x: 588, y: 70}
+  m_SizeDelta: {x: 1175, y: 70}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!222 &864665111598249098
 CanvasRenderer:

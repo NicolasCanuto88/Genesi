@@ -13,38 +13,19 @@ using ParrelSync;
 
 /// <summary>
 /// MainMenuManager — Milestone 3, Blocco 1 (Frontend &amp; Identità).
+/// Rev: aggiornato per corrispondere ESATTAMENTE alla gerarchia reale di
+/// MainMenu.unity (estetica sci-fi con parentesi angolari, accent bar,
+/// badge personaggio nome+ruolo+dot separati) — vedi guida wiring per il
+/// percorso preciso di ogni campo nella Hierarchy.
 ///
-/// State machine a 6 stati che orchestra l'intero flusso pre-partita:
+/// State machine a 6 stati — logica invariata dalla versione precedente:
+///   CharacterCreation → MainMenu → CharacterSelect → SessionType → LobbyHost → Join
 ///
-///   CharacterCreation → creazione nuovo personaggio (primo accesso o nuovo)
-///   MainMenu          → schermata principale con azioni disponibili
-///   CharacterSelect   → selezione/cambio personaggio
-///   SessionType       → tipo sessione (Aperta / Su invito) prima di hostare
-///   LobbyHost         → attesa giocatori con join code, poi avvio partita
-///   Join              → inserimento codice e connessione come client
-///
-/// FLUSSO PRIMO ACCESSO:
-///   CharacterCreation → MainMenu
-///
-/// FLUSSO NUOVA PARTITA (personaggio già esistente):
-///   MainMenu → SessionType → LobbyHost → "Inizia" → LoadScene("Game")
-///
-/// FLUSSO NUOVA PARTITA (nessun personaggio selezionato):
-///   MainMenu → CharacterSelect → SessionType → LobbyHost → "Inizia"
-///
-/// FLUSSO UNISCITI:
-///   MainMenu → Join → [connessione] → auto-load Game (NGO lo gestisce)
-///
-/// PARRELSYNC: il clone non vede nessun menu — AutoStartHost avvia il client
-/// automaticamente, il canvas viene disabilitato in Awake.
-///
-/// CAMBIO SCENA: l'host chiama NetworkManager.Singleton.SceneManager.LoadScene
-/// ("Game", Single) → NGO replica il cambio a tutti i client connessi. Tutti
-/// i GameObject di MainMenu.unity vengono distrutti; NetworkManager sopravvive
-/// (DontDestroyOnLoad gestito internamente da NGO).
-///
-/// NOTE SCENA: "Game" deve corrispondere ESATTAMENTE al nome del file
-/// Game.unity in Build Settings (vedi guida Editor).
+/// CAMBIO RISPETTO ALLA VERSIONE PRECEDENTE: il badge personaggio nel
+/// MainMenuPanel non è un singolo testo "Nome · Ruolo" ma tre elementi
+/// separati (Name, Role, Dot) — Dot è un'Image colorata dinamicamente in
+/// base al ruolo tramite RoleColors.Get() (fonte unica, condivisa con
+/// CharacterEntryUI per coerenza tra badge personaggio e lista selezione).
 /// </summary>
 public class MainMenuManager : MonoBehaviour
 {
@@ -66,66 +47,114 @@ public class MainMenuManager : MonoBehaviour
     [SerializeField] private GameObject joinPanel;
 
     // ── CHARACTER CREATION ────────────────────────────────────────────────────
+    // Percorso: MainMenuCanvas/CharacterCreationPanel/ContentContainer/...
 
     [Header("Character Creation")]
+    [Tooltip("ContentContainer/NameSection/CreationNameInput")]
     [SerializeField] private TMP_InputField creationNameInput;
+    [Tooltip("ContentContainer/RoleContainer/Pilota")]
     [SerializeField] private Button creationBtnPilota;
+    [Tooltip("ContentContainer/RoleContainer/Ingegnere")]
     [SerializeField] private Button creationBtnIngegnere;
+    [Tooltip("ContentContainer/RoleContainer/Scanner")]
     [SerializeField] private Button creationBtnScanner;
+    [Tooltip("ContentContainer/RoleContainer/Medico")]
     [SerializeField] private Button creationBtnMedico;
+    [Tooltip("ContentContainer/ErrorText")]
     [SerializeField] private TextMeshProUGUI creationErrorLabel;
+    [Tooltip("ContentContainer/Apply")]
     [SerializeField] private Button creationBtnConferma;
+    [Tooltip("Nuovo bottone da creare in Editor (vedi guida) — visibile solo se esiste già almeno un personaggio")]
+    [SerializeField] private Button creationBtnIndietro;
 
     // ── MAIN MENU ─────────────────────────────────────────────────────────────
+    // Percorso: MainMenuCanvas/MainMenuPanel/...
 
-    [Header("Main Menu")]
-    [SerializeField] private TextMeshProUGUI mainActiveCharacterText;
+    [Header("Main Menu — badge personaggio (3 elementi separati, non un testo unico)")]
+    [Tooltip("CharacterBadge/CharacterInfo/Background/Container/Name")]
+    [SerializeField] private TextMeshProUGUI mainCharacterNameText;
+    [Tooltip("CharacterBadge/CharacterInfo/Background/Container/Role")]
+    [SerializeField] private TextMeshProUGUI mainCharacterRoleText;
+    [Tooltip("CharacterBadge/CharacterInfo/Background/Container/Dot — colorata dinamicamente per ruolo")]
+    [SerializeField] private Image mainCharacterDot;
+
+    [Header("Main Menu — azioni")]
+    [Tooltip("CharacterBadge/ChangeCharacter")]
     [SerializeField] private Button mainBtnCambiaPersonaggio;
+    [Tooltip("NewGame")]
     [SerializeField] private Button mainBtnNuovaPartita;
+    [Tooltip("LoadGame")]
     [SerializeField] private Button mainBtnCarica;
+    [Tooltip("Join")]
     [SerializeField] private Button mainBtnUnisciti;
+    [Tooltip("Options")]
     [SerializeField] private Button mainBtnOpzioni;
+    [Tooltip("Credits")]
     [SerializeField] private Button mainBtnCrediti;
 
     // ── CHARACTER SELECT ──────────────────────────────────────────────────────
+    // Percorso: MainMenuCanvas/CharacterSelectPanel/ContentContainer/...
 
     [Header("Character Select")]
+    [Tooltip("CharacterContainer/CharacterList/Viewport/Content — NON il ScrollRect stesso")]
     [SerializeField] private Transform selectListContainer;
     [SerializeField] private GameObject characterEntryPrefab;
+    [Tooltip("CharacterContainer/NewCharacter")]
     [SerializeField] private Button selectBtnNuovoPersonaggio;
+    [Tooltip("ButtonContainer/Apply")]
     [SerializeField] private Button selectBtnConferma;
+    [Tooltip("ButtonContainer/Back")]
     [SerializeField] private Button selectBtnIndietro;
 
     // ── SESSION TYPE ──────────────────────────────────────────────────────────
+    // Percorso: MainMenuCanvas/SessionTypePanel/ContentContainer/...
 
     [Header("Session Type")]
+    [Tooltip("CardMainContainer/CardContainer/Background/Open — card 'Aperta'")]
     [SerializeField] private Button sessionBtnAperta;
+    [Tooltip("CardMainContainer/CardContainer (1)/Background/Open (1) — card 'Su invito'")]
     [SerializeField] private Button sessionBtnSuInvito;
+    [Tooltip("Back (diretto sotto ContentContainer, non dentro le card)")]
     [SerializeField] private Button sessionBtnIndietro;
 
     // ── LOBBY HOST ────────────────────────────────────────────────────────────
+    // Percorso: MainMenuCanvas/LobbyHostPanel/ContentContainer/...
 
     [Header("Lobby Host")]
+    [Tooltip("BadgeSession/Text")]
     [SerializeField] private TextMeshProUGUI lobbySessionTypeBadge;
+    [Tooltip("CardContainer (2)/Background/JoinCode — il codice vero e proprio (es. DJFMKQ)")]
     [SerializeField] private TextMeshProUGUI lobbyJoinCodeText;
+    [Tooltip("CardContainer (2)/Background/CopyCode")]
     [SerializeField] private Button lobbyBtnCopiaCode;
+    [Tooltip("⚠️ ATTENZIONE: nella scena questo GameObject si chiama 'JoinCode (1)' " +
+             "ma è in realtà il conteggio giocatori, non un codice — testo originale " +
+             "di placeholder 'Equipaggio a bordo: 1/5'")]
     [SerializeField] private TextMeshProUGUI lobbyPlayerCountText;
+    [Tooltip("StartGame")]
     [SerializeField] private Button lobbyBtnInizia;
+    [Tooltip("Back")]
     [SerializeField] private Button lobbyBtnAnnulla;
 
     // ── JOIN ──────────────────────────────────────────────────────────────────
+    // Percorso: MainMenuCanvas/JoinPanel/ContentContainer/...
 
     [Header("Join")]
+    [Tooltip("InputField (TMP)")]
     [SerializeField] private TMP_InputField joinCodeInput;
+    [Tooltip("⚠️ ATTENZIONE: nella scena questo GameObject si chiama 'JoinCode (1)' " +
+             "ma è in realtà il testo di stato connessione, non un codice")]
     [SerializeField] private TextMeshProUGUI joinStatusText;
+    [Tooltip("ButtonContainer/StartGame — testo visualizzato 'connetti'")]
     [SerializeField] private Button joinBtnConferma;
+    [Tooltip("ButtonContainer/Back")]
     [SerializeField] private Button joinBtnIndietro;
 
     // ── COLORI ────────────────────────────────────────────────────────────────
 
-    [Header("Colori ruolo")]
-    [SerializeField] private Color colorRuoloNormale = new Color(0.12f, 0.14f, 0.18f, 1f);
-    [SerializeField] private Color colorRuoloSelezionato = new Color(0.18f, 0.72f, 0.36f, 1f);
+    [Header("Colori selezione (sfondo bottoni ruolo creazione)")]
+    [SerializeField] private Color colorRuoloNormale = new Color(0.07f, 0.08f, 0.12f, 1f);
+    [SerializeField] private Color colorRuoloSelezionato = new Color(0.04f, 0.11f, 0.16f, 1f);
 
     // ── RIFERIMENTI ───────────────────────────────────────────────────────────
 
@@ -199,7 +228,6 @@ public class MainMenuManager : MonoBehaviour
 
     private void WireButtons()
     {
-        // Ruolo
         for (int i = 0; i < _creationRoleButtons.Length; i++)
         {
             int idx = i;
@@ -207,31 +235,27 @@ public class MainMenuManager : MonoBehaviour
                 _creationRoleButtons[idx].onClick.AddListener(() => OnRuoloSelezionato(NomiRuoli[idx]));
         }
         if (creationBtnConferma != null) creationBtnConferma.onClick.AddListener(OnCreationConferma);
+        if (creationBtnIndietro != null) creationBtnIndietro.onClick.AddListener(OnCreationIndietro);
 
-        // Main Menu
         if (mainBtnCambiaPersonaggio != null) mainBtnCambiaPersonaggio.onClick.AddListener(OnCambiaPersonaggio);
         if (mainBtnNuovaPartita != null) mainBtnNuovaPartita.onClick.AddListener(OnNuovaPartita);
         if (mainBtnUnisciti != null) mainBtnUnisciti.onClick.AddListener(OnUniscitiMainMenu);
-        if (mainBtnCarica != null) mainBtnCarica.interactable = false;
-        if (mainBtnOpzioni != null) mainBtnOpzioni.interactable = false;
-        if (mainBtnCrediti != null) mainBtnCrediti.interactable = false;
+        if (mainBtnCarica != null) mainBtnCarica.interactable = false; // Blocco 5
+        if (mainBtnOpzioni != null) mainBtnOpzioni.interactable = false; // M4
+        if (mainBtnCrediti != null) mainBtnCrediti.interactable = false; // M4
 
-        // Character Select
         if (selectBtnNuovoPersonaggio != null) selectBtnNuovoPersonaggio.onClick.AddListener(OnNuovoPersonaggio);
         if (selectBtnConferma != null) selectBtnConferma.onClick.AddListener(OnSelectConferma);
         if (selectBtnIndietro != null) selectBtnIndietro.onClick.AddListener(() => TransitionTo(Stato.MainMenu));
 
-        // Session Type
         if (sessionBtnAperta != null) sessionBtnAperta.onClick.AddListener(() => OnTipoSessione(TipoSessione.Aperta));
         if (sessionBtnSuInvito != null) sessionBtnSuInvito.onClick.AddListener(() => OnTipoSessione(TipoSessione.SuInvito));
         if (sessionBtnIndietro != null) sessionBtnIndietro.onClick.AddListener(() => TransitionTo(Stato.MainMenu));
 
-        // Lobby Host
         if (lobbyBtnCopiaCode != null) lobbyBtnCopiaCode.onClick.AddListener(OnCopiaCode);
         if (lobbyBtnInizia != null) lobbyBtnInizia.onClick.AddListener(OnIniziaPartita);
         if (lobbyBtnAnnulla != null) lobbyBtnAnnulla.onClick.AddListener(OnAnnullaHost);
 
-        // Join
         if (joinBtnConferma != null) joinBtnConferma.onClick.AddListener(OnJoinConferma);
         if (joinBtnIndietro != null) joinBtnIndietro.onClick.AddListener(() => TransitionTo(Stato.MainMenu));
     }
@@ -260,6 +284,9 @@ public class MainMenuManager : MonoBehaviour
         }
     }
 
+    // ── COLORE RUOLO: vedi classe statica RoleColors.cs (fonte unica, condivisa
+    // con CharacterEntryUI per coerenza tra badge e lista personaggi) ─────────
+
     // ── CHARACTER CREATION ────────────────────────────────────────────────────
 
     private void MostraCreazione()
@@ -269,13 +296,28 @@ public class MainMenuManager : MonoBehaviour
         _ruoloSelezionato = "";
         AggiornaCertColoriRuolo();
 
-        // Precompila il nome se il personaggio attivo ne ha già uno
         var profile = LocalCharacterProfile.Instance;
-        if (creationNameInput != null && profile.HasActiveCharacter
-            && profile.CharacterName != "Senza nome")
-            creationNameInput.text = profile.CharacterName;
-        else if (creationNameInput != null)
-            creationNameInput.text = "";
+        if (creationNameInput != null)
+            creationNameInput.text = (profile.HasActiveCharacter && profile.CharacterName != "Senza nome")
+                ? profile.CharacterName : "";
+
+        // Il bottone Indietro ha senso solo se esiste già almeno un personaggio —
+        // al primissimo avvio (nessun personaggio) non c'è nessun "menu principale"
+        // a cui tornare: la creazione è obbligatoria per poter giocare.
+        if (creationBtnIndietro != null)
+            creationBtnIndietro.gameObject.SetActive(profile.HasAnyCharacter);
+    }
+
+    /// <summary>
+    /// Annulla la creazione (anche se avviata da "+ Nuovo personaggio" dentro
+    /// CharacterSelect) e torna sempre al Main Menu — non a CharacterSelect —
+    /// per design esplicito: l'utente vuole un'uscita diretta, non un passo
+    /// indietro nello stack di navigazione.
+    /// </summary>
+    private void OnCreationIndietro()
+    {
+        _creatingFromSelect = false;
+        TransitionTo(Stato.MainMenu);
     }
 
     private void OnRuoloSelezionato(string ruolo)
@@ -328,18 +370,22 @@ public class MainMenuManager : MonoBehaviour
         mainMenuPanel?.SetActive(true);
         _isConnecting = false;
         _pendingAction = AzionePending.None;
-        AggiornaPannelloMainMenu();
+        AggiornaBadgePersonaggio();
     }
 
-    private void AggiornaPannelloMainMenu()
+    private void AggiornaBadgePersonaggio()
     {
         var profile = LocalCharacterProfile.Instance;
         bool haPersonaggio = profile.HasActiveCharacter;
 
-        if (mainActiveCharacterText != null)
-            mainActiveCharacterText.text = haPersonaggio
-                ? $"{profile.CharacterName}  ·  {profile.Role}"
-                : "Nessun personaggio — creane uno per iniziare.";
+        if (mainCharacterNameText != null)
+            mainCharacterNameText.text = haPersonaggio ? profile.CharacterName : "Nessun personaggio";
+
+        if (mainCharacterRoleText != null)
+            mainCharacterRoleText.text = haPersonaggio ? profile.Role : "—";
+
+        if (mainCharacterDot != null)
+            mainCharacterDot.color = haPersonaggio ? RoleColors.Get(profile.Role) : colorRuoloNormale;
 
         if (mainBtnNuovaPartita != null) mainBtnNuovaPartita.interactable = haPersonaggio;
         if (mainBtnUnisciti != null) mainBtnUnisciti.interactable = haPersonaggio;
@@ -473,6 +519,7 @@ public class MainMenuManager : MonoBehaviour
     {
         if (!NetworkManager.Singleton.IsServer) return;
         CancelInvoke(nameof(AggiornaContatoreGiocatori));
+        if (menuCanvas != null) menuCanvas.gameObject.SetActive(false);
         NetworkManager.Singleton.SceneManager.LoadScene(GAME_SCENE_NAME, LoadSceneMode.Single);
     }
 
@@ -488,7 +535,7 @@ public class MainMenuManager : MonoBehaviour
         if (lobbyPlayerCountText == null || NetworkManager.Singleton == null) return;
         int n = NetworkManager.Singleton.IsServer
             ? NetworkManager.Singleton.ConnectedClientsIds.Count : 0;
-        lobbyPlayerCountText.text = $"{n} / 5 giocatori";
+        lobbyPlayerCountText.text = $"Equipaggio a bordo: {n} / 5";
     }
 
     // ── JOIN ──────────────────────────────────────────────────────────────────
@@ -548,7 +595,6 @@ public class MainMenuManager : MonoBehaviour
     {
         if (_stato == Stato.LobbyHost) AggiornaContatoreGiocatori();
 
-        // Client puro connesso: aspetta che l'host carichi la scena
         bool èClientPuro = NetworkManager.Singleton.IsClient && !NetworkManager.Singleton.IsHost;
         bool èClientLocale = clientId == NetworkManager.Singleton.LocalClientId;
 
@@ -566,13 +612,8 @@ public class MainMenuManager : MonoBehaviour
         Debug.Log("[MainMenuManager] Relay pronto — partite cross-internet disponibili.");
     }
 
-    // ── CURSORE ───────────────────────────────────────────────────────────────────
+    // ── CURSORE ───────────────────────────────────────────────────────────────
 
-    /// <summary>
-    /// Forza il cursore libero ogni frame finché il canvas è visibile.
-    /// Protezione contro PlayerController.Awake() che può bloccare il cursore
-    /// nel brevissimo intervallo prima che OnNetworkSpawn lo sblocchi.
-    /// </summary>
     private void Update()
     {
         if (menuCanvas != null && menuCanvas.gameObject.activeSelf)
