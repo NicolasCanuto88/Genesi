@@ -5,7 +5,7 @@ using UnityEngine;
 using UnityEngine.InputSystem;
 
 /// <summary>
-/// PilotStation — Milestone 2
+/// PilotStation — Milestone 2, esteso in Milestone 3 Blocco 2.
 /// Postazione fisica del Pilota nel cockpit.
 ///
 /// PATTERN:
@@ -32,7 +32,55 @@ using UnityEngine.InputSystem;
 ///   PilotStation è l'unico punto da cui chiamare
 ///   FTLDrive.TryInitiateJump() e PropulsionSystem.RequestNavigationState().
 ///
+/// BUG FIX — uscita con Esc non funzionava:
+///   EnterStation ora recupera il PlayerInput con fallback su
+///   interactor.GetComponent<PlayerInput>() se playerInputReference non è
+///   assegnato in Inspector (stesso pattern già in MedicalStation —
+///   mancava qui, lasciando cancelAction null silenziosamente).
+///
+/// DECISIONE ARCHITETTURALE (Blocco 2, dopo ampia sperimentazione — vedi
+/// SESSION_HANDOFF per la cronologia completa): "Nave" NON si muove MAI
+/// fisicamente. Una nave che trasla/ruota davvero nel mondo, con player
+/// agganciati ad essa, si è rivelata un terreno di bug profondi e
+/// interconnessi (tremolio, oscillazioni, CharacterController che non
+/// segue piattaforme in movimento — limite documentato di Unity stesso,
+/// non un nostro bug). La soluzione adottata: la nave resta ferma,
+/// "Velocità"/NavigationState restano concetti puramente LOGICI (HUD,
+/// consumo carburante, ETA) — quando in Blocco 3 esisteranno asteroidi/
+/// relitti/stazioni visivi, saranno LORO a muoversi in senso inverso
+/// rispetto a questa velocità logica (la nave resta il centro fisso del
+/// mondo) — pattern comune nei giochi spaziali, evita anche problemi di
+/// precisione a coordinate molto grandi. Vedi ShipMovement.cs per il
+/// dettaglio.
+///
+/// Conseguenza pratica per QUESTO file: nessuna matematica di posizione
+/// relativa alla nave è necessaria — il player non deve mai essere
+/// "agganciato" a nulla, perché nulla si muove. Identico, in questo, al
+/// comportamento di MedicalStation/EngineeringStation.
+///
+/// BLOCCO 2 (M3) — pilotaggio MANUALE (solo stato logico):
+///   - Mentre seduto e NavigationState == Manual, la X del Look stick/mouse
+///     (azione "Look" del Player Action Map — libera, perché PlayerController
+///     è disabilitato qui e non la consuma più) pilota lo yaw LOGICO della
+///     nave via ShipMovement.Instance.SetManualSteerInput() — usato in
+///     futuro per ruotare in senso inverso il mondo esterno (Blocco 3+),
+///     non per ruotare "Nave" stessa. Azzerata quando si esce da MANUAL o
+///     dalla postazione.
+///   - Camera: passa automaticamente da vista cockpit (dashboard, esistente)
+///     a vista esterna in terza persona ancorata a shipChaseCamPoint (figlio
+///     fisso di "Nave") quando NavState diventa Manual, e torna alla vista
+///     cockpit quando NavState cambia o si esce dalla postazione. Nessuna
+///     dipendenza da Cinemachine — il progetto non lo ha installato
+///     (verificato in Packages/manifest.json), quindi si riusa lo stesso
+///     approccio "Camera.transform diretto" già usato da LookAtCockpitRoutine.
+///     Nota: finché non esiste contenuto esterno visivo che si muove
+///     (Blocco 3+), questa vista mostrerà la nave ferma dall'esterno — non
+///     dinamica come sarà una volta aggiunto il mondo inverso, ma corretta
+///     e pronta per quando arriverà.
+///
 /// DIPENDE DA: PropulsionSystem ✅ · FTLDrive ✅ · ShieldSystem ✅
+///   ShipMovement (Blocco 2, nuovo) · shipChaseCamPoint da creare in Editor
+///   come figlio fisso di "Nave".
 /// Multiplayer (M3+): aggiungere role-check (solo il Pilota può usare questa postazione).
 /// </summary>
 [RequireComponent(typeof(BoxCollider))]
@@ -41,14 +89,24 @@ public class PilotStation : MonoBehaviour, IInteractable
     // ── HUD ───────────────────────────────────────────────────────────────
     [Header("HUD")]
     [SerializeField] private PilotHUD pilotHUD;
-    [SerializeField] private Canvas   hudCanvas;
+    [SerializeField] private Canvas hudCanvas;
 
     // ── Player Positioning ────────────────────────────────────────────────
     [Header("Player Positioning")]
     [SerializeField] private Transform playerSnapPoint;
     [SerializeField] private Transform cameraLookAtPoint;
-    [SerializeField] private float     snapTransitionSpeed   = 5f;
-    [SerializeField] private float     cameraTransitionSpeed = 8f;
+    [SerializeField] private float snapTransitionSpeed = 5f;
+    [SerializeField] private float cameraTransitionSpeed = 8f;
+
+    // ── Camera terza persona (Blocco 2) ─────────────────────────────────────
+    [Header("Camera Terza Persona — MANUAL (Blocco 2)")]
+    [Tooltip("⚠️ EDITOR: crea un GameObject vuoto figlio di 'Nave' (statico, " +
+             "la nave non si muove mai — vedi nota architetturale in testa al " +
+             "file), posizionato dietro/sopra la plancia, orientato lungo la " +
+             "prua. Nessun asset necessario — solo un Transform vuoto. Se " +
+             "lasciato vuoto, il pilotaggio MANUAL resta in prima persona " +
+             "(vista cockpit invariata).")]
+    [SerializeField] private Transform shipChaseCamPoint;
 
     // ── Input ─────────────────────────────────────────────────────────────
     [Header("Input — Cancel (PlayerInput reference)")]
@@ -68,18 +126,25 @@ public class PilotStation : MonoBehaviour, IInteractable
     private bool isUsingStation;
     private bool isTransitioning;
 
-    private PlayerController    playerController;
+    private PlayerController playerController;
     private CharacterController characterController;
-    private Camera              playerCamera;
-    private InputAction         cancelAction;
+    private Camera playerCamera;
+    private InputAction cancelAction;
+    private InputAction lookAction; // Blocco 2 — steering MANUAL (logico)
 
-    private Vector3    originalPlayerPosition;
+    private Vector3 originalPlayerPosition;
     private Quaternion originalPlayerRotation;
     private Quaternion originalCameraRotation;
     private Quaternion targetCameraLocalRotation;
-    private bool       wasPlayerControllerEnabled;
+    private bool wasPlayerControllerEnabled;
 
-    private float       interactionCooldown;
+    // Blocco 2 — stato camera terza persona / polling NavState
+    private Transform originalCameraParent;
+    private Vector3 originalCameraLocalPosition;
+    private bool isChaseCamActive;
+    private NavigationState lastPolledNavState;
+
+    private float interactionCooldown;
     private const float COOLDOWN_DURATION = 0.5f;
 
     // =========================================================================
@@ -104,6 +169,9 @@ public class PilotStation : MonoBehaviour, IInteractable
 
         if (isUsingStation && cancelAction != null && cancelAction.WasPressedThisFrame())
             TryExitStation();
+
+        if (isUsingStation && !isTransitioning)
+            PollManualFlightState();
     }
 
     // =========================================================================
@@ -115,14 +183,14 @@ public class PilotStation : MonoBehaviour, IInteractable
         if (interactionCooldown > 0f) return;
 
         if (isUsingStation) TryExitStation();
-        else                EnterStation(interactor);
+        else EnterStation(interactor);
     }
 
-    public bool   CanInteract()             => !isUsingStation && interactionCooldown <= 0f;
-    public string GetInteractionPrompt()    => "Console Pilota";
-    public bool   IsContinuousInteraction() => false;
-    public void   OnLookEnter()             { }
-    public void   OnLookExit()              { }
+    public bool CanInteract() => !isUsingStation && interactionCooldown <= 0f;
+    public string GetInteractionPrompt() => "Console Pilota";
+    public bool IsContinuousInteraction() => false;
+    public void OnLookEnter() { }
+    public void OnLookExit() { }
 
     // =========================================================================
     // ENTRATA
@@ -130,9 +198,9 @@ public class PilotStation : MonoBehaviour, IInteractable
 
     private void EnterStation(GameObject interactor)
     {
-        playerController    = interactor.GetComponent<PlayerController>();
+        playerController = interactor.GetComponent<PlayerController>();
         characterController = interactor.GetComponent<CharacterController>();
-        playerCamera        = interactor.GetComponentInChildren<Camera>();
+        playerCamera = interactor.GetComponentInChildren<Camera>();
 
         if (playerController == null || playerCamera == null)
         {
@@ -140,15 +208,41 @@ public class PilotStation : MonoBehaviour, IInteractable
             return;
         }
 
-        // Cancel action dal PlayerInput reference (stesso pattern MedicalStation)
-        if (playerInputReference != null)
-            cancelAction = playerInputReference.actions.FindAction("Cancel");
+        // Recupera Cancel/Look action da PlayerInput: usa la reference assegnata
+        // in Inspector se presente, altrimenti fallback sul PlayerInput
+        // dell'interactor stesso (stesso pattern MedicalStation.EnterStation —
+        // bug fix: prima mancava il fallback, lasciando cancelAction null se il
+        // campo Inspector non era assegnato, ed Esc non usciva mai).
+        PlayerInput pi = playerInputReference != null
+            ? playerInputReference
+            : interactor.GetComponent<PlayerInput>();
 
-        // Salva stato originale del player
-        originalPlayerPosition     = interactor.transform.position;
-        originalPlayerRotation     = interactor.transform.rotation;
-        originalCameraRotation     = playerCamera.transform.localRotation;
+        if (pi != null)
+        {
+            cancelAction = pi.actions.FindAction("Cancel");
+            // Blocco 2: azione "Look" del Player map — libera mentre
+            // PlayerController è disabilitato (non la consuma più nessuno),
+            // riusata qui per lo steering MANUAL logico. Nessuna modifica
+            // all'asset Input Actions necessaria.
+            lookAction = pi.actions.FindAction("Look");
+        }
+
+        // Salva stato originale del player — posizione/rotazione ASSOLUTE
+        // nel mondo, semplici: "Nave" non si muove mai (vedi nota
+        // architetturale in testa al file), quindi non serve nessuna
+        // matematica relativa alla nave.
+        originalPlayerPosition = interactor.transform.position;
+        originalPlayerRotation = interactor.transform.rotation;
+        originalCameraRotation = playerCamera.transform.localRotation;
         wasPlayerControllerEnabled = playerController.enabled;
+
+        // Blocco 2 — stato camera per il possibile swap a terza persona
+        originalCameraParent = playerCamera.transform.parent;
+        originalCameraLocalPosition = playerCamera.transform.localPosition;
+        isChaseCamActive = false;
+        lastPolledNavState = PropulsionSystem.Instance != null
+            ? PropulsionSystem.Instance.CurrentNavState
+            : NavigationState.Anchored;
 
         playerController.enabled = false;
         if (characterController != null)
@@ -170,8 +264,8 @@ public class PilotStation : MonoBehaviour, IInteractable
     {
         isTransitioning = true;
 
-        Transform  t         = interactor.transform;
-        Vector3    targetPos = playerSnapPoint != null ? playerSnapPoint.position : transform.position;
+        Transform t = interactor.transform;
+        Vector3 targetPos = playerSnapPoint != null ? playerSnapPoint.position : transform.position;
         Quaternion targetRot = playerSnapPoint != null ? playerSnapPoint.rotation : transform.rotation;
 
         for (float p = 0f; p < 1f; p += Time.deltaTime * snapTransitionSpeed)
@@ -181,8 +275,8 @@ public class PilotStation : MonoBehaviour, IInteractable
             yield return null;
         }
 
-        t.position      = targetPos;
-        t.rotation      = targetRot;
+        t.position = targetPos;
+        t.rotation = targetRot;
         isTransitioning = false;
 
         if (cameraLookAtPoint != null)
@@ -193,7 +287,7 @@ public class PilotStation : MonoBehaviour, IInteractable
 
     private IEnumerator LookAtCockpitRoutine()
     {
-        Vector3    dir      = (cameraLookAtPoint.position - playerCamera.transform.position).normalized;
+        Vector3 dir = (cameraLookAtPoint.position - playerCamera.transform.position).normalized;
         Quaternion worldTgt = Quaternion.LookRotation(dir);
         targetCameraLocalRotation =
             Quaternion.Inverse(playerCamera.transform.parent.rotation) * worldTgt;
@@ -232,8 +326,16 @@ public class PilotStation : MonoBehaviour, IInteractable
             }
         }
 
+        // Riporta SEMPRE la camera sotto il player prima di qualunque altra
+        // logica di uscita: TransitionFromStation lavora su
+        // playerCamera.transform.localRotation assumendo che il parent sia
+        // di nuovo quello originale, altrimenti il lerp finale sarebbe nello
+        // spazio locale sbagliato (quello di shipChaseCamPoint).
+        ExitThirdPersonChaseCam();
+        ShipMovement.Instance?.SetManualSteerInput(0f);
+
         interactionCooldown = COOLDOWN_DURATION;
-        isUsingStation      = false;
+        isUsingStation = false;
 
         // MANUAL attivo → COASTING: nessuno al timone, la nave mantiene l'inerzia
         if (PropulsionSystem.Instance != null
@@ -271,13 +373,97 @@ public class PilotStation : MonoBehaviour, IInteractable
             yield return null;
         }
 
-        t.position                           = originalPlayerPosition;
-        t.rotation                           = originalPlayerRotation;
+        t.position = originalPlayerPosition;
+        t.rotation = originalPlayerRotation;
         playerCamera.transform.localRotation = originalCameraRotation;
 
         playerController.enabled = wasPlayerControllerEnabled;
+
+        // FIX — currentVelocity è un campo persistente in PlayerController
+        // per smussare accelerazione/decelerazione: disabilitare il
+        // componente non lo azzera, resta congelato alla velocità che il
+        // player aveva nell'istante di EnterStation. Senza questo,
+        // riattivando il componente il player riprenderebbe per qualche
+        // frame a muoversi nella direzione di prima di sedersi. Stesso
+        // identico bug latente in MedicalStation/EngineeringStation —
+        // stesso fix applicabile lì allo stesso modo.
+        playerController.ResetVelocity();
+
         if (characterController != null)
             characterController.enabled = true;
+    }
+
+    // =========================================================================
+    // PILOTAGGIO MANUALE — steering logico + camera terza persona (Blocco 2)
+    // =========================================================================
+
+    /// <summary>
+    /// Eseguito ogni frame mentre seduti (non in transizione). Rileva i
+    /// cambi di NavigationState per scambiare la camera cockpit/terza
+    /// persona, e mentre MANUAL è attivo inoltra la X del Look stick/mouse
+    /// a ShipMovement come yaw LOGICO di sterzata (non muove "Nave" — vedi
+    /// nota architetturale in testa al file).
+    /// </summary>
+    private void PollManualFlightState()
+    {
+        var ps = PropulsionSystem.Instance;
+        NavigationState navState = ps != null ? ps.CurrentNavState : NavigationState.Anchored;
+
+        if (navState != lastPolledNavState)
+        {
+            if (navState == NavigationState.Manual)
+                EnterThirdPersonChaseCam();
+            else if (lastPolledNavState == NavigationState.Manual)
+                ExitThirdPersonChaseCam();
+
+            lastPolledNavState = navState;
+        }
+
+        if (navState == NavigationState.Manual)
+        {
+            float steerX = lookAction != null ? lookAction.ReadValue<Vector2>().x : 0f;
+            ShipMovement.Instance?.SetManualSteerInput(steerX);
+        }
+        else
+        {
+            ShipMovement.Instance?.SetManualSteerInput(0f);
+        }
+    }
+
+    /// <summary>
+    /// Riparenta la camera del player su shipChaseCamPoint (figlio fisso di
+    /// "Nave" — la nave non si muove mai, quindi questo punto è
+    /// staticamente corretto) per la vista esterna in terza persona. No-op
+    /// se shipChaseCamPoint non è assegnato in Inspector — in quel caso il
+    /// pilotaggio MANUAL resta in vista cockpit (degradazione elegante,
+    /// nessun errore).
+    /// </summary>
+    private void EnterThirdPersonChaseCam()
+    {
+        if (isChaseCamActive || shipChaseCamPoint == null || playerCamera == null) return;
+
+        playerCamera.transform.SetParent(shipChaseCamPoint, worldPositionStays: false);
+        playerCamera.transform.localPosition = Vector3.zero;
+        playerCamera.transform.localRotation = Quaternion.identity;
+        isChaseCamActive = true;
+    }
+
+    /// <summary>
+    /// Riporta la camera sotto il player (parent/posizione originali salvati
+    /// in EnterStation), pronta per essere ri-orientata da LookAtCockpitRoutine
+    /// o dal lerp finale di TransitionFromStation. Idempotente — sicuro da
+    /// chiamare anche se la chase cam non era attiva.
+    /// </summary>
+    private void ExitThirdPersonChaseCam()
+    {
+        if (!isChaseCamActive || playerCamera == null) return;
+
+        playerCamera.transform.SetParent(originalCameraParent, worldPositionStays: false);
+        playerCamera.transform.localPosition = originalCameraLocalPosition;
+        // La localRotation corretta (vista cockpit) viene ripristinata da
+        // LookAtCockpitRoutine/TransitionFromStation — qui basta essere nel
+        // parent giusto prima che quei lerp lavorino.
+        isChaseCamActive = false;
     }
 
     // =========================================================================

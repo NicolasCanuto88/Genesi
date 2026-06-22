@@ -59,6 +59,29 @@ public class PlayerController : MonoBehaviour
     public bool IsCrouching => crouchToggled;
     public Transform CameraTransform => cameraTransform;
 
+    /// <summary>
+    /// Azzera la velocità interna (orizzontale + verticale/gravità).
+    /// NECESSARIO dopo qualunque periodo in cui questo componente resta
+    /// disabilitato (es. seduto a una postazione): currentVelocity è un
+    /// campo persistente usato per smussare accelerazione/decelerazione —
+    /// se non viene disabilitato anche l'Update() che lo aggiorna (è
+    /// esattamente il caso quando PlayerController.enabled = false), resta
+    /// congelato a qualunque velocità avesse il player nell'istante esatto
+    /// dell'interazione. Riattivando il componente senza azzerarlo, il
+    /// primo HandleMovement() riparte da quella velocità "vecchia" — il
+    /// player riprende per qualche frame a muoversi nella direzione in cui
+    /// camminava prima di sedersi, invece di ripartire fermo.
+    ///
+    /// Da chiamare SEMPRE da qualunque postazione (PilotStation,
+    /// MedicalStation, EngineeringStation) subito dopo aver riattivato
+    /// questo componente.
+    /// </summary>
+    public void ResetVelocity()
+    {
+        currentVelocity = Vector3.zero;
+        verticalVelocity = -2f; // valore di riposo "a terra", stesso usato in HandleMovement()
+    }
+
     private void Awake()
     {
         characterController = GetComponent<CharacterController>();
