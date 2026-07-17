@@ -1,4 +1,4 @@
-using UnityEngine;
+﻿using UnityEngine;
 using UnityEngine.InputSystem;
 using UnityEngine.EventSystems;
 using System.Collections;
@@ -13,7 +13,9 @@ public class EngineeringStation : MonoBehaviour, IInteractable
     [Header("Dashboard")]
     [SerializeField] private EngineeringDashboardUI dashboardUI;
     [SerializeField] private Canvas dashboardCanvas; // World Space canvas
-    [SerializeField] private UnityEngine.UI.Selectable firstSelectedElement;
+    // firstSelectedElement rimosso: la selezione iniziale è ora gestita
+    // dinamicamente da EngineeringDashboardUI.SetInitialSelection() in base
+    // allo stato blackout, che è più corretto di un elemento fisso.
 
     [Header("Player Positioning")]
     [SerializeField] private Transform playerSnapPoint;
@@ -66,8 +68,10 @@ public class EngineeringStation : MonoBehaviour, IInteractable
 
     private void Start()
     {
-        if (dashboardCanvas != null && Camera.main != null)
-            dashboardCanvas.worldCamera = Camera.main;
+        // FIX (Rev Q, post-playtest con due giocatori reali): NON impostare
+        // più dashboardCanvas.worldCamera = Camera.main qui — vedi nota
+        // dettagliata in EnterStation() per il perché. Lasciato vuoto
+        // apposta: l'assegnazione corretta avviene solo lì.
     }
 
     // ===== IInteractable =====
@@ -98,16 +102,43 @@ public class EngineeringStation : MonoBehaviour, IInteractable
             return;
         }
 
-        if (playerController == null)
-        {
-            playerController = player.GetComponent<PlayerController>();
-            characterController = player.GetComponent<CharacterController>();
-            playerCamera = player.GetComponentInChildren<Camera>();
-            playerInputComponent = player.GetComponent<PlayerInput>();
+        // FIX (Rev Q, post-playtest con due giocatori reali) — riferimenti
+        // SEMPRE riassegnati ad ogni ingresso, non più "solo la prima
+        // volta" (era `if (playerController == null)`, stesso identico
+        // pattern già corretto in MedicalStation/PilotStation). Con un solo
+        // Engineer per sessione il bug non si manifestava mai, ma lasciato
+        // così sarebbe esploso non appena un giocatore DIVERSO da quello
+        // che ha usato per primo la postazione ci si fosse seduto: avrebbe
+        // ereditato camera/PlayerController del primo, non i propri.
+        playerController = player.GetComponent<PlayerController>();
+        characterController = player.GetComponent<CharacterController>();
+        playerCamera = player.GetComponentInChildren<Camera>();
+        playerInputComponent = player.GetComponent<PlayerInput>();
 
-            if (playerInputComponent != null)
-                cancelAction = playerInputComponent.actions.FindAction("Cancel");
-        }
+        if (playerInputComponent != null)
+            cancelAction = playerInputComponent.actions.FindAction("Cancel");
+
+        // FIX PRINCIPALE (Rev Q) — causa reale del pannello "bloccato" in
+        // playtest con un secondo giocatore reale: dashboardCanvas.worldCamera
+        // veniva impostato UNA SOLA VOLTA in Start() su Camera.main, letto al
+        // caricamento della scena. Con un solo giocatore locale (i vecchi test
+        // ParrelSync auto-connect) capitava quasi sempre di risolversi per
+        // caso alla camera giusta; con due giocatori reali che spawnano in
+        // momenti diversi, Camera.main può risolversi alla camera sbagliata
+        // (o restare quella di un altro player) — e da quel momento resta
+        // sbagliata per tutta la sessione, perché impostata una volta sola.
+        // GraphicRaycaster su un Canvas World Space usa esattamente questo
+        // riferimento per capire dove "atterra" un click: con la camera
+        // sbagliata i bottoni semplicemente non ricevono mai l'evento di
+        // click — da cui la sensazione di "tutto bloccato" pur senza alcun
+        // errore in console.
+        //
+        // Fix: assegna esplicitamente la camera del giocatore che sta
+        // EFFETTIVAMENTE entrando nella postazione in questo momento — non
+        // dipende da tag, da Camera.main, né da quale altro player abbia
+        // attivato/disattivato la propria camera nel frattempo.
+        if (dashboardCanvas != null && playerCamera != null)
+            dashboardCanvas.worldCamera = playerCamera;
 
         if (playerController == null || characterController == null || playerCamera == null)
         {
@@ -133,18 +164,13 @@ public class EngineeringStation : MonoBehaviour, IInteractable
         {
             dashboardUI.gameObject.SetActive(true);
             dashboardUI.Open();
+            // La selezione EventSystem iniziale è gestita da dashboardUI.Open()
+            // → SetInitialSelection(): Restore se blackout, altrimenti prima
+            // luce. Vedi EngineeringDashboardUI.cs. Non serve toccarla qui.
         }
 
-        if (firstSelectedElement != null && EventSystem.current != null)
-            EventSystem.current.SetSelectedGameObject(firstSelectedElement.gameObject);
-
-        if (VirtualCursor.Instance != null)
-            VirtualCursor.Instance.Activate();
-        else
-        {
-            Cursor.lockState = CursorLockMode.None;
-            Cursor.visible = true;
-        }
+        // VirtualCursor rimosso: navigazione via tasti direzionali/gamepad
+        // gestita dall'EventSystem in Game.unity con InputSystemUIInputModule.
 
         Debug.Log("[EngineeringStation] Entering station - Transitioning to workstation");
     }
@@ -157,8 +183,10 @@ public class EngineeringStation : MonoBehaviour, IInteractable
         isTransitioning = true;
         transitionProgress = 0f;
 
-        if (VirtualCursor.Instance != null)
-            VirtualCursor.Instance.Deactivate();
+        // VirtualCursor rimosso — vedi EnterStation. Non c'è nulla da
+        // "disattivare" in questo pannello: la navigazione tornerà
+        // automaticamente al gameplay quando l'EventSystem non avrà più
+        // Selected e il PlayerController tornerà attivo.
 
         if (dashboardUI != null)
         {
@@ -234,7 +262,7 @@ public class EngineeringStation : MonoBehaviour, IInteractable
 
         if (!isExiting)
         {
-            // ENTRATA � sposta verso snap point
+            // ENTRATA � sposta verso snap point
             characterController.enabled = false;
 
             playerController.transform.position = Vector3.Lerp(originalPlayerPosition, playerSnapPoint.position, t);
@@ -247,9 +275,9 @@ public class EngineeringStation : MonoBehaviour, IInteractable
                 isTransitioning = false;
                 playerController.enabled = allowMovementWhileUsing;
 
-                // Camera: ora che il player � fermo allo snap point, punta verso Monitor 1.
-                // Usiamo LookAtMonitorRoutine � stesso metodo dei tasti 1/2 � cos� il risultato
-                // � identico. Il player � gi� nella rotazione finale: nessuna ambiguit� sul parent.
+                // Camera: ora che il player � fermo allo snap point, punta verso Monitor 1.
+                // Usiamo LookAtMonitorRoutine � stesso metodo dei tasti 1/2 � cos� il risultato
+                // � identico. Il player � gi� nella rotazione finale: nessuna ambiguit� sul parent.
                 LookAtMonitor(0);
 
                 Debug.Log("[EngineeringStation] Transition complete - At workstation");
@@ -257,7 +285,7 @@ public class EngineeringStation : MonoBehaviour, IInteractable
         }
         else
         {
-            // USCITA � torna alla posizione originale
+            // USCITA � torna alla posizione originale
             characterController.enabled = false;
 
             playerController.transform.position = Vector3.Lerp(playerSnapPoint.position, originalPlayerPosition, t);
@@ -326,7 +354,7 @@ public class EngineeringStation : MonoBehaviour, IInteractable
         {
             Vector3 direction = (cameraLookAtPoints[0].position - eyesPosition).normalized;
             float verticalAngle = Mathf.Atan2(direction.y, new Vector2(direction.x, direction.z).magnitude) * Mathf.Rad2Deg;
-            modeText += $"\nAngle: {verticalAngle:F1}� (+ = UP)";
+            modeText += $"\nAngle: {verticalAngle:F1}� (+ = UP)";
         }
 
         UnityEditor.Handles.Label(eyesPosition + Vector3.up * 0.5f, modeText);

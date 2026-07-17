@@ -1,0 +1,56 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!1 &3410523354393298420
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 8670809121998867608}
+  - component: {fileID: 6110786877083478465}
+  m_Layer: 0
+  m_Name: EngineeringMonitor
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &8670809121998867608
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 3410523354393298420}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0.49999923, y: -0.5000008, z: -0.4999992, w: 0.5000008}
+  m_LocalPosition: {x: -0.2570015, y: 1.6249998, z: -2.045998}
+  m_LocalScale: {x: 0.5543019, y: 0.55430186, z: 0.55430186}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: -90}
+--- !u!114 &6110786877083478465
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 3410523354393298420}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 8423b3addbcabcd47bafe345dea94a41, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::MonitorSwitcher
+  playerInput: {fileID: 6433726008336228455, guid: 5905d5b625d4bd3459c47fe732864acf, type: 3}
+  previousActionName: Previous
+  nextActionName: Next
+  monitors:
+  - {fileID: 0}
+  - {fileID: 0}
+  - {fileID: 0}
+  defaultMonitorIndex: 0
+  wrapAround: 1
+  engineeringStation: {fileID: 0}

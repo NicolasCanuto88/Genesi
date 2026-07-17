@@ -1,47 +1,44 @@
 ﻿using UnityEngine;
-using Unity.Netcode;
-
-#if UNITY_EDITOR
-using ParrelSync;
-#endif
 
 /// <summary>
-/// AutoStartHost — Rev O (Blocco 1 M3, rewrite).
+/// AutoStartHost — Rev Q (Blocco 2 M3, rewrite).
 ///
-/// PRIMA: avviava automaticamente Host (istanza principale Editor/build)
-/// o Client (clone ParrelSync) all'avvio della scena. Incompatibile con
-/// un flusso di menu reale — tutta la sessione di rete partiva prima ancora
-/// che il giocatore potesse inserire il proprio nome.
+/// STORIA:
+///   Rev O: avviava automaticamente Host o Client all'avvio della scena —
+///   incompatibile con un flusso di menu reale, la sessione di rete
+///   partiva prima ancora che il giocatore potesse inserire il proprio
+///   nome.
+///   Rev P: riscritto per avviare automaticamente SOLO il Client nei
+///   clone ParrelSync, bypassando il loro menu (MainMenuManager si
+///   auto-disattivava per i clone allo stesso scopo) — comodo per un test
+///   rapido a un click, ma il clone non passava mai dal proprio menu:
+///   nessuna creazione di un secondo personaggio separato, nessun
+///   controllo reale del flusso che un secondo giocatore reale userebbe.
 ///
-/// ORA: avvia automaticamente SOLO il Client per i clone ParrelSync, così il
-/// workflow di test interno in Editor (Host window + clone window) resta
-/// identico a prima — il clone si connette automaticamente all'host appena
-/// la partita viene creata dal menu. L'istanza principale non tocca la rete:
-/// MainMenuManager gestisce Host e Join tramite l'UI del menu.
+/// ORA (Rev Q): il clone ParrelSync è un'istanza del gioco IDENTICA a
+///   qualunque altra — passa dal menu come tutti, crea il proprio
+///   personaggio, e si unisce manualmente inserendo il join code generato
+///   dall'istanza host (stesso flusso "Unisciti" già esistente). Questo
+///   script non fa più nulla per nessuna istanza — sia in Editor che in
+///   build, l'unico punto di ingresso alla rete è sempre MainMenuManager
+///   tramite l'UI del menu.
 ///
-/// In build: questo script non fa assolutamente nulla. MainMenuManager è
-/// l'unico punto di ingresso alla rete sia in Editor (istanza principale)
-/// sia in build.
+/// Lo script resta come file vuoto, intenzionalmente, invece di essere
+/// cancellato: il GameObject "AutoStartHost" in scena (se presente) può
+/// restare con questo componente attaccato senza effetto, evitando di
+/// dover toccare la scena per rimuoverlo. Può essere eliminato in modo
+/// sicuro in qualunque momento, sia lo script che il GameObject.
 ///
-/// ⚠️ REGOLA INVARIANTE: non aggiungere mai qui logica di avvio host/rete.
-/// Se serve un percorso rapido per test senza menu, usare il debug GUI di
-/// MainMenuManager (che può esporre un bypass #if UNITY_EDITOR) — mai
-/// tornare ad auto-avviare l'host qui.
+/// ⚠️ REGOLA INVARIANTE: non aggiungere mai qui logica di avvio host/rete,
+/// né per l'istanza principale né per i clone ParrelSync. Se serve un
+/// percorso rapido per test senza passare dal menu, usare un eventuale
+/// debug GUI dedicato (es. su MainMenuManager, dietro #if UNITY_EDITOR) —
+/// mai un avvio automatico silenzioso in Start().
 /// </summary>
 public class AutoStartHost : MonoBehaviour
 {
     private void Start()
     {
-#if UNITY_EDITOR
-        if (!ClonesManager.IsClone()) return; // istanza principale: niente
-
-        // Clone ParrelSync: avvia il client automaticamente per il test interno.
-        // L'host viene creato dall'istanza principale tramite il menu (MainMenuManager).
-        if (NetworkManager.Singleton == null || NetworkManager.Singleton.IsListening) return;
-
-        NetworkManager.Singleton.StartClient();
-        Debug.Log("[AutoStartHost] Clone ParrelSync → StartClient automatico");
-#endif
-        // In build: niente. MainMenuManager gestisce tutto.
+        // Intenzionalmente vuoto — vedi nota in testa al file.
     }
 }

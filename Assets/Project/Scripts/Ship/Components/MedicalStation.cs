@@ -33,19 +33,19 @@ public class MedicalStation : MonoBehaviour, IInteractable
 
     // ===== STATO INTERNO =====
 
-    private bool isUsingStation  = false;
+    private bool isUsingStation = false;
     private bool isTransitioning = false;
 
-    private PlayerController     playerController;
-    private CharacterController  characterController;
-    private Camera               playerCamera;
-    private InputAction          cancelAction;
+    private PlayerController playerController;
+    private CharacterController characterController;
+    private Camera playerCamera;
+    private InputAction cancelAction;
 
-    private Vector3    originalPlayerPosition;
+    private Vector3 originalPlayerPosition;
     private Quaternion originalPlayerRotation;
     private Quaternion originalCameraRotation;
     private Quaternion targetCameraLocalRotation;
-    private bool       wasPlayerControllerEnabled;
+    private bool wasPlayerControllerEnabled;
 
     private float interactionCooldown = 0f;
     private const float COOLDOWN_DURATION = 0.5f;
@@ -59,8 +59,10 @@ public class MedicalStation : MonoBehaviour, IInteractable
 
     private void Start()
     {
-        if (dashboardCanvas != null && Camera.main != null)
-            dashboardCanvas.worldCamera = Camera.main;
+        // FIX (Rev Q, post-playtest con due giocatori reali): NON impostare
+        // più dashboardCanvas.worldCamera = Camera.main qui — vedi nota
+        // dettagliata in EnterStation() per il perché. Lasciato vuoto
+        // apposta: l'assegnazione corretta avviene solo lì.
     }
 
     private void Update()
@@ -84,21 +86,34 @@ public class MedicalStation : MonoBehaviour, IInteractable
             EnterStation(interactor);
     }
 
-    public bool   CanInteract()            => !isUsingStation && interactionCooldown <= 0f;
-    public string GetInteractionPrompt()   => "Medical Station";
-    public bool   IsContinuousInteraction() => false;
-    public void   OnLookEnter()            { }
-    public void   OnLookExit()             { }
+    public bool CanInteract() => !isUsingStation && interactionCooldown <= 0f;
+    public string GetInteractionPrompt() => "Medical Station";
+    public bool IsContinuousInteraction() => false;
+    public void OnLookEnter() { }
+    public void OnLookExit() { }
 
     // ===== ENTER =====
 
     private void EnterStation(GameObject interactor)
     {
-        playerController    = interactor.GetComponent<PlayerController>();
+        playerController = interactor.GetComponent<PlayerController>();
         characterController = interactor.GetComponent<CharacterController>();
-        playerCamera        = interactor.GetComponentInChildren<Camera>();
+        playerCamera = interactor.GetComponentInChildren<Camera>();
 
         if (playerController == null || playerCamera == null) return;
+
+        // FIX (Rev Q) — causa reale del pannello "bloccato" in playtest con
+        // un secondo giocatore reale: dashboardCanvas.worldCamera veniva
+        // impostato una sola volta in Start() su Camera.main (letto al
+        // caricamento scena, prima ancora che i player spawnassero) — con
+        // due giocatori reali può risolversi alla camera sbagliata e restare
+        // tale per tutta la sessione, facendo sì che GraphicRaycaster non
+        // rilevi mai i click sul Canvas World Space. Vedi EngineeringStation.cs
+        // per la spiegazione completa — stesso identico bug, stesso fix:
+        // assegna esplicitamente la camera del giocatore che sta
+        // EFFETTIVAMENTE entrando ora, non dipende da Camera.main/tag.
+        if (dashboardCanvas != null)
+            dashboardCanvas.worldCamera = playerCamera;
 
         // Recupera Cancel action da PlayerInput
         PlayerInput pi = playerInputReference != null
@@ -114,7 +129,7 @@ public class MedicalStation : MonoBehaviour, IInteractable
         originalCameraRotation = playerCamera.transform.localRotation;
 
         wasPlayerControllerEnabled = playerController.enabled;
-        playerController.enabled   = false;
+        playerController.enabled = false;
         if (characterController != null)
             characterController.enabled = false;
 
@@ -133,8 +148,8 @@ public class MedicalStation : MonoBehaviour, IInteractable
     {
         isTransitioning = true;
 
-        Transform t       = interactor.transform;
-        Vector3   targetPos = playerSnapPoint != null ? playerSnapPoint.position : transform.position;
+        Transform t = interactor.transform;
+        Vector3 targetPos = playerSnapPoint != null ? playerSnapPoint.position : transform.position;
         Quaternion targetRot = playerSnapPoint != null ? playerSnapPoint.rotation : transform.rotation;
 
         float progress = 0f;
@@ -188,7 +203,7 @@ public class MedicalStation : MonoBehaviour, IInteractable
         if (!isUsingStation) return;
 
         interactionCooldown = COOLDOWN_DURATION;
-        isUsingStation      = false;
+        isUsingStation = false;
 
         if (dashboardUI != null)
         {

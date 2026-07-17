@@ -1,6 +1,8 @@
 using UnityEngine;
 using UnityEngine.UI;
+using UnityEngine.EventSystems;
 using TMPro;
+using System.Collections;
 using System.Collections.Generic;
 
 /// <summary>
@@ -84,6 +86,12 @@ public class EngineeringDashboardUI : MonoBehaviour
         RefreshLightsList();
         UpdateUI();
         InvokeRepeating(nameof(UpdateUI), 0f, 0.1f);
+
+        // Imposta la selezione iniziale per la navigazione a tasti direzionali.
+        // Va fatto DOPO RefreshLightsList (le luci devono esistere per essere
+        // selezionabili) e DOPO UpdateUI (che decide se il BlackoutPanel è
+        // attivo o meno). Vedi commento su SetInitialSelection.
+        SetInitialSelection();
     }
 
     public void Close()
@@ -147,8 +155,20 @@ public class EngineeringDashboardUI : MonoBehaviour
 
         // — Pannello blackout —
         if (blackoutPanel != null)
-            blackoutPanel.SetActive(
-                powerManager.IsInBlackout && powerManager.IsBlackoutManualResetNeeded);
+        {
+            bool shouldShowBlackout =
+                powerManager.IsInBlackout && powerManager.IsBlackoutManualResetNeeded;
+            bool wasShowingBlackout = blackoutPanel.activeSelf;
+
+            blackoutPanel.SetActive(shouldShowBlackout);
+
+            // Se il BlackoutPanel è appena scomparso e la selezione era sul
+            // restorePowerButton (ormai disattivato con il padre), riporta la
+            // selezione sulla prima luce, altrimenti EventSystem la perderebbe
+            // e la navigazione a tasti smetterebbe di rispondere.
+            if (wasShowingBlackout && !shouldShowBlackout)
+                RestoreSelectionAfterBlackoutEnds();
+        }
 
         // — Pulsante restore —
         if (restorePowerButton != null && restorePowerStatusText != null)
@@ -233,6 +253,110 @@ public class EngineeringDashboardUI : MonoBehaviour
 
             lightControls.Add(entry);
         }
+    }
+
+    // ── Selezione iniziale (navigazione a tasti direzionali) ─────────────────
+
+    /// <summary>
+    /// Sceglie il primo Selectable su cui posizionare la selezione EventSystem
+    /// all'apertura del pannello. In blackout: il pulsante Restore, punto
+    /// naturale di partenza in situazione di emergenza. Altrimenti: la prima
+    /// luce della lista.
+    ///
+    /// Perché una coroutine e non l'assegnazione diretta: i prefab delle luci
+    /// vengono Instantiate() nello stesso frame in cui viene chiamato Open(),
+    /// e Unity può non aver ancora finalizzato l'inizializzazione dei
+    /// componenti Selectable/Toggle nello stesso frame. Rimandare al frame
+    /// successivo (yield return null) garantisce che i Selectable siano
+    /// operativi e possano ricevere la selezione — è il pattern standard per
+    /// "seleziona qualcosa che ho appena istanziato". La versione precedente,
+    /// che assegnava direttamente subito dopo RefreshLightsList(), funzionava
+    /// nel ramo blackout (Restore preesiste ed è sempre pronto) ma falliva nel
+    /// ramo luci (la prima luce era appena istanziata), lasciando l'EventSystem
+    /// senza selezione — sintomo osservato: "nessuna evidenziazione" con le
+    /// frecce, perché senza Selected non c'è punto di partenza da cui muoversi.
+    /// </summary>
+    private void SetInitialSelection()
+    {
+        StartCoroutine(SetInitialSelectionNextFrame());
+    }
+
+    private IEnumerator SetInitialSelectionNextFrame()
+    {
+        // Aspetta un frame: Instantiate() istanzia il GameObject nello stesso
+        // frame ma alcuni componenti finalizzano solo dopo. Un yield è
+        // sufficiente — non serve WaitForEndOfFrame né più frame.
+        yield return null;
+
+        if (EventSystem.current == null)
+        {
+            Debug.LogWarning("[EngineeringDashboard] SetInitialSelection: EventSystem.current è null. " +
+                             "Verifica di aver aggiunto un EventSystem con InputSystemUIInputModule in Game.unity.");
+            yield break;
+        }
+
+        GameObject initial = null;
+        string reason = "";
+
+        if (blackoutPanel != null && blackoutPanel.activeInHierarchy
+            && restorePowerButton != null && restorePowerButton.interactable)
+        {
+            initial = restorePowerButton.gameObject;
+            reason = "blackout attivo → restorePowerButton";
+        }
+        else if (lightsListParent != null && lightsListParent.childCount > 0)
+        {
+            // Cerca il primo Selectable nella lista luci (di solito è il Toggle
+            // del primo LightControlEntry). GetComponentInChildren risale la
+            // gerarchia del prefab e trova il Toggle anche se è nidificato.
+            var firstEntry = lightsListParent.GetChild(0);
+            var firstSelectable = firstEntry.GetComponentInChildren<Selectable>();
+
+            if (firstSelectable != null && firstSelectable.interactable)
+            {
+                initial = firstSelectable.gameObject;
+                reason = $"nessun blackout → prima luce ({firstEntry.name})";
+            }
+            else
+            {
+                Debug.LogWarning("[EngineeringDashboard] SetInitialSelection: la prima riga luce " +
+                                 $"({firstEntry.name}) non ha un Selectable interactable. " +
+                                 "Verifica che il prefab LightControlEntry abbia un Toggle " +
+                                 "con Interactable=ON.");
+            }
+        }
+        else
+        {
+            Debug.LogWarning("[EngineeringDashboard] SetInitialSelection: nessun candidato disponibile. " +
+                             $"blackoutPanel={(blackoutPanel != null ? blackoutPanel.activeInHierarchy.ToString() : "null")}, " +
+                             $"lightsListParent={(lightsListParent != null ? lightsListParent.childCount.ToString() : "null")} figli.");
+        }
+
+        if (initial != null)
+        {
+            EventSystem.current.SetSelectedGameObject(initial);
+            Debug.Log($"[EngineeringDashboard] Selezione iniziale impostata: {initial.name} ({reason}).");
+        }
+    }
+
+    /// <summary>
+    /// Chiamato da UpdateUI quando il BlackoutPanel passa da attivo a non
+    /// attivo: la selezione era probabilmente sul restorePowerButton,
+    /// che è appena stato disattivato con il suo genitore. Riporta la
+    /// selezione sulla prima luce così l'utente può continuare a navigare.
+    /// </summary>
+    private void RestoreSelectionAfterBlackoutEnds()
+    {
+        if (EventSystem.current == null) return;
+
+        var currentSelected = EventSystem.current.currentSelectedGameObject;
+        bool wasOnRestore = restorePowerButton != null
+            && currentSelected == restorePowerButton.gameObject;
+
+        if (!wasOnRestore) return; // La selezione era altrove, non ci interessa
+
+        if (lightsListParent != null && lightsListParent.childCount > 0)
+            EventSystem.current.SetSelectedGameObject(lightsListParent.GetChild(0).gameObject);
     }
 
     // ── Handler pulsanti ─────────────────────────────────────────────────────

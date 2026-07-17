@@ -7,10 +7,6 @@ using UnityEngine.SceneManagement;
 using UnityEngine.UI;
 using TMPro;
 
-#if UNITY_EDITOR
-using ParrelSync;
-#endif
-
 /// <summary>
 /// MainMenuManager — Milestone 3, Blocco 1 (Frontend &amp; Identità).
 /// Rev: aggiornato per corrispondere ESATTAMENTE alla gerarchia reale di
@@ -182,14 +178,16 @@ public class MainMenuManager : MonoBehaviour
 
     private void Awake()
     {
-#if UNITY_EDITOR
-        if (ClonesManager.IsClone())
-        {
-            if (menuCanvas != null) menuCanvas.gameObject.SetActive(false);
-            enabled = false;
-            return;
-        }
-#endif
+        // FIX (richiesta esplicita): in precedenza un clone ParrelSync
+        // disattivava interamente il menu qui (vedi nota in AutoStartHost.cs
+        // per la storia completa del meccanismo gemello rimosso insieme a
+        // questo) — il clone passava direttamente alla connessione di rete
+        // senza alcuna interazione utente. Ora il clone si comporta
+        // ESATTAMENTE come qualunque altra istanza: passa dal menu, crea il
+        // proprio personaggio separato, e si unisce manualmente inserendo
+        // il join code generato dall'istanza host (stesso flusso "Unisciti"
+        // già esistente per chiunque). Nessun trattamento speciale per
+        // ClonesManager.IsClone() necessario qui.
         _creationRoleButtons = new[] {
             creationBtnPilota, creationBtnIngegnere,
             creationBtnScanner, creationBtnMedico
@@ -198,9 +196,6 @@ public class MainMenuManager : MonoBehaviour
 
     private void Start()
     {
-#if UNITY_EDITOR
-        if (!enabled) return;
-#endif
         WireButtons();
 
         NetworkManager.Singleton.OnServerStarted += OnServerStarted;

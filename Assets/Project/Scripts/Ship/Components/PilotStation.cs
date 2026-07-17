@@ -158,8 +158,14 @@ public class PilotStation : MonoBehaviour, IInteractable
 
     private void Start()
     {
-        if (hudCanvas != null && Camera.main != null)
-            hudCanvas.worldCamera = Camera.main;
+        // FIX (Rev Q): NON impostare più hudCanvas.worldCamera = Camera.main
+        // qui — stesso bug "camera sbagliata risolta una volta sola al
+        // caricamento scena" già fixato in EngineeringStation.cs/
+        // MedicalStation.cs (vedi quei file per la spiegazione completa).
+        // PilotHUD è display-only (nessun click UI, vedi nota in testa al
+        // file) quindi qui non causava pannelli "bloccati" — ma la stessa
+        // assegnazione corretta avviene comunque in EnterStation() per
+        // coerenza ed eventuali usi futuri non puramente display-only.
     }
 
     private void Update()
@@ -207,6 +213,12 @@ public class PilotStation : MonoBehaviour, IInteractable
             Debug.LogWarning("[PilotStation] Interactor privo di PlayerController o Camera.");
             return;
         }
+
+        // FIX (Rev Q) — stesso pattern di EngineeringStation.cs/MedicalStation.cs:
+        // assegna la camera del giocatore che sta EFFETTIVAMENTE entrando ora,
+        // non più Camera.main risolto una volta sola in Start().
+        if (hudCanvas != null)
+            hudCanvas.worldCamera = playerCamera;
 
         // Recupera Cancel/Look action da PlayerInput: usa la reference assegnata
         // in Inspector se presente, altrimenti fallback sul PlayerInput
