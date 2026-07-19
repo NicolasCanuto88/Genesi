@@ -1,6 +1,7 @@
 ﻿using UnityEngine;
 using Unity.Netcode;
 using System.Collections.Generic;
+using System.Linq;
 using System;
 
 /// <summary>
@@ -407,6 +408,16 @@ public class PowerManager : NetworkBehaviour
         return true;
     }
 
+    /// <summary>
+    /// Restituisce le luci Manual in ordine stabile per nome del GameObject.
+    /// L'ordine di powerConsumers dipende dall'ordine di registrazione e da
+    /// Sort() interni chiamati in EnterCriticalState/ExitCriticalState, quindi
+    /// senza OrderBy la lista mostrata all'UI cambierebbe ogni volta che si
+    /// entra/esce da critical — confusa dal punto di vista dell'utente, che
+    /// naviga con tasti direzionali e si aspetta un ordine prevedibile.
+    /// L'OrderBy qui è puramente cosmetico — non modifica la logica di power
+    /// management, solo l'ordine con cui l'UI le espone.
+    /// </summary>
     public List<ShipLight> GetManualLights()
     {
         var manualLights = new List<ShipLight>();
@@ -415,7 +426,7 @@ public class PowerManager : NetworkBehaviour
             if (consumer is ShipLight light && light.GetLightMode() == ShipLight.LightMode.Manual)
                 manualLights.Add(light);
         }
-        return manualLights;
+        return manualLights.OrderBy(l => l.gameObject.name).ToList();
     }
 
     public void RegisterPowerConsumer(IPowerConsumer consumer)

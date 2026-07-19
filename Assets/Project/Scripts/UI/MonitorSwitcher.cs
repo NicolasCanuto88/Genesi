@@ -76,12 +76,20 @@ public class MonitorSwitcher : MonoBehaviour
             Debug.LogWarning("[MonitorSwitcher] PlayerInput reference non assegnato.");
         }
 
-        // Cerca IDashboardPanel su ogni CanvasGroup
+        // Cerca IDashboardPanel su ogni CanvasGroup, oppure sui suoi figli.
+        // GetComponentInChildren (non solo GetComponent) è essenziale: nella
+        // scena tipica, EngineeringDashboardUI sta su un GameObject FIGLIO
+        // del CanvasGroup del monitor, non sul CanvasGroup stesso.
+        // GetComponent restituisce null in quel caso, panels[i] resta null,
+        // e la Open/Close via IDashboardPanel non viene mai chiamata → la
+        // selezione EventSystem non viene ripristinata al cambio monitor.
+        // GetComponentInChildren funziona anche quando lo script è sullo
+        // stesso GameObject del CanvasGroup, quindi copre entrambi i casi.
         panels = new IDashboardPanel[monitors != null ? monitors.Length : 0];
         for (int i = 0; i < panels.Length; i++)
         {
             if (monitors[i] != null)
-                panels[i] = monitors[i].GetComponent<IDashboardPanel>();
+                panels[i] = monitors[i].GetComponentInChildren<IDashboardPanel>(includeInactive: true);
         }
 
         ShowMonitor(defaultMonitorIndex, instant: true);
@@ -89,7 +97,19 @@ public class MonitorSwitcher : MonoBehaviour
 
     private void Update()
     {
-        bool dashboardActive = VirtualCursor.Instance != null && VirtualCursor.Instance.IsActive;
+        // Gate "sono seduto alla postazione?": in origine era
+        // VirtualCursor.Instance.IsActive, che accendeva/spegneva la
+        // navigazione dei monitor insieme al cursore virtuale. Rimosso
+        // VirtualCursor con la conversione a navigazione a tasti
+        // direzionali, il segnale corretto è direttamente lo stato della
+        // stazione — è comunque il vero significato di "la dashboard è
+        // attiva": il giocatore è seduto e la sta usando.
+        //
+        // Se engineeringStation non è cablato in Inspector (config
+        // sbagliata), degrada in modo prudente: navigazione DISATTIVA.
+        // Meglio che spara switch inaspettati quando il giocatore preme
+        // ← → in gameplay normale.
+        bool dashboardActive = engineeringStation != null && engineeringStation.IsUsingStation;
 
         // On open: reset to the default monitor so reopening always starts on Monitor 1.
         if (dashboardActive && !dashboardWasActive)

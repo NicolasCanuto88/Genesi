@@ -36,6 +36,15 @@ public class EngineeringStation : MonoBehaviour, IInteractable
     [SerializeField] private bool allowMovementWhileUsing = false;
 
     private bool isUsingStation = false;
+
+    /// <summary>
+    /// True se il giocatore è attualmente seduto alla postazione (dopo
+    /// EnterStation e prima di ExitStation). Esposta per MonitorSwitcher,
+    /// che usava VirtualCursor.IsActive come antenna "sono al lavoro?" —
+    /// ora che VirtualCursor è stato rimosso, il segnale corretto è
+    /// direttamente questo campo. Vedi MonitorSwitcher.Update().
+    /// </summary>
+    public bool IsUsingStation => isUsingStation;
     private bool isExiting = false;
     private PlayerController playerController;
     private CharacterController characterController;
@@ -163,10 +172,31 @@ public class EngineeringStation : MonoBehaviour, IInteractable
         if (dashboardUI != null)
         {
             dashboardUI.gameObject.SetActive(true);
-            dashboardUI.Open();
-            // La selezione EventSystem iniziale è gestita da dashboardUI.Open()
-            // → SetInitialSelection(): Restore se blackout, altrimenti prima
-            // luce. Vedi EngineeringDashboardUI.cs. Non serve toccarla qui.
+
+            // NON chiamiamo dashboardUI.Open() qui: ora che EngineeringDashboardUI
+            // implementa IDashboardPanel, MonitorSwitcher lo chiama automaticamente
+            // via panels[currentIndex].Open() quando il Monitor 1 diventa
+            // visibile all'apertura (ShowMonitor(defaultMonitorIndex, instant:
+            // true) nel proprio Update all'edge dashboardActive false→true).
+            //
+            // Se chiamassimo Open() anche qui, si scatenerebbero due Open()
+            // consecutivi nello stesso frame: la seconda distruggerebbe le
+            // luci istanziate dalla prima con RefreshLightsList (Destroy),
+            // e la coroutine di selezione della prima Open, risvegliata al
+            // frame successivo, finirebbe per puntare a un GameObject
+            // appena distrutto. Sintomo osservato nel playtest 2026-XX:
+            // due log "[EngineeringDashboard] RefreshLightsList: trovate
+            // 16 luci Manual" consecutivi ma nessun
+            // "[EngineeringDashboard] Selezione iniziale impostata: ...",
+            // nessuna evidenziazione della prima luce.
+            //
+            // Nota sulla simmetria apparente con ExitStation: quello
+            // continua a chiamare dashboardUI.Close() esplicitamente,
+            // perché all'uscita nessuno notifica il pannello — MonitorSwitcher
+            // smette solo di reagire ai tasti Previous/Next tramite il gate
+            // IsUsingStation, ma non chiama Close(). Senza Close() esplicito,
+            // l'InvokeRepeating(UpdateUI) di EngineeringDashboardUI
+            // continuerebbe a girare in background dopo l'uscita.
         }
 
         // VirtualCursor rimosso: navigazione via tasti direzionali/gamepad

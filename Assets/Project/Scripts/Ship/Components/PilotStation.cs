@@ -343,7 +343,8 @@ public class PilotStation : MonoBehaviour, IInteractable
         // playerCamera.transform.localRotation assumendo che il parent sia
         // di nuovo quello originale, altrimenti il lerp finale sarebbe nello
         // spazio locale sbagliato (quello di shipChaseCamPoint).
-        ExitThirdPersonChaseCam();
+        // false = non riorientare al monitor (TransitionFromStation ci pensa già).
+        ExitThirdPersonChaseCam(restoreLookAtCockpit: false);
         ShipMovement.Instance?.SetManualSteerInput(0f);
 
         interactionCooldown = COOLDOWN_DURATION;
@@ -462,20 +463,40 @@ public class PilotStation : MonoBehaviour, IInteractable
 
     /// <summary>
     /// Riporta la camera sotto il player (parent/posizione originali salvati
-    /// in EnterStation), pronta per essere ri-orientata da LookAtCockpitRoutine
-    /// o dal lerp finale di TransitionFromStation. Idempotente — sicuro da
-    /// chiamare anche se la chase cam non era attiva.
+    /// in EnterStation). Se <paramref name="restoreLookAtCockpit"/> è true
+    /// (default), riorienta anche la camera verso il monitor tramite
+    /// LookAtCockpitRoutine — usato quando torniamo da MANUAL a COASTING
+    /// restando seduti alla postazione. Se false, la camera resta come
+    /// pare — usato in fase di uscita dalla postazione, dove il lerp
+    /// finale di TransitionFromStation ci pensa già.
+    ///
+    /// Idempotente: sicuro da chiamare anche se la chase cam non era
+    /// attiva (esce subito senza toccare nulla).
+    ///
+    /// BUG FIX (post-playtest end-to-end Blocco 2): prima
+    /// ExitThirdPersonChaseCam non ripristinava mai la localRotation. Il
+    /// commento diceva "sarà ripristinata da LookAtCockpitRoutine/
+    /// TransitionFromStation", ma questa promessa vale solo per il caso
+    /// "uscita dalla postazione" — nel caso "torno a COASTING mentre resto
+    /// seduto" (dopo aver ripremuto Q per uscire da MANUAL), nessuna delle
+    /// due routine veniva chiamata. Risultato: la camera restava nella
+    /// rotazione di terza persona (verso il sedile visto dall'esterno)
+    /// invece di puntare al monitor. Questo parametro rende esplicito
+    /// quale dei due casi stiamo servendo.
     /// </summary>
-    private void ExitThirdPersonChaseCam()
+    private void ExitThirdPersonChaseCam(bool restoreLookAtCockpit = true)
     {
         if (!isChaseCamActive || playerCamera == null) return;
 
         playerCamera.transform.SetParent(originalCameraParent, worldPositionStays: false);
         playerCamera.transform.localPosition = originalCameraLocalPosition;
-        // La localRotation corretta (vista cockpit) viene ripristinata da
-        // LookAtCockpitRoutine/TransitionFromStation — qui basta essere nel
-        // parent giusto prima che quei lerp lavorino.
         isChaseCamActive = false;
+
+        // Se richiesto (caso "resto seduto"), riorienta al monitor come
+        // faceva TransitionToStation dopo lo snap: stesso LookAtCockpitRoutine
+        // → stessa vista cockpit di quando ci si è appena seduti.
+        if (restoreLookAtCockpit && cameraLookAtPoint != null)
+            StartCoroutine(LookAtCockpitRoutine());
     }
 
     // =========================================================================

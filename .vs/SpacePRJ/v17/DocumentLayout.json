@@ -3,12 +3,24 @@
   "WorkspaceRootPath": "C:\\Users\\nicol\\UnityProjects\\SpacePRJ\\",
   "Documents": [
     {
-      "AbsoluteMoniker": "D:0:0:{D02C7C30-1E04-944D-CA4B-BF4BFB5FB4B6}|Assembly-CSharp.csproj|c:\\users\\nicol\\unityprojects\\spaceprj\\assets\\project\\scripts\\ui\\engineeringdashboardui.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "AbsoluteMoniker": "D:0:0:{D02C7C30-1E04-944D-CA4B-BF4BFB5FB4B6}|Assembly-CSharp.csproj|C:\\Users\\nicol\\UnityProjects\\SpacePRJ\\assets\\project\\scripts\\ui\\engineeringdashboardui.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
       "RelativeMoniker": "D:0:0:{D02C7C30-1E04-944D-CA4B-BF4BFB5FB4B6}|Assembly-CSharp.csproj|solutionrelative:assets\\project\\scripts\\ui\\engineeringdashboardui.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{D02C7C30-1E04-944D-CA4B-BF4BFB5FB4B6}|Assembly-CSharp.csproj|C:\\Users\\nicol\\UnityProjects\\SpacePRJ\\assets\\project\\scripts\\ui\\monitorswitcher.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{D02C7C30-1E04-944D-CA4B-BF4BFB5FB4B6}|Assembly-CSharp.csproj|solutionrelative:assets\\project\\scripts\\ui\\monitorswitcher.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
     },
     {
       "AbsoluteMoniker": "D:0:0:{D02C7C30-1E04-944D-CA4B-BF4BFB5FB4B6}|Assembly-CSharp.csproj|c:\\users\\nicol\\unityprojects\\spaceprj\\assets\\project\\scripts\\ship\\components\\engineeringstation.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
       "RelativeMoniker": "D:0:0:{D02C7C30-1E04-944D-CA4B-BF4BFB5FB4B6}|Assembly-CSharp.csproj|solutionrelative:assets\\project\\scripts\\ship\\components\\engineeringstation.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{D02C7C30-1E04-944D-CA4B-BF4BFB5FB4B6}|Assembly-CSharp.csproj|C:\\Users\\nicol\\UnityProjects\\SpacePRJ\\assets\\project\\scripts\\core\\managers\\powermanager.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{D02C7C30-1E04-944D-CA4B-BF4BFB5FB4B6}|Assembly-CSharp.csproj|solutionrelative:assets\\project\\scripts\\core\\managers\\powermanager.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{D02C7C30-1E04-944D-CA4B-BF4BFB5FB4B6}|Assembly-CSharp.csproj|C:\\Users\\nicol\\UnityProjects\\SpacePRJ\\assets\\project\\scripts\\ship\\components\\pilotstation.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{D02C7C30-1E04-944D-CA4B-BF4BFB5FB4B6}|Assembly-CSharp.csproj|solutionrelative:assets\\project\\scripts\\ship\\components\\pilotstation.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
     },
     {
       "AbsoluteMoniker": "D:0:0:{D02C7C30-1E04-944D-CA4B-BF4BFB5FB4B6}|Assembly-CSharp.csproj|C:\\Users\\nicol\\UnityProjects\\SpacePRJ\\assets\\project\\scripts\\core\\mainmenumanager.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
@@ -33,10 +45,6 @@
     {
       "AbsoluteMoniker": "D:0:0:{D02C7C30-1E04-944D-CA4B-BF4BFB5FB4B6}|Assembly-CSharp.csproj|C:\\Users\\nicol\\UnityProjects\\SpacePRJ\\assets\\project\\scripts\\ship\\systems\\testrepairable.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
       "RelativeMoniker": "D:0:0:{D02C7C30-1E04-944D-CA4B-BF4BFB5FB4B6}|Assembly-CSharp.csproj|solutionrelative:assets\\project\\scripts\\ship\\systems\\testrepairable.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
-    },
-    {
-      "AbsoluteMoniker": "D:0:0:{D02C7C30-1E04-944D-CA4B-BF4BFB5FB4B6}|Assembly-CSharp.csproj|C:\\Users\\nicol\\UnityProjects\\SpacePRJ\\assets\\project\\scripts\\ui\\monitorswitcher.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
-      "RelativeMoniker": "D:0:0:{D02C7C30-1E04-944D-CA4B-BF4BFB5FB4B6}|Assembly-CSharp.csproj|solutionrelative:assets\\project\\scripts\\ui\\monitorswitcher.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
     },
     {
       "AbsoluteMoniker": "D:0:0:{D02C7C30-1E04-944D-CA4B-BF4BFB5FB4B6}|Assembly-CSharp.csproj|C:\\Users\\nicol\\UnityProjects\\SpacePRJ\\assets\\project\\scripts\\ui\\profiletabui.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
@@ -154,44 +162,44 @@
           "Children": [
             {
               "$type": "Document",
+              "DocumentIndex": 4,
+              "Title": "PilotStation.cs",
+              "DocumentMoniker": "C:\\Users\\nicol\\UnityProjects\\SpacePRJ\\Assets\\Project\\Scripts\\Ship\\Components\\PilotStation.cs",
+              "RelativeDocumentMoniker": "Assets\\Project\\Scripts\\Ship\\Components\\PilotStation.cs",
+              "ToolTip": "C:\\Users\\nicol\\UnityProjects\\SpacePRJ\\Assets\\Project\\Scripts\\Ship\\Components\\PilotStation.cs",
+              "RelativeToolTip": "Assets\\Project\\Scripts\\Ship\\Components\\PilotStation.cs",
+              "ViewState": "AgIAADUCAAAAAAAAAAAmwFcCAAABAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2026-07-19T12:31:20.295Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 3,
+              "Title": "PowerManager.cs",
+              "DocumentMoniker": "C:\\Users\\nicol\\UnityProjects\\SpacePRJ\\Assets\\Project\\Scripts\\Core\\Managers\\PowerManager.cs",
+              "RelativeDocumentMoniker": "Assets\\Project\\Scripts\\Core\\Managers\\PowerManager.cs",
+              "ToolTip": "C:\\Users\\nicol\\UnityProjects\\SpacePRJ\\Assets\\Project\\Scripts\\Core\\Managers\\PowerManager.cs",
+              "RelativeToolTip": "Assets\\Project\\Scripts\\Core\\Managers\\PowerManager.cs",
+              "ViewState": "AgIAAMkBAAAAAAAAAAAIwPsBAAABAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2026-07-19T11:35:46.326Z"
+            },
+            {
+              "$type": "Document",
               "DocumentIndex": 1,
-              "Title": "EngineeringStation.cs",
-              "DocumentMoniker": "C:\\Users\\nicol\\UnityProjects\\SpacePRJ\\Assets\\Project\\Scripts\\Ship\\Components\\EngineeringStation.cs",
-              "RelativeDocumentMoniker": "Assets\\Project\\Scripts\\Ship\\Components\\EngineeringStation.cs",
-              "ToolTip": "C:\\Users\\nicol\\UnityProjects\\SpacePRJ\\Assets\\Project\\Scripts\\Ship\\Components\\EngineeringStation.cs",
-              "RelativeToolTip": "Assets\\Project\\Scripts\\Ship\\Components\\EngineeringStation.cs",
-              "ViewState": "AgIAAAABAAAAAAAAAAAkwGoBAAABAAAAAAAAAA==",
-              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
-              "WhenOpened": "2026-07-17T21:26:26.649Z",
-              "EditorCaption": ""
-            },
-            {
-              "$type": "Document",
-              "DocumentIndex": 9,
-              "Title": "ProfileTabUI.cs",
-              "DocumentMoniker": "C:\\Users\\nicol\\UnityProjects\\SpacePRJ\\Assets\\Project\\Scripts\\UI\\ProfileTabUI.cs",
-              "RelativeDocumentMoniker": "Assets\\Project\\Scripts\\UI\\ProfileTabUI.cs",
-              "ToolTip": "C:\\Users\\nicol\\UnityProjects\\SpacePRJ\\Assets\\Project\\Scripts\\UI\\ProfileTabUI.cs",
-              "RelativeToolTip": "Assets\\Project\\Scripts\\UI\\ProfileTabUI.cs",
-              "ViewState": "AgIAAAAAAAAAAAAAAAAAAGkAAAABAAAAAAAAAA==",
-              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
-              "WhenOpened": "2026-06-17T21:28:59.088Z"
-            },
-            {
-              "$type": "Document",
-              "DocumentIndex": 8,
               "Title": "MonitorSwitcher.cs",
               "DocumentMoniker": "C:\\Users\\nicol\\UnityProjects\\SpacePRJ\\Assets\\Project\\Scripts\\UI\\MonitorSwitcher.cs",
               "RelativeDocumentMoniker": "Assets\\Project\\Scripts\\UI\\MonitorSwitcher.cs",
               "ToolTip": "C:\\Users\\nicol\\UnityProjects\\SpacePRJ\\Assets\\Project\\Scripts\\UI\\MonitorSwitcher.cs",
               "RelativeToolTip": "Assets\\Project\\Scripts\\UI\\MonitorSwitcher.cs",
-              "ViewState": "AgIAAAAAAAAAAAAAAAAAABYAAAAVAAAAAAAAAA==",
+              "ViewState": "AgIAAIwAAAAAAAAAAADwv68AAAABAAAAAAAAAA==",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
-              "WhenOpened": "2026-06-16T21:35:47.596Z"
+              "WhenOpened": "2026-06-16T21:35:47.596Z",
+              "EditorCaption": ""
             },
             {
               "$type": "Document",
-              "DocumentIndex": 7,
+              "DocumentIndex": 10,
               "Title": "TestRepairable.cs",
               "DocumentMoniker": "C:\\Users\\nicol\\UnityProjects\\SpacePRJ\\Assets\\Project\\Scripts\\Ship\\Systems\\TestRepairable.cs",
               "RelativeDocumentMoniker": "Assets\\Project\\Scripts\\Ship\\Systems\\TestRepairable.cs",
@@ -203,7 +211,7 @@
             },
             {
               "$type": "Document",
-              "DocumentIndex": 6,
+              "DocumentIndex": 9,
               "Title": "MedicalDashboardUI.cs",
               "DocumentMoniker": "C:\\Users\\nicol\\UnityProjects\\SpacePRJ\\Assets\\Project\\Scripts\\UI\\MedicalDashboardUI.cs",
               "RelativeDocumentMoniker": "Assets\\Project\\Scripts\\UI\\MedicalDashboardUI.cs",
@@ -215,7 +223,7 @@
             },
             {
               "$type": "Document",
-              "DocumentIndex": 16,
+              "DocumentIndex": 18,
               "Title": "InventoryDashboardUI.cs",
               "DocumentMoniker": "C:\\Users\\nicol\\UnityProjects\\SpacePRJ\\Assets\\Project\\Scripts\\UI\\InventoryDashboardUI.cs",
               "RelativeDocumentMoniker": "Assets\\Project\\Scripts\\UI\\InventoryDashboardUI.cs",
@@ -227,7 +235,7 @@
             },
             {
               "$type": "Document",
-              "DocumentIndex": 14,
+              "DocumentIndex": 16,
               "Title": "ZoneManager.cs",
               "DocumentMoniker": "C:\\Users\\nicol\\UnityProjects\\SpacePRJ\\Assets\\Project\\Scripts\\Ship\\Systems\\ZoneManager.cs",
               "RelativeDocumentMoniker": "Assets\\Project\\Scripts\\Ship\\Systems\\ZoneManager.cs",
@@ -245,14 +253,39 @@
               "RelativeDocumentMoniker": "Assets\\Project\\Scripts\\UI\\EngineeringDashboardUI.cs",
               "ToolTip": "C:\\Users\\nicol\\UnityProjects\\SpacePRJ\\Assets\\Project\\Scripts\\UI\\EngineeringDashboardUI.cs",
               "RelativeToolTip": "Assets\\Project\\Scripts\\UI\\EngineeringDashboardUI.cs",
-              "ViewState": "AgIAAAwAAAAAAAAAAAAAABgAAAA2AAAAAAAAAA==",
+              "ViewState": "AgIAANsBAAAAAAAAAADwv+0BAAAFAAAAAAAAAA==",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
               "WhenOpened": "2026-05-25T13:23:37.232Z",
               "EditorCaption": ""
             },
             {
               "$type": "Document",
-              "DocumentIndex": 10,
+              "DocumentIndex": 2,
+              "Title": "EngineeringStation.cs",
+              "DocumentMoniker": "C:\\Users\\nicol\\UnityProjects\\SpacePRJ\\Assets\\Project\\Scripts\\Ship\\Components\\EngineeringStation.cs",
+              "RelativeDocumentMoniker": "Assets\\Project\\Scripts\\Ship\\Components\\EngineeringStation.cs",
+              "ToolTip": "C:\\Users\\nicol\\UnityProjects\\SpacePRJ\\Assets\\Project\\Scripts\\Ship\\Components\\EngineeringStation.cs",
+              "RelativeToolTip": "Assets\\Project\\Scripts\\Ship\\Components\\EngineeringStation.cs",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAAAoAAAAfAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2026-07-17T21:26:26.649Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 11,
+              "Title": "ProfileTabUI.cs",
+              "DocumentMoniker": "C:\\Users\\nicol\\UnityProjects\\SpacePRJ\\Assets\\Project\\Scripts\\UI\\ProfileTabUI.cs",
+              "RelativeDocumentMoniker": "Assets\\Project\\Scripts\\UI\\ProfileTabUI.cs",
+              "ToolTip": "C:\\Users\\nicol\\UnityProjects\\SpacePRJ\\Assets\\Project\\Scripts\\UI\\ProfileTabUI.cs",
+              "RelativeToolTip": "Assets\\Project\\Scripts\\UI\\ProfileTabUI.cs",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAAGkAAAABAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2026-06-17T21:28:59.088Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 12,
               "Title": "LocalCharacterProfile.cs",
               "DocumentMoniker": "C:\\Users\\nicol\\UnityProjects\\SpacePRJ\\Assets\\Project\\Scripts\\Core\\Managers\\LocalCharacterProfile.cs",
               "RelativeDocumentMoniker": "Assets\\Project\\Scripts\\Core\\Managers\\LocalCharacterProfile.cs",
@@ -264,7 +297,7 @@
             },
             {
               "$type": "Document",
-              "DocumentIndex": 30,
+              "DocumentIndex": 32,
               "Title": "ElectricalDegradationManager.cs",
               "DocumentMoniker": "C:\\Users\\nicol\\UnityProjects\\SpacePRJ\\Assets\\Project\\Scripts\\ElectricalDegradationManager.cs",
               "RelativeDocumentMoniker": "Assets\\Project\\Scripts\\ElectricalDegradationManager.cs",
@@ -276,7 +309,7 @@
             },
             {
               "$type": "Document",
-              "DocumentIndex": 13,
+              "DocumentIndex": 15,
               "Title": "SciFiSegmentedBar.cs",
               "DocumentMoniker": "C:\\Users\\nicol\\UnityProjects\\SpacePRJ\\Assets\\Project\\Scripts\\UI\\SciFiSegmentedBar.cs",
               "RelativeDocumentMoniker": "Assets\\Project\\Scripts\\UI\\SciFiSegmentedBar.cs",
@@ -288,7 +321,7 @@
             },
             {
               "$type": "Document",
-              "DocumentIndex": 31,
+              "DocumentIndex": 33,
               "Title": "HullSystem.cs",
               "DocumentMoniker": "C:\\Users\\nicol\\UnityProjects\\SpacePRJ\\Assets\\Project\\Scripts\\HullSystem.cs",
               "RelativeDocumentMoniker": "Assets\\Project\\Scripts\\HullSystem.cs",
@@ -300,7 +333,7 @@
             },
             {
               "$type": "Document",
-              "DocumentIndex": 12,
+              "DocumentIndex": 14,
               "Title": "VirtualCursor.cs",
               "DocumentMoniker": "C:\\Users\\nicol\\UnityProjects\\SpacePRJ\\Assets\\Project\\Scripts\\UI\\VirtualCursor.cs",
               "RelativeDocumentMoniker": "Assets\\Project\\Scripts\\UI\\VirtualCursor.cs",
@@ -312,7 +345,7 @@
             },
             {
               "$type": "Document",
-              "DocumentIndex": 15,
+              "DocumentIndex": 17,
               "Title": "RepairMinigame.cs",
               "DocumentMoniker": "C:\\Users\\nicol\\UnityProjects\\SpacePRJ\\Assets\\Project\\Scripts\\Ship\\Systems\\RepairMinigame.cs",
               "RelativeDocumentMoniker": "Assets\\Project\\Scripts\\Ship\\Systems\\RepairMinigame.cs",
@@ -324,7 +357,7 @@
             },
             {
               "$type": "Document",
-              "DocumentIndex": 17,
+              "DocumentIndex": 19,
               "Title": "ShipSystemsDashboardUI.cs",
               "DocumentMoniker": "C:\\Users\\nicol\\UnityProjects\\SpacePRJ\\Assets\\Project\\Scripts\\UI\\ShipSystemsDashboardUI.cs",
               "RelativeDocumentMoniker": "Assets\\Project\\Scripts\\UI\\ShipSystemsDashboardUI.cs",
@@ -336,7 +369,7 @@
             },
             {
               "$type": "Document",
-              "DocumentIndex": 32,
+              "DocumentIndex": 34,
               "Title": "EngineeringStation.cs",
               "DocumentMoniker": "C:\\Users\\nicol\\UnityProjects\\SpacePRJ\\Assets\\Project\\Scripts\\Ship\\EngineeringStation.cs",
               "RelativeDocumentMoniker": "Assets\\Project\\Scripts\\Ship\\EngineeringStation.cs",
@@ -348,7 +381,7 @@
             },
             {
               "$type": "Document",
-              "DocumentIndex": 24,
+              "DocumentIndex": 26,
               "Title": "AutomaticLightOptimizer.cs",
               "DocumentMoniker": "C:\\Users\\nicol\\UnityProjects\\SpacePRJ\\Assets\\Creepy_Cat\\Common Scripts\\AutomaticLightOptimizer.cs",
               "RelativeDocumentMoniker": "Assets\\Creepy_Cat\\Common Scripts\\AutomaticLightOptimizer.cs",
@@ -360,7 +393,7 @@
             },
             {
               "$type": "Document",
-              "DocumentIndex": 2,
+              "DocumentIndex": 5,
               "Title": "MainMenuManager.cs",
               "DocumentMoniker": "C:\\Users\\nicol\\UnityProjects\\SpacePRJ\\Assets\\Project\\Scripts\\Core\\MainMenuManager.cs",
               "RelativeDocumentMoniker": "Assets\\Project\\Scripts\\Core\\MainMenuManager.cs",
@@ -372,7 +405,7 @@
             },
             {
               "$type": "Document",
-              "DocumentIndex": 5,
+              "DocumentIndex": 8,
               "Title": "RelayManager.cs",
               "DocumentMoniker": "C:\\Users\\nicol\\UnityProjects\\SpacePRJ\\Assets\\Project\\Scripts\\Core\\RelayManager.cs",
               "RelativeDocumentMoniker": "Assets\\Project\\Scripts\\Core\\RelayManager.cs",
@@ -384,7 +417,7 @@
             },
             {
               "$type": "Document",
-              "DocumentIndex": 11,
+              "DocumentIndex": 13,
               "Title": "AutoStartHost.cs",
               "DocumentMoniker": "C:\\Users\\nicol\\UnityProjects\\SpacePRJ\\Assets\\Project\\Scripts\\Core\\AutoStartHost.cs",
               "RelativeDocumentMoniker": "Assets\\Project\\Scripts\\Core\\AutoStartHost.cs",
@@ -396,7 +429,7 @@
             },
             {
               "$type": "Document",
-              "DocumentIndex": 4,
+              "DocumentIndex": 7,
               "Title": "PlayerNetworkOwnership.cs",
               "DocumentMoniker": "C:\\Users\\nicol\\UnityProjects\\SpacePRJ\\Assets\\Project\\Scripts\\Player\\PlayerNetworkOwnership.cs",
               "RelativeDocumentMoniker": "Assets\\Project\\Scripts\\Player\\PlayerNetworkOwnership.cs",
@@ -408,7 +441,7 @@
             },
             {
               "$type": "Document",
-              "DocumentIndex": 3,
+              "DocumentIndex": 6,
               "Title": "CharacterEntryUI.cs",
               "DocumentMoniker": "C:\\Users\\nicol\\UnityProjects\\SpacePRJ\\Assets\\Project\\Scripts\\UI\\CharacterEntryUI.cs",
               "RelativeDocumentMoniker": "Assets\\Project\\Scripts\\UI\\CharacterEntryUI.cs",
@@ -420,7 +453,7 @@
             },
             {
               "$type": "Document",
-              "DocumentIndex": 20,
+              "DocumentIndex": 22,
               "Title": "DoubleDoorOpenAuto.cs",
               "DocumentMoniker": "C:\\Users\\nicol\\UnityProjects\\SpacePRJ\\Assets\\Project\\Scripts\\Ship\\Components\\DoubleDoorOpenAuto.cs",
               "RelativeDocumentMoniker": "Assets\\Project\\Scripts\\Ship\\Components\\DoubleDoorOpenAuto.cs",
@@ -432,7 +465,7 @@
             },
             {
               "$type": "Document",
-              "DocumentIndex": 25,
+              "DocumentIndex": 27,
               "Title": "Ladder.cs",
               "DocumentMoniker": "C:\\Users\\nicol\\UnityProjects\\SpacePRJ\\Assets\\Project\\Scripts\\Ship\\Components\\Ladder.cs",
               "RelativeDocumentMoniker": "Assets\\Project\\Scripts\\Ship\\Components\\Ladder.cs",
@@ -444,7 +477,7 @@
             },
             {
               "$type": "Document",
-              "DocumentIndex": 28,
+              "DocumentIndex": 30,
               "Title": "ShipController.cs",
               "DocumentMoniker": "C:\\Users\\nicol\\UnityProjects\\SpacePRJ\\Assets\\Project\\Scripts\\Ship\\Core\\ShipController.cs",
               "RelativeDocumentMoniker": "Assets\\Project\\Scripts\\Ship\\Core\\ShipController.cs",
@@ -456,7 +489,7 @@
             },
             {
               "$type": "Document",
-              "DocumentIndex": 18,
+              "DocumentIndex": 20,
               "Title": "ShieldSystem.cs",
               "DocumentMoniker": "C:\\Users\\nicol\\UnityProjects\\SpacePRJ\\Assets\\Project\\Scripts\\Ship\\Systems\\ShieldSystem.cs",
               "RelativeDocumentMoniker": "Assets\\Project\\Scripts\\Ship\\Systems\\ShieldSystem.cs",
@@ -468,7 +501,7 @@
             },
             {
               "$type": "Document",
-              "DocumentIndex": 33,
+              "DocumentIndex": 35,
               "Title": "AmbientShipAudio.cs",
               "DocumentMoniker": "C:\\Users\\nicol\\UnityProjects\\SpacePRJ\\Assets\\Project\\Scripts\\AmbientShipAudio.cs",
               "RelativeDocumentMoniker": "Assets\\Project\\Scripts\\AmbientShipAudio.cs",
@@ -480,7 +513,7 @@
             },
             {
               "$type": "Document",
-              "DocumentIndex": 19,
+              "DocumentIndex": 21,
               "Title": "PlayerController.cs",
               "DocumentMoniker": "C:\\Users\\nicol\\UnityProjects\\SpacePRJ\\Assets\\Project\\Scripts\\Player\\PlayerController.cs",
               "RelativeDocumentMoniker": "Assets\\Project\\Scripts\\Player\\PlayerController.cs",
@@ -492,7 +525,7 @@
             },
             {
               "$type": "Document",
-              "DocumentIndex": 21,
+              "DocumentIndex": 23,
               "Title": "InputDeviceManager.cs",
               "DocumentMoniker": "C:\\Users\\nicol\\UnityProjects\\SpacePRJ\\Assets\\Project\\Scripts\\Core\\Managers\\InputDeviceManager.cs",
               "RelativeDocumentMoniker": "Assets\\Project\\Scripts\\Core\\Managers\\InputDeviceManager.cs",
@@ -504,7 +537,7 @@
             },
             {
               "$type": "Document",
-              "DocumentIndex": 23,
+              "DocumentIndex": 25,
               "Title": "ShipLight.cs",
               "DocumentMoniker": "C:\\Users\\nicol\\UnityProjects\\SpacePRJ\\Assets\\Project\\Scripts\\Ship\\Core\\ShipLight.cs",
               "RelativeDocumentMoniker": "Assets\\Project\\Scripts\\Ship\\Core\\ShipLight.cs",
@@ -516,7 +549,7 @@
             },
             {
               "$type": "Document",
-              "DocumentIndex": 22,
+              "DocumentIndex": 24,
               "Title": "InteractionSystem.cs",
               "DocumentMoniker": "C:\\Users\\nicol\\UnityProjects\\SpacePRJ\\Assets\\Project\\Scripts\\Player\\InteractionSystem.cs",
               "RelativeDocumentMoniker": "Assets\\Project\\Scripts\\Player\\InteractionSystem.cs",
@@ -528,7 +561,7 @@
             },
             {
               "$type": "Document",
-              "DocumentIndex": 34,
+              "DocumentIndex": 36,
               "Title": "FTLDrive.cs",
               "DocumentMoniker": "C:\\Users\\nicol\\UnityProjects\\SpacePRJ\\Assets\\Project\\Scripts\\Ship\\Systems\\FTLDrive.cs",
               "RelativeDocumentMoniker": "Assets\\Project\\Scripts\\Ship\\Systems\\FTLDrive.cs",
@@ -540,7 +573,7 @@
             },
             {
               "$type": "Document",
-              "DocumentIndex": 27,
+              "DocumentIndex": 29,
               "Title": "PowerManager.cs",
               "DocumentMoniker": "C:\\Users\\nicol\\UnityProjects\\SpacePRJ\\Assets\\Project\\Scripts\\Core\\PowerManager.cs",
               "RelativeDocumentMoniker": "Assets\\Project\\Scripts\\Core\\PowerManager.cs",
@@ -552,7 +585,7 @@
             },
             {
               "$type": "Document",
-              "DocumentIndex": 29,
+              "DocumentIndex": 31,
               "Title": "LifeSupportSystem.cs",
               "DocumentMoniker": "C:\\Users\\nicol\\UnityProjects\\SpacePRJ\\Assets\\Project\\Scripts\\Ship\\Systems\\LifeSupportSystem.cs",
               "RelativeDocumentMoniker": "Assets\\Project\\Scripts\\Ship\\Systems\\LifeSupportSystem.cs",
@@ -564,7 +597,7 @@
             },
             {
               "$type": "Document",
-              "DocumentIndex": 26,
+              "DocumentIndex": 28,
               "Title": "Door.cs",
               "DocumentMoniker": "C:\\Users\\nicol\\UnityProjects\\SpacePRJ\\Assets\\Project\\Scripts\\Ship\\Components\\Door.cs",
               "RelativeDocumentMoniker": "Assets\\Project\\Scripts\\Ship\\Components\\Door.cs",
