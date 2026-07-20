@@ -340,6 +340,15 @@ public class EngineeringStation : MonoBehaviour, IInteractable
 
                 playerController.enabled = wasPlayerControllerEnabled;
 
+                // FIX — currentVelocity è un campo persistente in PlayerController
+                // per smussare accelerazione/decelerazione: disabilitare il
+                // componente non lo azzera, resta congelato alla velocità che il
+                // player aveva nell'istante di EnterStation. Senza questo,
+                // riattivando il componente il player riprenderebbe per qualche
+                // frame a muoversi nella direzione di prima di sedersi. Stesso
+                // fix applicato in PilotStation e MedicalStation.
+                playerController.ResetVelocity();
+
                 Cursor.lockState = CursorLockMode.Locked;
                 Cursor.visible = false;
 

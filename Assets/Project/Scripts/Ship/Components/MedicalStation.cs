@@ -10,7 +10,9 @@ using System.Collections;
 ///   - IInteractable → rilevata da InteractionSystem via raycast
 ///   - Snap player con lerp verso playerSnapPoint
 ///   - Camera ruota verso il monitor al termine della transizione
-///   - VirtualCursor.Activate() / Deactivate()
+///   - Nessun VirtualCursor: la Medical Dashboard è display-only,
+///     nessuno scroll e nessun click. Solo lettura di informazioni
+///     (HP crew, O2, Life Support, scorte mediche)
 ///   - Uscita via Cancel (Esc / B gamepad) con cooldown 0.5s
 ///
 /// Un solo monitor — MedicalDashboardUI.
@@ -139,8 +141,6 @@ public class MedicalStation : MonoBehaviour, IInteractable
         if (dashboardUI != null)
             dashboardUI.gameObject.SetActive(true);
 
-        VirtualCursor.Instance?.Activate();
-
         StartCoroutine(TransitionToStation(interactor));
     }
 
@@ -211,8 +211,6 @@ public class MedicalStation : MonoBehaviour, IInteractable
             dashboardUI.gameObject.SetActive(false);
         }
 
-        VirtualCursor.Instance?.Deactivate();
-
         StartCoroutine(TransitionFromStation());
     }
 
@@ -241,6 +239,16 @@ public class MedicalStation : MonoBehaviour, IInteractable
         playerCamera.transform.localRotation = originalCameraRotation;
 
         playerController.enabled = wasPlayerControllerEnabled;
+
+        // FIX — currentVelocity è un campo persistente in PlayerController
+        // per smussare accelerazione/decelerazione: disabilitare il
+        // componente non lo azzera, resta congelato alla velocità che il
+        // player aveva nell'istante di EnterStation. Senza questo,
+        // riattivando il componente il player riprenderebbe per qualche
+        // frame a muoversi nella direzione di prima di sedersi. Stesso
+        // fix applicato in PilotStation ed EngineeringStation.
+        playerController.ResetVelocity();
+
         if (characterController != null)
             characterController.enabled = true;
     }

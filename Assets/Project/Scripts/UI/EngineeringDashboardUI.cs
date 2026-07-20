@@ -38,6 +38,12 @@ public class EngineeringDashboardUI : MonoBehaviour, IDashboardPanel
     [SerializeField] private Transform lightsListParent;
     [SerializeField] private GameObject lightControlPrefab;
 
+    [Header("Debug")]
+    [Tooltip("Se true, stampa log informativi di flusso (selezione EventSystem, " +
+             "refresh lista luci, toggle luci, ripristini della rete di sicurezza). " +
+             "I LogWarning restano sempre attivi. Lasciare OFF in produzione.")]
+    [SerializeField] private bool verboseLogging = false;
+
     private PowerManager powerManager;
     private List<LightControlEntry> lightControls = new List<LightControlEntry>();
     private bool isOpen = false;
@@ -173,7 +179,7 @@ public class EngineeringDashboardUI : MonoBehaviour, IDashboardPanel
             }
             else
             {
-                powerStatusText.text = "✅ OPERATIONAL";
+                powerStatusText.text = "[OK] OPERATIONAL";
                 powerStatusText.color = Color.green;
             }
         }
@@ -259,7 +265,8 @@ public class EngineeringDashboardUI : MonoBehaviour, IDashboardPanel
 
         List<ShipLight> manualLights = powerManager.GetManualLights();
 
-        Debug.Log($"[EngineeringDashboard] RefreshLightsList: trovate {manualLights.Count} luci Manual");
+        if (verboseLogging)
+            Debug.Log($"[EngineeringDashboard] RefreshLightsList: trovate {manualLights.Count} luci Manual");
 
         foreach (var light in manualLights)
         {
@@ -353,7 +360,8 @@ public class EngineeringDashboardUI : MonoBehaviour, IDashboardPanel
         if (initial != null)
         {
             EventSystem.current.SetSelectedGameObject(initial);
-            Debug.Log($"[EngineeringDashboard] Selezione iniziale impostata: {initial.name} ({reason}).");
+            if (verboseLogging)
+                Debug.Log($"[EngineeringDashboard] Selezione iniziale impostata: {initial.name} ({reason}).");
         }
         else
         {
@@ -444,7 +452,8 @@ public class EngineeringDashboardUI : MonoBehaviour, IDashboardPanel
         if (candidate != null)
         {
             EventSystem.current.SetSelectedGameObject(candidate);
-            Debug.Log($"[EngineeringDashboard] EnsureSelectionSafety: selezione ripristinata su {candidate.name} ({reason}).");
+            if (verboseLogging)
+                Debug.Log($"[EngineeringDashboard] EnsureSelectionSafety: selezione ripristinata su {candidate.name} ({reason}).");
         }
     }
 
@@ -484,7 +493,8 @@ public class EngineeringDashboardUI : MonoBehaviour, IDashboardPanel
         if (firstSelectable != null && firstSelectable.interactable)
         {
             EventSystem.current.SetSelectedGameObject(firstSelectable.gameObject);
-            Debug.Log($"[EngineeringDashboard] Selezione trasferita dal Restore alla prima luce ({firstEntry.name}) dopo fine blackout.");
+            if (verboseLogging)
+                Debug.Log($"[EngineeringDashboard] Selezione trasferita dal Restore alla prima luce ({firstEntry.name}) dopo fine blackout.");
         }
     }
 
@@ -495,7 +505,8 @@ public class EngineeringDashboardUI : MonoBehaviour, IDashboardPanel
         if (light != null)
         {
             light.SetManualState(isOn);
-            Debug.Log($"[EngineeringDashboard] {light.gameObject.name} → {(isOn ? "ON" : "OFF")}");
+            if (verboseLogging)
+                Debug.Log($"[EngineeringDashboard] {light.gameObject.name} → {(isOn ? "ON" : "OFF")}");
         }
     }
 
