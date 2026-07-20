@@ -4,13 +4,13 @@ using SpaceSurvivor.Ship.Systems;
 using UnityEngine;
 
 /// <summary>
-/// PilotHUD — Milestone 2
+/// PilotHUD — Milestone 2, esteso Rev T (velocità corrente/target/max).
 /// Dashboard cockpit del Pilota. Canvas World Space, display-only.
 ///
 /// SEZIONI:
 ///   Zona       — tipo zona + evento attivo (icona emoji + label)
 ///   Navigazione — stato corrente (colore + label) + warning autopilota
-///   Propulsione — fuel cells (contatore + SciFiSegmentedBar)
+///   Propulsione — fuel cells + velocità corrente/target/max (Rev T)
 ///   FTL        — stato + barra carica (Charging) + timer MM:SS (Cooldown/Lockout)
 ///   Scudi      — stato (Off/SpinUp/On) + HP + SciFiSegmentedBar
 ///
@@ -55,7 +55,7 @@ public class PilotHUD : MonoBehaviour, IDashboardPanel
     // SEZIONE PROPULSIONE — FUEL
     // =========================================================================
 
-    [Header("— Propulsione —")]
+    [Header("— Propulsione — Fuel —")]
     [Tooltip("Contatore fuel cells: 'FUEL: 18'")]
     [SerializeField] private TextMeshProUGUI labelFuelCount;
 
@@ -64,6 +64,31 @@ public class PilotHUD : MonoBehaviour, IDashboardPanel
 
     [Tooltip("Massimo fuel cells per la barra (default 30). Non hardcoded nel GDD → configurabile")]
     [SerializeField] private int maxFuelDisplay = 30;
+
+    // =========================================================================
+    // SEZIONE PROPULSIONE — VELOCITÀ (Rev T)
+    // =========================================================================
+
+    [Header("— Propulsione — Velocità (Rev T) —")]
+    [Tooltip("Label velocità unica formato: 'VEL: 42.3 → 60.0  (max 100)  m/s'. " +
+             "Il target è nascosto quando ~= current (nave stabile). Opzionale — " +
+             "se null, nessun display velocità.")]
+    [SerializeField] private TextMeshProUGUI labelSpeedCurrent;
+
+    [Tooltip("Barra segmentata velocità (Current/Max). Opzionale — se null, no-op.")]
+    [SerializeField] private SciFiSegmentedBar barSpeed;
+
+    [Tooltip("Colore per la scritta velocità quando la nave è STABILE (current ≈ target). " +
+             "Default: colore accent principale, sensazione 'crociera'.")]
+    [SerializeField] private Color colorSpeedStable = new Color(0.20f, 1.00f, 0.50f);
+
+    [Tooltip("Colore per la scritta velocità quando la nave ACCELERA (current < target). " +
+             "Default: cyan brillante, coerente con lo stile terminal.")]
+    [SerializeField] private Color colorSpeedAccelerating = new Color(0.00f, 0.80f, 1.00f);
+
+    [Tooltip("Colore per la scritta velocità quando la nave DECELERA (current > target). " +
+             "Default: ambra, feedback di 'freno in atto'.")]
+    [SerializeField] private Color colorSpeedDecelerating = new Color(1.00f, 0.70f, 0.10f);
 
     // =========================================================================
     // SEZIONE FTL
@@ -103,15 +128,15 @@ public class PilotHUD : MonoBehaviour, IDashboardPanel
     // COLORI DI STATO
     // =========================================================================
 
-    [Header("— Colori —")]
-    [SerializeField] private Color colorAnchored  = new Color(0.50f, 0.50f, 0.50f);
-    [SerializeField] private Color colorCoasting  = new Color(0.40f, 0.80f, 1.00f);
+    [Header("— Colori Navigazione —")]
+    [SerializeField] private Color colorAnchored = new Color(0.50f, 0.50f, 0.50f);
+    [SerializeField] private Color colorCoasting = new Color(0.40f, 0.80f, 1.00f);
     [SerializeField] private Color colorAutopilot = new Color(0.20f, 1.00f, 0.40f);
-    [SerializeField] private Color colorManual    = new Color(1.00f, 0.90f, 0.20f);
-    [SerializeField] private Color colorFTL       = new Color(0.60f, 0.20f, 1.00f);
-    [SerializeField] private Color colorWarning   = new Color(1.00f, 0.50f, 0.00f);
-    [SerializeField] private Color colorOn        = new Color(0.20f, 1.00f, 0.50f);
-    [SerializeField] private Color colorOff       = new Color(0.40f, 0.40f, 0.40f);
+    [SerializeField] private Color colorManual = new Color(1.00f, 0.90f, 0.20f);
+    [SerializeField] private Color colorFTL = new Color(0.60f, 0.20f, 1.00f);
+    [SerializeField] private Color colorWarning = new Color(1.00f, 0.50f, 0.00f);
+    [SerializeField] private Color colorOn = new Color(0.20f, 1.00f, 0.50f);
+    [SerializeField] private Color colorOff = new Color(0.40f, 0.40f, 0.40f);
 
     // =========================================================================
     // IDashboardPanel
@@ -144,6 +169,7 @@ public class PilotHUD : MonoBehaviour, IDashboardPanel
         RefreshZone();
         RefreshNavState();
         RefreshFuel();
+        RefreshSpeed();
         RefreshFTL();
         RefreshShields();
     }
@@ -155,12 +181,12 @@ public class PilotHUD : MonoBehaviour, IDashboardPanel
         var zm = ZoneManager.Instance;
         if (zm == null)
         {
-            SetText(labelZoneType,  "---");
+            SetText(labelZoneType, "---");
             SetText(labelZoneEvent, "");
             return;
         }
 
-        SetText(labelZoneType,  ZoneTypeLabel(zm.CurrentZone));
+        SetText(labelZoneType, ZoneTypeLabel(zm.CurrentZone));
         SetText(labelZoneEvent, ZoneEventLabel(zm.ActiveEvent));
     }
 
@@ -169,37 +195,37 @@ public class PilotHUD : MonoBehaviour, IDashboardPanel
     private void RefreshNavState()
     {
         var ftl = FTLDrive.Instance;
-        var ps  = PropulsionSystem.Instance;
+        var ps = PropulsionSystem.Instance;
 
-        string navText  = "---";
-        Color  navColor = Color.white;
+        string navText = "---";
+        Color navColor = Color.white;
 
         // Priorità: stato FTL sovrascrive la navigazione standard
         if (ftl != null && ftl.CurrentState == FTLState.Charging)
         {
-            navText  = "FTL — CARICA IN CORSO";
+            navText = "FTL — CARICA IN CORSO";
             navColor = colorFTL;
         }
         else if (ftl != null && ftl.CurrentState == FTLState.Jumping)
         {
-            navText  = "FTL — SALTO IN CORSO";
+            navText = "FTL — SALTO IN CORSO";
             navColor = Color.white;
         }
         else if (ps != null)
         {
             (navText, navColor) = ps.CurrentNavState switch
             {
-                NavigationState.Anchored  => ("ANCORATA",  colorAnchored),
-                NavigationState.Coasting  => ("INERZIA",   colorCoasting),
+                NavigationState.Anchored => ("ANCORATA", colorAnchored),
+                NavigationState.Coasting => ("INERZIA", colorCoasting),
                 NavigationState.Autopilot => ("AUTOPILOTA", colorAutopilot),
-                NavigationState.Manual    => ("MANUALE",   colorManual),
-                _                        => ("---", Color.white)
+                NavigationState.Manual => ("MANUALE", colorManual),
+                _ => ("---", Color.white)
             };
         }
 
         if (labelNavState != null)
         {
-            labelNavState.text  = navText;
+            labelNavState.text = navText;
             labelNavState.color = navColor;
         }
 
@@ -217,12 +243,74 @@ public class PilotHUD : MonoBehaviour, IDashboardPanel
     private void RefreshFuel()
     {
         var inv = InventorySystem.Instance;
-        int qty  = inv != null ? inv.GetQuantity(ItemType.FuelCell) : 0;
+        int qty = inv != null ? inv.GetQuantity(ItemType.FuelCell) : 0;
 
         SetText(labelFuelCount, $"FUEL: {qty}");
 
         if (barFuel != null)
             barFuel.SetValue(maxFuelDisplay > 0 ? Mathf.Clamp01((float)qty / maxFuelDisplay) : 0f);
+    }
+
+    // ── Propulsione / Velocità (Rev T) ────────────────────────────────────
+
+    /// <summary>
+    /// Rev T — mostra velocità corrente, target (se diverso), e cap massimo
+    /// data la degradazione. Colore adattivo:
+    ///   stable        (|curr - target| < 0.5) → verde
+    ///   accelerating  (curr < target)         → cyan
+    ///   decelerating  (curr > target)         → ambra
+    ///
+    /// La label è unica per compattezza; il target è nascosto quando la nave
+    /// è stabile per non affollare l'HUD durante la crociera.
+    /// </summary>
+    private void RefreshSpeed()
+    {
+        var ps = PropulsionSystem.Instance;
+
+        if (labelSpeedCurrent == null && barSpeed == null) return; // niente da aggiornare
+
+        if (ps == null)
+        {
+            SetText(labelSpeedCurrent, "VEL: ---");
+            if (barSpeed != null) barSpeed.SetValue(0f);
+            return;
+        }
+
+        float current = ps.CurrentSpeed;
+        float target = ps.TargetSpeed;
+        float maxCap = ps.MaxSpeedAtDegradation;
+        float diff = target - current;
+
+        // Testo: se stabile mostra solo current e max, altrimenti current → target
+        string text;
+        Color color;
+        if (Mathf.Abs(diff) < 0.5f)
+        {
+            text = $"VEL: {current:F1}  (max {maxCap:F0})  m/s";
+            color = colorSpeedStable;
+        }
+        else if (diff > 0f)
+        {
+            text = $"VEL: {current:F1} → {target:F1}  (max {maxCap:F0})  m/s";
+            color = colorSpeedAccelerating;
+        }
+        else
+        {
+            text = $"VEL: {current:F1} ← {target:F1}  (max {maxCap:F0})  m/s";
+            color = colorSpeedDecelerating;
+        }
+
+        if (labelSpeedCurrent != null)
+        {
+            labelSpeedCurrent.text = text;
+            labelSpeedCurrent.color = color;
+        }
+
+        if (barSpeed != null)
+        {
+            float pct = maxCap > 0.01f ? Mathf.Clamp01(current / maxCap) : 0f;
+            barSpeed.SetValue(pct);
+        }
     }
 
     // ── FTL Drive ─────────────────────────────────────────────────────────
@@ -235,16 +323,16 @@ public class PilotHUD : MonoBehaviour, IDashboardPanel
         {
             SetText(labelFTLStatus, "FTL: N/A");
             SetActive(panelFTLCharge, false);
-            SetActive(panelFTLTimer,  false);
+            SetActive(panelFTLTimer, false);
             return;
         }
 
         bool isCharging = ftl.CurrentState == FTLState.Charging;
-        bool hasTimer   = ftl.CurrentState == FTLState.Cooldown
+        bool hasTimer = ftl.CurrentState == FTLState.Cooldown
                        || ftl.CurrentState == FTLState.Lockout;
 
         SetActive(panelFTLCharge, isCharging);
-        SetActive(panelFTLTimer,  hasTimer);
+        SetActive(panelFTLTimer, hasTimer);
 
         if (isCharging && barFTLCharge != null)
             barFTLCharge.SetValue(ftl.ChargeProgress);
@@ -253,29 +341,29 @@ public class PilotHUD : MonoBehaviour, IDashboardPanel
             SetText(labelFTLTimer, FormatTime(ftl.TimeRemaining));
 
         // Label stato + colore
-        string ftlText  = ftl.CurrentState switch
+        string ftlText = ftl.CurrentState switch
         {
-            FTLState.Ready    => "FTL: PRONTO",
+            FTLState.Ready => "FTL: PRONTO",
             FTLState.Charging => $"FTL: CARICA  {ftl.ChargeProgress * 100f:F0}%",
-            FTLState.Jumping  => "FTL: SALTO IN CORSO",
+            FTLState.Jumping => "FTL: SALTO IN CORSO",
             FTLState.Cooldown => "FTL: COOLDOWN",
-            FTLState.Lockout  => "FTL: LOCKOUT",
-            _                 => "FTL: ---"
+            FTLState.Lockout => "FTL: LOCKOUT",
+            _ => "FTL: ---"
         };
 
         Color ftlColor = ftl.CurrentState switch
         {
-            FTLState.Ready    => colorOn,
+            FTLState.Ready => colorOn,
             FTLState.Charging => colorFTL,
-            FTLState.Jumping  => Color.white,
+            FTLState.Jumping => Color.white,
             FTLState.Cooldown => colorCoasting,
-            FTLState.Lockout  => colorWarning,
-            _                 => colorOff
+            FTLState.Lockout => colorWarning,
+            _ => colorOff
         };
 
         if (labelFTLStatus != null)
         {
-            labelFTLStatus.text  = ftlText;
+            labelFTLStatus.text = ftlText;
             labelFTLStatus.color = ftlColor;
         }
     }
@@ -289,22 +377,22 @@ public class PilotHUD : MonoBehaviour, IDashboardPanel
         if (sh == null)
         {
             SetText(labelShieldStatus, "SCUDI: N/A");
-            SetText(labelShieldHP,     "");
+            SetText(labelShieldHP, "");
             if (barShieldHP != null) barShieldHP.SetValue(0f);
             return;
         }
 
         (string stateText, Color stateColor) = sh.State switch
         {
-            ShieldSystem.ShieldState.On       => ("SCUDI: ATTIVI",   colorOn),
-            ShieldSystem.ShieldState.Charging => ("SCUDI: SPIN-UP",  colorFTL),
-            ShieldSystem.ShieldState.Off      => ("SCUDI: INATTIVI", colorOff),
-            _                                 => ("SCUDI: ---",      Color.white)
+            ShieldSystem.ShieldState.On => ("SCUDI: ATTIVI", colorOn),
+            ShieldSystem.ShieldState.Charging => ("SCUDI: SPIN-UP", colorFTL),
+            ShieldSystem.ShieldState.Off => ("SCUDI: INATTIVI", colorOff),
+            _ => ("SCUDI: ---", Color.white)
         };
 
         if (labelShieldStatus != null)
         {
-            labelShieldStatus.text  = stateText;
+            labelShieldStatus.text = stateText;
             labelShieldStatus.color = stateColor;
         }
 
@@ -351,19 +439,19 @@ public class PilotHUD : MonoBehaviour, IDashboardPanel
 
     private static string ZoneTypeLabel(ZoneType zone) => zone switch
     {
-        ZoneType.Inner    => "SISTEMA INTERNO",
+        ZoneType.Inner => "SISTEMA INTERNO",
         ZoneType.Frontier => "FRONTIERA",
         ZoneType.DeepVoid => "VUOTO PROFONDO",
-        _                 => "---"
+        _ => "---"
     };
 
     private static string ZoneEventLabel(ZoneEvent evt) => evt switch
     {
-        ZoneEvent.None           => "— ROTTA LIBERA —",
+        ZoneEvent.None => "— ROTTA LIBERA —",
         ZoneEvent.RadiationStorm => "☢  TEMPESTA RADIAZIONI",
-        ZoneEvent.AsteroidField  => "☄  CAMPO DI METEORITI",
-        ZoneEvent.SolarStorm     => "☀  TEMPESTA SOLARE",
-        ZoneEvent.EMAnomaly      => "⚡  ANOMALIA EM",
-        _                        => ""
+        ZoneEvent.AsteroidField => "☄  CAMPO DI METEORITI",
+        ZoneEvent.SolarStorm => "☀  TEMPESTA SOLARE",
+        ZoneEvent.EMAnomaly => "⚡  ANOMALIA EM",
+        _ => ""
     };
 }

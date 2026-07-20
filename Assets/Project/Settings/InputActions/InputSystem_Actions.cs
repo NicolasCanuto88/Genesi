@@ -244,6 +244,15 @@ public partial class @InputSystem_Actions: IInputActionCollection2, IDisposable
                     ""processors"": """",
                     ""interactions"": """",
                     ""initialStateCheck"": false
+                },
+                {
+                    ""name"": ""Throttle"",
+                    ""type"": ""Value"",
+                    ""id"": ""6bc662f4-cb09-4933-88fd-b8f9751f0c71"",
+                    ""expectedControlType"": ""Axis"",
+                    ""processors"": """",
+                    ""interactions"": """",
+                    ""initialStateCheck"": true
                 }
             ],
             ""bindings"": [
@@ -796,6 +805,72 @@ public partial class @InputSystem_Actions: IInputActionCollection2, IDisposable
                     ""action"": ""ToggleTablet"",
                     ""isComposite"": false,
                     ""isPartOfComposite"": false
+                },
+                {
+                    ""name"": ""1D Axis"",
+                    ""id"": ""9953ba67-955a-4383-9429-4dc71cecf200"",
+                    ""path"": ""1DAxis"",
+                    ""interactions"": """",
+                    ""processors"": """",
+                    ""groups"": """",
+                    ""action"": ""Throttle"",
+                    ""isComposite"": true,
+                    ""isPartOfComposite"": false
+                },
+                {
+                    ""name"": ""negative"",
+                    ""id"": ""d0271189-2150-4514-b2a5-16a7127382d1"",
+                    ""path"": ""<Keyboard>/s"",
+                    ""interactions"": """",
+                    ""processors"": """",
+                    ""groups"": """",
+                    ""action"": ""Throttle"",
+                    ""isComposite"": false,
+                    ""isPartOfComposite"": true
+                },
+                {
+                    ""name"": ""positive"",
+                    ""id"": ""d4cd5917-61d5-410d-92ed-3d6dcda7b755"",
+                    ""path"": ""<Keyboard>/w"",
+                    ""interactions"": """",
+                    ""processors"": """",
+                    ""groups"": """",
+                    ""action"": ""Throttle"",
+                    ""isComposite"": false,
+                    ""isPartOfComposite"": true
+                },
+                {
+                    ""name"": ""1D Axis"",
+                    ""id"": ""3bf301d0-7c8c-469a-8a14-f3f26d7c5100"",
+                    ""path"": ""1DAxis"",
+                    ""interactions"": """",
+                    ""processors"": """",
+                    ""groups"": """",
+                    ""action"": ""Throttle"",
+                    ""isComposite"": true,
+                    ""isPartOfComposite"": false
+                },
+                {
+                    ""name"": ""negative"",
+                    ""id"": ""1e1ba0cc-208e-48ff-8229-c8b4fd44c4b8"",
+                    ""path"": ""<Gamepad>/leftTrigger"",
+                    ""interactions"": """",
+                    ""processors"": """",
+                    ""groups"": """",
+                    ""action"": ""Throttle"",
+                    ""isComposite"": false,
+                    ""isPartOfComposite"": true
+                },
+                {
+                    ""name"": ""positive"",
+                    ""id"": ""38b1f8d7-396f-4ccf-b143-b34ff120c671"",
+                    ""path"": ""<Gamepad>/rightTrigger"",
+                    ""interactions"": """",
+                    ""processors"": """",
+                    ""groups"": """",
+                    ""action"": ""Throttle"",
+                    ""isComposite"": false,
+                    ""isPartOfComposite"": true
                 }
             ]
         },
@@ -1541,6 +1616,7 @@ public partial class @InputSystem_Actions: IInputActionCollection2, IDisposable
         m_Player_RepairKey_2 = m_Player.FindAction("RepairKey_2", throwIfNotFound: true);
         m_Player_RepairKey_3 = m_Player.FindAction("RepairKey_3", throwIfNotFound: true);
         m_Player_ToggleTablet = m_Player.FindAction("ToggleTablet", throwIfNotFound: true);
+        m_Player_Throttle = m_Player.FindAction("Throttle", throwIfNotFound: true);
         // UI
         m_UI = asset.FindActionMap("UI", throwIfNotFound: true);
         m_UI_Navigate = m_UI.FindAction("Navigate", throwIfNotFound: true);
@@ -1658,6 +1734,7 @@ public partial class @InputSystem_Actions: IInputActionCollection2, IDisposable
     private readonly InputAction m_Player_RepairKey_2;
     private readonly InputAction m_Player_RepairKey_3;
     private readonly InputAction m_Player_ToggleTablet;
+    private readonly InputAction m_Player_Throttle;
     /// <summary>
     /// Provides access to input actions defined in input action map "Player".
     /// </summary>
@@ -1738,6 +1815,10 @@ public partial class @InputSystem_Actions: IInputActionCollection2, IDisposable
         /// </summary>
         public InputAction @ToggleTablet => m_Wrapper.m_Player_ToggleTablet;
         /// <summary>
+        /// Provides access to the underlying input action "Player/Throttle".
+        /// </summary>
+        public InputAction @Throttle => m_Wrapper.m_Player_Throttle;
+        /// <summary>
         /// Provides access to the underlying input action map instance.
         /// </summary>
         public InputActionMap Get() { return m_Wrapper.m_Player; }
@@ -1814,6 +1895,9 @@ public partial class @InputSystem_Actions: IInputActionCollection2, IDisposable
             @ToggleTablet.started += instance.OnToggleTablet;
             @ToggleTablet.performed += instance.OnToggleTablet;
             @ToggleTablet.canceled += instance.OnToggleTablet;
+            @Throttle.started += instance.OnThrottle;
+            @Throttle.performed += instance.OnThrottle;
+            @Throttle.canceled += instance.OnThrottle;
         }
 
         /// <summary>
@@ -1876,6 +1960,9 @@ public partial class @InputSystem_Actions: IInputActionCollection2, IDisposable
             @ToggleTablet.started -= instance.OnToggleTablet;
             @ToggleTablet.performed -= instance.OnToggleTablet;
             @ToggleTablet.canceled -= instance.OnToggleTablet;
+            @Throttle.started -= instance.OnThrottle;
+            @Throttle.performed -= instance.OnThrottle;
+            @Throttle.canceled -= instance.OnThrottle;
         }
 
         /// <summary>
@@ -2424,6 +2511,13 @@ public partial class @InputSystem_Actions: IInputActionCollection2, IDisposable
         /// <seealso cref="UnityEngine.InputSystem.InputAction.performed" />
         /// <seealso cref="UnityEngine.InputSystem.InputAction.canceled" />
         void OnToggleTablet(InputAction.CallbackContext context);
+        /// <summary>
+        /// Method invoked when associated input action "Throttle" is either <see cref="UnityEngine.InputSystem.InputAction.started" />, <see cref="UnityEngine.InputSystem.InputAction.performed" /> or <see cref="UnityEngine.InputSystem.InputAction.canceled" />.
+        /// </summary>
+        /// <seealso cref="UnityEngine.InputSystem.InputAction.started" />
+        /// <seealso cref="UnityEngine.InputSystem.InputAction.performed" />
+        /// <seealso cref="UnityEngine.InputSystem.InputAction.canceled" />
+        void OnThrottle(InputAction.CallbackContext context);
     }
     /// <summary>
     /// Interface to implement callback methods for all input action callbacks associated with input actions defined by "UI" which allows adding and removing callbacks.

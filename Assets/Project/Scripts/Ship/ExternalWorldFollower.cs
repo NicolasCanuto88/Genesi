@@ -3,7 +3,7 @@ using UnityEngine;
 namespace SpaceSurvivor.Ship
 {
     /// <summary>
-    /// ExternalWorldFollower — Milestone 3, Blocco 3 (prima implementazione).
+    /// ExternalWorldFollower — Milestone 3, Blocco 3 (Rev S → Rev T).
     ///
     /// Componente da attaccare a QUALUNQUE GameObject del "mondo esterno"
     /// (asteroidi, relitti, stazioni, starfield distante) che deve dare
@@ -11,7 +11,8 @@ namespace SpaceSurvivor.Ship
     /// di movimento da ShipMovement.Instance e applica il DELTA INVERSO
     /// alla propria Transform ogni frame:
     ///   - traslazione: -LogicalForward × CurrentSpeed × Time.deltaTime
-    ///   - rotazione: -deltaYaw attorno a shipReference (o Vector3.zero)
+    ///   - rotazione: Inverse(deltaRotation) applicato rispetto a
+    ///     shipReference (o Vector3.zero se non assegnato)
     ///
     /// La nave (e i player al suo interno) resta ferma. Sono gli oggetti
     /// esterni che si muovono — il risultato visuale è indistinguibile
@@ -19,20 +20,24 @@ namespace SpaceSurvivor.Ship
     /// problemi di precisione a coordinate molto grandi (nave e player
     /// non si allontanano mai dall'origine del mondo).
     ///
+    /// AGGIORNAMENTO Rev T (dopo estensione ShipMovement a Quaternion):
+    ///   Era: delta yaw scalare (float) → RotateAround(pivot, up, -deltaYaw).
+    ///   Ora: delta Quaternion → Inverse applicato a mano a posizione
+    ///        relativa al pivot e a orientamento. Supporta pilotaggio 3D
+    ///        (yaw + pitch) senza cambiare l'interfaccia esterna del
+    ///        componente. Normalizzazione periodica del transform.rotation
+    ///        per prevenire drift accumulativo su tempi lunghi.
+    ///
     /// SCELTA DI RETE: MonoBehaviour puro, NON NetworkBehaviour. Il
     /// movimento è simulazione client-side deterministica dallo stato
-    /// GIÀ replicato di ShipMovement (LogicalYawDegrees è NetworkVariable,
-    /// CurrentSpeed è letto da PropulsionSystem che è a sua volta
-    /// server-authoritative). Ogni client applica lo stesso identico
-    /// delta agli stessi valori replicati → tutti vedono la stessa
-    /// posizione senza traffico di rete aggiuntivo. Vantaggio: il
-    /// costo di rete NON scala col numero di oggetti esterni (100
-    /// asteroidi = 1 asteroide, dal punto di vista della banda). Un
-    /// eventuale NetworkTransform per asteroide sarebbe stato invece
-    /// costoso e non necessario, dato che questi oggetti non hanno
-    /// interazione fisica non-deterministica coi player nella fase di
-    /// "scorrimento" (avvicinamento e saccheggio saranno gestiti da un
-    /// sistema separato, con la nave ancorata e il mondo fermo).
+    /// GIÀ replicato di ShipMovement (LogicalRotation e LogicalPosition
+    /// sono NetworkVariable; CurrentSpeed è letto da PropulsionSystem che
+    /// è a sua volta server-authoritative con _netCurrentSpeed). Ogni
+    /// client applica lo stesso identico delta agli stessi valori
+    /// replicati → tutti vedono la stessa posizione senza traffico di
+    /// rete aggiuntivo. Il costo di rete NON scala col numero di oggetti
+    /// esterni (100 asteroidi = 1 asteroide, dal punto di vista della
+    /// banda).
     ///
     /// USO TIPICO:
     ///   1. Attaccare a un GameObject "ExternalWorldRoot" che contiene
@@ -41,15 +46,10 @@ namespace SpaceSurvivor.Ship
     ///   2. Assegnare shipReference al Transform di "Nave" (opzionale —
     ///      default Vector3.zero, funziona finché "Nave" è all'origine)
     ///   3. Play → il mondo scorre quando il pilota accelera in MANUAL/
-    ///      AUTOPILOT/COASTING, ruota quando il pilota sterza in MANUAL
+    ///      AUTOPILOT/COASTING, ruota su yaw+pitch quando sterza in MANUAL
     ///
-    /// TEST MINIMO (Blocco 3 fase 1):
-    ///   - 1 asteroide di prova a ~50m davanti alla nave
-    ///   - Un solo ExternalWorldFollower su quel GameObject
-    ///   - Pilota entra in postazione, MANUAL, accelera → l'asteroide
-    ///     scorre verso di lui e alla fine gli passa vicino/dietro
-    ///
-    /// DIPENDE DA: ShipMovement (Instance + OnInstanceReady)
+    /// DIPENDE DA: ShipMovement (Instance + OnInstanceReady + LogicalRotation
+    ///             + LogicalForward + CurrentSpeed)
     /// </summary>
     public class ExternalWorldFollower : MonoBehaviour
     {
@@ -76,7 +76,9 @@ namespace SpaceSurvivor.Ship
         [SerializeField] private bool verboseLogging = false;
 
         // ── Stato interno ────────────────────────────────────────────────────
-        private float _previousYaw;
+        // Rev T: era _previousYaw (float). Ora è il quaternion completo del
+        // frame precedente, così il delta cattura yaw+pitch insieme.
+        private Quaternion _previousRotation;
         private bool _initialized;
 
         // ── Lifecycle ────────────────────────────────────────────────────────
@@ -111,15 +113,18 @@ namespace SpaceSurvivor.Ship
 
         private void Initialize()
         {
-            // Cattura il yaw corrente come punto di partenza — evita un
+            // Cattura la rotazione corrente come punto di partenza — evita un
             // "salto" al primo frame se la nave stava già ruotando prima
             // che questo componente si abilitasse (es. hot-reload in Editor).
-            _previousYaw = ShipMovement.Instance.LogicalYawDegrees;
+            _previousRotation = ShipMovement.Instance.LogicalRotation;
             _initialized = true;
 
             if (verboseLogging)
+            {
+                Vector3 euler = _previousRotation.eulerAngles;
                 Debug.Log($"[ExternalWorldFollower] {name}: bind con ShipMovement completato. " +
-                          $"Yaw iniziale: {_previousYaw:F1}°");
+                          $"Rotazione iniziale: yaw {euler.y:F1}° · pitch {euler.x:F1}°");
+            }
         }
 
         // ── Update ───────────────────────────────────────────────────────────
@@ -132,26 +137,41 @@ namespace SpaceSurvivor.Ship
             if (ship == null) return; // difensivo: potrebbe essere despawnato
 
             // ── Rotazione inversa ───────────────────────────────────────────
-            // Delta yaw dal frame precedente. Se il pilota ha ruotato la nave
-            // di +deltaYaw, il mondo deve ruotare di -deltaYaw attorno alla
-            // nave — così un asteroide davanti resta "visivamente davanti"
-            // rispetto alla nuova direzione della nave. La rotazione modifica
-            // sia la posizione che l'orientamento dell'oggetto (RotateAround).
+            // Delta quaternion dal frame precedente. Se la nave è ruotata
+            // di deltaRotation, il mondo deve subire Inverse(deltaRotation)
+            // rispetto al pivot — sia in posizione (ruota il vettore
+            // pivot→oggetto) sia in orientamento (l'oggetto stesso ruota
+            // in senso opposto).
+            //
+            // Nota su drift: deltaRotation è ricalcolato da zero ogni frame
+            // (non composto ricorsivamente in locale). L'unica composizione
+            // ricorsiva è transform.rotation ← inverseDelta * transform.rotation,
+            // che su tempi lunghi può accumulare errore numerico. Normalizziamo
+            // il risultato per blindarci.
             if (applyRotation)
             {
-                float currentYaw = ship.LogicalYawDegrees;
-                float deltaYaw = currentYaw - _previousYaw;
+                Quaternion currentRotation = ship.LogicalRotation;
+                Quaternion deltaRotation = currentRotation * Quaternion.Inverse(_previousRotation);
 
-                if (Mathf.Abs(deltaYaw) > 0.0001f)
+                // Ignora delta praticamente nulli (nave ferma o quasi) —
+                // evita computazione inutile e micro-jitter numerico.
+                if (Quaternion.Angle(deltaRotation, Quaternion.identity) > 0.001f)
                 {
+                    Quaternion inverseDelta = Quaternion.Inverse(deltaRotation);
                     Vector3 pivot = shipReference != null
                         ? shipReference.position
                         : Vector3.zero;
 
-                    transform.RotateAround(pivot, Vector3.up, -deltaYaw);
+                    // Ruota il vettore pivot→oggetto per la nuova posizione
+                    Vector3 offsetFromPivot = transform.position - pivot;
+                    transform.position = pivot + inverseDelta * offsetFromPivot;
+
+                    // Ruota l'orientamento dell'oggetto per lo stesso delta,
+                    // poi normalizza per prevenire drift accumulativo.
+                    transform.rotation = (inverseDelta * transform.rotation).normalized;
                 }
 
-                _previousYaw = currentYaw;
+                _previousRotation = currentRotation;
             }
 
             // ── Traslazione inversa ─────────────────────────────────────────
@@ -175,13 +195,23 @@ namespace SpaceSurvivor.Ship
             if (!_initialized || ShipMovement.Instance == null) return;
 
             var ship = ShipMovement.Instance;
-            GUILayout.BeginArea(new Rect(340, Screen.height - 90, 320, 80));
+            Vector3 euler = ship.LogicalRotation.eulerAngles;
+
+            GUILayout.BeginArea(new Rect(360, Screen.height - 100, 340, 90));
             GUILayout.BeginVertical("box");
             GUILayout.Label($"[ExtWorldFollower] {name}");
-            GUILayout.Label($"Pos: {transform.position.x:F1}, {transform.position.z:F1}");
-            GUILayout.Label($"ShipSpeed: {ship.CurrentSpeed:F1} m/s · Yaw: {ship.LogicalYawDegrees:F1}°");
+            GUILayout.Label($"Pos: {transform.position.x:F1}, {transform.position.y:F1}, {transform.position.z:F1}");
+            GUILayout.Label($"ShipSpeed: {ship.CurrentSpeed:F1} m/s");
+            GUILayout.Label($"ShipRot: yaw {euler.y:F1}° · pitch {NormalizeAngleDisplay(euler.x):F1}°");
             GUILayout.EndVertical();
             GUILayout.EndArea();
+        }
+
+        private static float NormalizeAngleDisplay(float angleDeg)
+        {
+            angleDeg %= 360f;
+            if (angleDeg > 180f) angleDeg -= 360f;
+            return angleDeg;
         }
 #endif
     }

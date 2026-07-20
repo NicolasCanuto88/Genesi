@@ -5,7 +5,8 @@ using UnityEngine;
 using UnityEngine.InputSystem;
 
 /// <summary>
-/// PilotStation — Milestone 2, esteso in Milestone 3 Blocco 2.
+/// PilotStation — Milestone 2, esteso in Milestone 3 Blocco 2 (Rev Q/R) e
+/// Blocco 3 fase 2 (Rev T — modello di volo 3D con pitch e throttle).
 /// Postazione fisica del Pilota nel cockpit.
 ///
 /// PATTERN:
@@ -21,6 +22,7 @@ using UnityEngine.InputSystem;
 ///   toggleManualAction     → MANUAL ↔ COASTING           [consigliato: Q / RStick Click]
 ///   shieldToggleAction     → ShieldSystem.TryActivate()  [F / LB]
 ///   ftlJumpAction          → FTLDrive.TryInitiateJump()  [G / Y]
+///   throttleAction (Rev T) → asse W/S continuo [-1, +1]  [W/S KB / RT-LT GP]
 ///
 /// LOGICA USCITA:
 ///   MANUAL attivo     → RequestNavigationState(Coasting)   [nessuno al timone]
@@ -30,66 +32,43 @@ using UnityEngine.InputSystem;
 ///
 /// REGOLA INVARIANTE:
 ///   PilotStation è l'unico punto da cui chiamare
-///   FTLDrive.TryInitiateJump() e PropulsionSystem.RequestNavigationState().
+///   FTLDrive.TryInitiateJump(), PropulsionSystem.RequestNavigationState()
+///   e PropulsionSystem.SetManualThrottleInput().
 ///
-/// BUG FIX — uscita con Esc non funzionava:
-///   EnterStation ora recupera il PlayerInput con fallback su
-///   interactor.GetComponent<PlayerInput>() se playerInputReference non è
-///   assegnato in Inspector (stesso pattern già in MedicalStation —
-///   mancava qui, lasciando cancelAction null silenziosamente).
+/// DECISIONE ARCHITETTURALE (Blocco 2): "Nave" NON si muove MAI fisicamente.
+/// Vedi ShipMovement.cs per il dettaglio completo. Il pilotaggio è puramente
+/// LOGICO — steering aggiorna ShipMovement.LogicalRotation (Quaternion), il
+/// throttle aggiorna PropulsionSystem.TargetSpeed. Il mondo esterno
+/// (ExternalWorldFollower) scorre in senso inverso rispetto a questi valori.
 ///
-/// DECISIONE ARCHITETTURALE (Blocco 2, dopo ampia sperimentazione — vedi
-/// SESSION_HANDOFF per la cronologia completa): "Nave" NON si muove MAI
-/// fisicamente. Una nave che trasla/ruota davvero nel mondo, con player
-/// agganciati ad essa, si è rivelata un terreno di bug profondi e
-/// interconnessi (tremolio, oscillazioni, CharacterController che non
-/// segue piattaforme in movimento — limite documentato di Unity stesso,
-/// non un nostro bug). La soluzione adottata: la nave resta ferma,
-/// "Velocità"/NavigationState restano concetti puramente LOGICI (HUD,
-/// consumo carburante, ETA) — quando in Blocco 3 esisteranno asteroidi/
-/// relitti/stazioni visivi, saranno LORO a muoversi in senso inverso
-/// rispetto a questa velocità logica (la nave resta il centro fisso del
-/// mondo) — pattern comune nei giochi spaziali, evita anche problemi di
-/// precisione a coordinate molto grandi. Vedi ShipMovement.cs per il
-/// dettaglio.
-///
-/// Conseguenza pratica per QUESTO file: nessuna matematica di posizione
-/// relativa alla nave è necessaria — il player non deve mai essere
-/// "agganciato" a nulla, perché nulla si muove. Identico, in questo, al
-/// comportamento di MedicalStation/EngineeringStation.
-///
-/// BLOCCO 2 (M3) — pilotaggio MANUALE (solo stato logico):
-///   - Mentre seduto e NavigationState == Manual, la X del Look stick/mouse
-///     (azione "Look" del Player Action Map — libera, perché PlayerController
-///     è disabilitato qui e non la consuma più) pilota lo yaw LOGICO della
-///     nave via ShipMovement.Instance.SetManualSteerInput() — usato in
-///     futuro per ruotare in senso inverso il mondo esterno (Blocco 3+),
-///     non per ruotare "Nave" stessa. Azzerata quando si esce da MANUAL o
-///     dalla postazione.
-///   - Camera: passa automaticamente da vista cockpit (dashboard, esistente)
-///     a vista esterna in terza persona ancorata a shipChaseCamPoint (figlio
-///     fisso di "Nave") quando NavState diventa Manual, e torna alla vista
-///     cockpit quando NavState cambia o si esce dalla postazione. Nessuna
-///     dipendenza da Cinemachine — il progetto non lo ha installato
-///     (verificato in Packages/manifest.json), quindi si riusa lo stesso
-///     approccio "Camera.transform diretto" già usato da LookAtCockpitRoutine.
-///     Nota: finché non esiste contenuto esterno visivo che si muove
-///     (Blocco 3+), questa vista mostrerà la nave ferma dall'esterno — non
-///     dinamica come sarà una volta aggiunto il mondo inverso, ma corretta
-///     e pronta per quando arriverà.
+/// BLOCCO 3 fase 2 (Rev T) — modello di volo 3D:
+///   - Look action (X,Y) → ShipMovement.SetManualLookInput(Vector2)
+///     Convenzione FPS: mouse su = muso su. Pitch clampato a ±80° internamente.
+///   - Throttle action (asse) → PropulsionSystem.SetManualThrottleInput(float)
+///     +1 = accelera in avanti, -1 = decelera, 0 = mantieni velocità (inerzia).
+///   - Camera terza persona ancorata a shipChaseCamPoint (figlio fisso di
+///     "Nave", statico). Quando NavState diventa Manual la camera swappa
+///     dalla vista cockpit alla vista esterna.
 ///
 /// DIPENDE DA: PropulsionSystem ✅ · FTLDrive ✅ · ShieldSystem ✅
-///   ShipMovement (Blocco 2, nuovo) · shipChaseCamPoint da creare in Editor
-///   come figlio fisso di "Nave".
+///   ShipMovement (Blocco 2) · shipChaseCamPoint da creare in Editor come
+///   figlio fisso di "Nave" · nuova action "Throttle" nell'asset InputActions.
 /// Multiplayer (M3+): aggiungere role-check (solo il Pilota può usare questa postazione).
 /// </summary>
 [RequireComponent(typeof(BoxCollider))]
 public class PilotStation : MonoBehaviour, IInteractable
 {
     // ── HUD ───────────────────────────────────────────────────────────────
-    [Header("HUD")]
+    [Header("HUD — Cockpit (World Space, sul monitor)")]
     [SerializeField] private PilotHUD pilotHUD;
     [SerializeField] private Canvas hudCanvas;
+
+    [Header("HUD — Volo esterno MANUAL (Screen Space Overlay)")]
+    [Tooltip("PilotFlightHUD (Rev T): HUD sovrapposto durante il volo in vista " +
+             "terza persona. Toggle mutualmente esclusivo con PilotHUD — visibile " +
+             "solo quando EnterThirdPersonChaseCam è attivo. Se lasciato vuoto, " +
+             "il volo MANUAL non ha HUD visibile (degradazione elegante).")]
+    [SerializeField] private PilotFlightHUD flightHUD;
 
     // ── Player Positioning ────────────────────────────────────────────────
     [Header("Player Positioning")]
@@ -121,6 +100,23 @@ public class PilotStation : MonoBehaviour, IInteractable
     [SerializeField] private InputActionReference shieldToggleAction;
     [Tooltip("Avvia salto FTL — mai automatico. G (KB) / Y (GP)")]
     [SerializeField] private InputActionReference ftlJumpAction;
+
+    [Tooltip("Throttle W/S (Rev T). Value type / Axis 1D. Consigliato: " +
+             "1D Axis Composite → Negative: <Keyboard>/s + <Gamepad>/leftTrigger; " +
+             "Positive: <Keyboard>/w + <Gamepad>/rightTrigger. Se lasciato vuoto, " +
+             "il throttle in MANUAL è sempre 0 — la nave mantiene sempre la velocità " +
+             "corrente (utile per test isolati di sterzata).")]
+    [SerializeField] private InputActionReference throttleAction;
+
+    [Header("Sensibilità input (Rev T)")]
+    [Tooltip("Moltiplicatore applicato al delta del mouse per l'action Look prima " +
+             "di passarlo a ShipMovement. Il New Input System restituisce i movimenti " +
+             "del mouse in unità arbitrarie che possono spesso saturare il clamp " +
+             "[-1, +1] interno, rendendo la sterzata a mouse iper-reattiva rispetto " +
+             "allo stick. Il gamepad NON è scalato — il suo stick è già in [-1, +1] " +
+             "e la sensibilità naturale è corretta. Default 0.15 — da tarare in " +
+             "playtest, ma parte come 'nave grossa e pesante'.")]
+    [SerializeField, Range(0.01f, 1f)] private float mouseSensitivity = 0.15f;
 
     // ── Stato interno ─────────────────────────────────────────────────────
     private bool isUsingStation;
@@ -345,12 +341,19 @@ public class PilotStation : MonoBehaviour, IInteractable
         // spazio locale sbagliato (quello di shipChaseCamPoint).
         // false = non riorientare al monitor (TransitionFromStation ci pensa già).
         ExitThirdPersonChaseCam(restoreLookAtCockpit: false);
-        ShipMovement.Instance?.SetManualSteerInput(0f);
+
+        // Azzera input pilota logici — evita che valori "congelati" restino
+        // attivi sul server dopo che il Pilota si è alzato.
+        ShipMovement.Instance?.SetManualLookInput(Vector2.zero);
+        PropulsionSystem.Instance?.SetManualThrottleInput(0f);
 
         interactionCooldown = COOLDOWN_DURATION;
         isUsingStation = false;
 
         // MANUAL attivo → COASTING: nessuno al timone, la nave mantiene l'inerzia
+        // (PropulsionSystem in COASTING congela TargetSpeed = CurrentSpeed, la
+        // nave continua a viaggiare alla velocità corrente indefinitamente —
+        // Rev T, coerente con "spazio vuoto, nessun attrito").
         if (PropulsionSystem.Instance != null
             && PropulsionSystem.Instance.CurrentNavState == NavigationState.Manual)
         {
@@ -365,6 +368,12 @@ public class PilotStation : MonoBehaviour, IInteractable
             pilotHUD.Close();
             pilotHUD.gameObject.SetActive(false);
         }
+
+        // Rev T — sicurezza: se per qualche motivo il FlightHUD è ancora
+        // aperto (es. uscita brutale mentre in MANUAL), chiudilo. In caso
+        // normale ExitThirdPersonChaseCam sopra ha già chiamato Close().
+        if (flightHUD != null && flightHUD.gameObject.activeSelf)
+            flightHUD.Close();
 
         StartCoroutine(TransitionFromStation());
     }
@@ -407,15 +416,18 @@ public class PilotStation : MonoBehaviour, IInteractable
     }
 
     // =========================================================================
-    // PILOTAGGIO MANUALE — steering logico + camera terza persona (Blocco 2)
+    // PILOTAGGIO MANUALE — steering logico + throttle + camera terza persona
     // =========================================================================
 
     /// <summary>
     /// Eseguito ogni frame mentre seduti (non in transizione). Rileva i
     /// cambi di NavigationState per scambiare la camera cockpit/terza
-    /// persona, e mentre MANUAL è attivo inoltra la X del Look stick/mouse
-    /// a ShipMovement come yaw LOGICO di sterzata (non muove "Nave" — vedi
-    /// nota architetturale in testa al file).
+    /// persona, e mentre MANUAL è attivo inoltra:
+    ///   - Look (Vector2) → ShipMovement.SetManualLookInput (yaw + pitch logici)
+    ///   - Throttle (float) → PropulsionSystem.SetManualThrottleInput
+    ///
+    /// Nulla di tutto questo muove "Nave" fisicamente — vedi nota
+    /// architetturale in testa al file.
     /// </summary>
     private void PollManualFlightState()
     {
@@ -434,12 +446,32 @@ public class PilotStation : MonoBehaviour, IInteractable
 
         if (navState == NavigationState.Manual)
         {
-            float steerX = lookAction != null ? lookAction.ReadValue<Vector2>().x : 0f;
-            ShipMovement.Instance?.SetManualSteerInput(steerX);
+            // Look — yaw (X) e pitch (Y), convenzione FPS gestita in ShipMovement.
+            // Sensibilità mouse applicata a monte: il New Input System restituisce
+            // il delta mouse in unità che spesso saturano il clamp [-1, +1] di
+            // ShipMovement, mentre lo stick gamepad è già naturalmente in [-1, +1].
+            // Scaliamo solo se l'ultimo device che ha triggerato l'action è una
+            // tastiera/mouse; altrimenti passiamo il vettore invariato.
+            Vector2 lookDelta = lookAction != null
+                ? lookAction.ReadValue<Vector2>()
+                : Vector2.zero;
+
+            if (IsLookFromMouse())
+                lookDelta *= mouseSensitivity;
+
+            ShipMovement.Instance?.SetManualLookInput(lookDelta);
+
+            // Throttle — asse continuo W/S. Se non assegnato in Inspector,
+            // resta 0 (nave mantiene velocità corrente) — degradazione elegante.
+            float throttle = throttleAction != null && throttleAction.action != null
+                ? throttleAction.action.ReadValue<float>()
+                : 0f;
+            ps?.SetManualThrottleInput(throttle);
         }
         else
         {
-            ShipMovement.Instance?.SetManualSteerInput(0f);
+            ShipMovement.Instance?.SetManualLookInput(Vector2.zero);
+            ps?.SetManualThrottleInput(0f);
         }
     }
 
@@ -459,6 +491,12 @@ public class PilotStation : MonoBehaviour, IInteractable
         playerCamera.transform.localPosition = Vector3.zero;
         playerCamera.transform.localRotation = Quaternion.identity;
         isChaseCamActive = true;
+
+        // Rev T — swap HUD cockpit → HUD di volo. Il PilotHUD della plancia
+        // è dietro alla vista terza persona (non guardato dal Pilota), il
+        // FlightHUD Screen Space Overlay è sempre visibile davanti.
+        if (pilotHUD != null) pilotHUD.Close();
+        if (flightHUD != null) flightHUD.Open();
     }
 
     /// <summary>
@@ -472,17 +510,6 @@ public class PilotStation : MonoBehaviour, IInteractable
     ///
     /// Idempotente: sicuro da chiamare anche se la chase cam non era
     /// attiva (esce subito senza toccare nulla).
-    ///
-    /// BUG FIX (post-playtest end-to-end Blocco 2): prima
-    /// ExitThirdPersonChaseCam non ripristinava mai la localRotation. Il
-    /// commento diceva "sarà ripristinata da LookAtCockpitRoutine/
-    /// TransitionFromStation", ma questa promessa vale solo per il caso
-    /// "uscita dalla postazione" — nel caso "torno a COASTING mentre resto
-    /// seduto" (dopo aver ripremuto Q per uscire da MANUAL), nessuna delle
-    /// due routine veniva chiamata. Risultato: la camera restava nella
-    /// rotazione di terza persona (verso il sedile visto dall'esterno)
-    /// invece di puntare al monitor. Questo parametro rende esplicito
-    /// quale dei due casi stiamo servendo.
     /// </summary>
     private void ExitThirdPersonChaseCam(bool restoreLookAtCockpit = true)
     {
@@ -491,6 +518,12 @@ public class PilotStation : MonoBehaviour, IInteractable
         playerCamera.transform.SetParent(originalCameraParent, worldPositionStays: false);
         playerCamera.transform.localPosition = originalCameraLocalPosition;
         isChaseCamActive = false;
+
+        // Rev T — swap HUD di volo → HUD cockpit. FlightHUD scompare (siamo
+        // di nuovo in vista cockpit), PilotHUD torna a mostrare la piena
+        // strumentazione sul monitor.
+        if (flightHUD != null) flightHUD.Close();
+        if (pilotHUD != null) pilotHUD.Open();
 
         // Se richiesto (caso "resto seduto"), riorienta al monitor come
         // faceva TransitionToStation dopo lo snap: stesso LookAtCockpitRoutine
@@ -516,6 +549,12 @@ public class PilotStation : MonoBehaviour, IInteractable
 
         if (ftlJumpAction?.action != null)
             ftlJumpAction.action.performed += OnFTLJump;
+
+        // Throttle action: enable esplicito (le action Value non si abilitano
+        // automaticamente solo dal reading — dipende dal PlayerInput setup).
+        // Rev T: se non assegnato o già enabled, no-op.
+        if (throttleAction?.action != null && !throttleAction.action.enabled)
+            throttleAction.action.Enable();
     }
 
     private void UnbindPilotActions()
@@ -531,6 +570,11 @@ public class PilotStation : MonoBehaviour, IInteractable
 
         if (ftlJumpAction?.action != null)
             ftlJumpAction.action.performed -= OnFTLJump;
+
+        // Throttle action: non la disabilitiamo (potrebbe essere condivisa con
+        // la Player map — non è nostra da spegnere in modo aggressivo). Il
+        // polling in PollManualFlightState smetterà comunque di leggerla
+        // quando isUsingStation == false.
     }
 
     // =========================================================================
@@ -596,5 +640,22 @@ public class PilotStation : MonoBehaviour, IInteractable
     private void OnFTLJump(InputAction.CallbackContext _)
     {
         FTLDrive.Instance?.TryInitiateJump();
+    }
+
+    /// <summary>
+    /// Rev T — determina se l'action Look è stata triggerata l'ultima volta
+    /// da un mouse. Usato per applicare mouseSensitivity solo in quel caso.
+    /// Il gamepad non ha bisogno di scaling (stick già in [-1, +1]).
+    ///
+    /// Nota: activeControl può essere null se nessun device ha appena
+    /// scritto sull'action — trattiamo quel caso come "non mouse", scelta
+    /// sicura (peggio non scaliamo il mouse per un frame che scaliamo lo
+    /// stick per errore).
+    /// </summary>
+    private bool IsLookFromMouse()
+    {
+        if (lookAction == null) return false;
+        var device = lookAction.activeControl?.device;
+        return device is UnityEngine.InputSystem.Mouse;
     }
 }

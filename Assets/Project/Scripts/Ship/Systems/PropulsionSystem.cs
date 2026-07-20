@@ -18,7 +18,7 @@ namespace SpaceSurvivor.Ship
     // ─── PropulsionSystem ─────────────────────────────────────────────────────
 
     /// <summary>
-    /// PropulsionSystem — Milestone 2
+    /// PropulsionSystem — Milestone 2, esteso Rev T per modello di volo 3D.
     /// NetworkBehaviour + IPowerConsumer + IRepairable.
     ///
     /// RESPONSABILITÀ:
@@ -29,9 +29,26 @@ namespace SpaceSurvivor.Ship
     ///   - Riceve SetAutopilotAvailable() da ZoneManager (AsteroidField)
     ///   - Riceve SetFTLOverride() da FTLDrive durante la carica
     ///
-    /// MOVIMENTO (M3):
-    ///   ShipMovement.cs leggerà GetCurrentSpeed() e GetNavigationState().
-    ///   In M2 il sistema è puramente logico — nessun Rigidbody.
+    /// MODELLO DI VOLO (Rev T — modello arcade throttle target):
+    ///   - CurrentSpeed è ora dinamico (NetworkVariable), non più sempre al max.
+    ///   - TargetSpeed è la velocità verso cui CurrentSpeed accelera con rate
+    ///     _data.accelerationRate (scalato dal degrado).
+    ///   - In MANUAL, il Pilota preme W/S → SetManualThrottleInput(±1) →
+    ///     TargetSpeed si sposta con lo stesso rate (sensazione "leva")
+    ///     verso [0, MaxSpeedAtDegradation]. Rilasciando la leva, target
+    ///     si congela — il Pilota mantiene la velocità impostata.
+    ///   - In AUTOPILOT, TargetSpeed = MaxSpeedAtDegradation (aggiornato
+    ///     automaticamente al variare del degrado).
+    ///   - In COASTING, TargetSpeed = CurrentSpeed al momento della
+    ///     transizione (freeze inerzia — spazio vuoto, nessun attrito).
+    ///   - In ANCHORED, TargetSpeed = CurrentSpeed = 0 (snap immediato).
+    ///
+    /// LETTORI DEL MOVIMENTO:
+    ///   ShipMovement legge CurrentSpeed e CurrentNavState per accumulare
+    ///   LogicalPosition e per esporre LogicalForward. Il mondo esterno
+    ///   (ExternalWorldFollower) usa LogicalForward × CurrentSpeed come
+    ///   velocità inversa. In M2 il sistema è puramente logico — nessun
+    ///   Rigidbody, "Nave" non si muove mai fisicamente.
     ///
     /// REPAIR PANEL:
     ///   Assegna questa istanza come repairableTarget al RepairPanel
@@ -56,7 +73,7 @@ namespace SpaceSurvivor.Ship
         // ── Stato iniziale ────────────────────────────────────────────────────
         [Header("Stato Iniziale")]
         [SerializeField] private NavigationState startingState = NavigationState.Anchored;
-        [SerializeField] private bool            startPowered  = true;
+        [SerializeField] private bool startPowered = true;
 
         // ── Network Variables ─────────────────────────────────────────────────
         private readonly NetworkVariable<float> _netHealth =
@@ -70,23 +87,48 @@ namespace SpaceSurvivor.Ship
         private readonly NetworkVariable<bool> _netAutopilotAvailable =
             new(true, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Server);
 
+        // Rev T — velocità dinamiche
+        private readonly NetworkVariable<float> _netCurrentSpeed =
+            new(0f, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Server);
+
+        private readonly NetworkVariable<float> _netTargetSpeed =
+            new(0f, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Server);
+
         // ── Runtime (server) ──────────────────────────────────────────────────
         private PropulsionUpgradeData _data;
-        private PowerManager          _powerManager;
-        private bool                  _isPowered;
-        private bool                  _ftlOverride;        // FTLDrive sopprime i motori
-        private float                 _fuelAccumulator;    // fuel frazionario accumulato
-        private float                 _fuelTickTimer;
-        private const float           FuelTickInterval = 1f;
+        private PowerManager _powerManager;
+        private bool _isPowered;
+        private bool _ftlOverride;        // FTLDrive sopprime i motori
+        private float _fuelAccumulator;    // fuel frazionario accumulato
+        private float _fuelTickTimer;
+        private float _manualThrottleInput; // Rev T — [-1, +1], W/S dal Pilota
+        private const float FuelTickInterval = 1f;
 
         // ── Proprietà pubbliche ───────────────────────────────────────────────
         public NavigationState CurrentNavState => (NavigationState)_netNavState.Value;
-        public bool   AutopilotAvailable       => _netAutopilotAvailable.Value;
-        public float  CurrentHealth            => _netHealth.Value;
-        public float  CurrentHealthPercent     => _data != null && _data.maxHealth > 0f
+        public bool AutopilotAvailable => _netAutopilotAvailable.Value;
+        public float CurrentHealth => _netHealth.Value;
+        public float CurrentHealthPercent => _data != null && _data.maxHealth > 0f
                                                   ? _netHealth.Value / _data.maxHealth : 1f;
-        public float  CurrentSpeed             => _data != null
+
+        /// <summary>Velocità corrente reale (m/s) — accelera verso TargetSpeed.</summary>
+        public float CurrentSpeed => _netCurrentSpeed.Value;
+
+        /// <summary>Velocità target verso cui CurrentSpeed si smussa. In MANUAL
+        /// è controllata dal throttle del Pilota, in AUTOPILOT è MaxSpeedAtDegradation.</summary>
+        public float TargetSpeed => _netTargetSpeed.Value;
+
+        /// <summary>Cap massimo del TargetSpeed dato il degrado attuale.</summary>
+        public float MaxSpeedAtDegradation => _data != null
                                                   ? _data.maxSpeed * GetDegradationMults().speed : 0f;
+
+        /// <summary>Accelerazione angolare yaw (deg/sec²) scalata dal degrado. Per ShipMovement.</summary>
+        public float YawAcceleration => _data != null
+                                        ? _data.yawAcceleration * GetDegradationMults().speed : 0f;
+
+        /// <summary>Accelerazione angolare pitch (deg/sec²) scalata dal degrado. Per ShipMovement.</summary>
+        public float PitchAcceleration => _data != null
+                                          ? _data.pitchAcceleration * GetDegradationMults().speed : 0f;
 
         // ── Lifecycle NGO ─────────────────────────────────────────────────────
         public override void OnNetworkSpawn()
@@ -99,11 +141,13 @@ namespace SpaceSurvivor.Ship
             if (_data != null)
                 _netHealth.Value = _data.maxHealth;
 
-            _netNavState.Value          = (int)startingState;
+            _netNavState.Value = (int)startingState;
             _netAutopilotAvailable.Value = true;
+            _netCurrentSpeed.Value = 0f;
+            _netTargetSpeed.Value = 0f;
 
-            _netHealth.OnValueChanged    += OnHealthChanged;
-            _netNavState.OnValueChanged  += OnNavStateChanged;
+            _netHealth.OnValueChanged += OnHealthChanged;
+            _netNavState.OnValueChanged += OnNavStateChanged;
 
             if (PowerManager.Instance != null)
                 InitWithPowerManager();
@@ -117,7 +161,7 @@ namespace SpaceSurvivor.Ship
         {
             PowerManager.OnInstanceReady -= InitWithPowerManager;
 
-            _netHealth.OnValueChanged   -= OnHealthChanged;
+            _netHealth.OnValueChanged -= OnHealthChanged;
             _netNavState.OnValueChanged -= OnNavStateChanged;
 
             if (IsServer && _isPowered && _powerManager != null)
@@ -136,16 +180,95 @@ namespace SpaceSurvivor.Ship
             _isPowered = startPowered;
         }
 
-        // ── Update (server — fuel tick) ───────────────────────────────────────
+        // ── Update (server — fuel tick + throttle/speed) ──────────────────────
         private void Update()
         {
             if (!IsServer) return;
+
+            UpdateThrottleAndSpeed();
 
             _fuelTickTimer += Time.deltaTime;
             if (_fuelTickTimer < FuelTickInterval) return;
             _fuelTickTimer = 0f;
 
             ConsumeFuelTick();
+        }
+
+        /// <summary>
+        /// Rev T — server-only. Aggiorna TargetSpeed dallo stato + input Pilota,
+        /// poi fa accelerare CurrentSpeed verso TargetSpeed con accelerationRate
+        /// del data (scalato dal degrado).
+        ///
+        /// Comportamento per stato:
+        ///   ANCHORED  → target/current forzati a 0 (già gestito in OnNavStateChanged,
+        ///               ma tenuto qui come safety in caso di modifiche esterne)
+        ///   COASTING  → target congelato, current inseguirà (di solito già uguale)
+        ///   AUTOPILOT → target = MaxSpeedAtDegradation (si aggiorna col degrado)
+        ///   MANUAL    → target += throttle × accelerationRate × dt (clamp)
+        /// </summary>
+        private void UpdateThrottleAndSpeed()
+        {
+            if (_data == null) return;
+
+            // FTL override sopprime tutto — motori spenti
+            if (_ftlOverride)
+            {
+                if (_netTargetSpeed.Value != 0f) _netTargetSpeed.Value = 0f;
+                if (_netCurrentSpeed.Value != 0f) _netCurrentSpeed.Value = 0f;
+                return;
+            }
+
+            float accel = _data.accelerationRate * GetDegradationMults().speed;
+            float dt = Time.deltaTime;
+            var navState = CurrentNavState;
+            float maxCap = MaxSpeedAtDegradation;
+
+            // 1. Aggiorna TargetSpeed in base allo stato
+            switch (navState)
+            {
+                case NavigationState.Anchored:
+                    _netTargetSpeed.Value = 0f;
+                    break;
+
+                case NavigationState.Autopilot:
+                    // Segue automaticamente il cap del degrado
+                    _netTargetSpeed.Value = maxCap;
+                    break;
+
+                case NavigationState.Manual:
+                    // Throttle sposta il target con lo stesso rate dell'accelerazione
+                    if (!Mathf.Approximately(_manualThrottleInput, 0f))
+                    {
+                        float newTarget = _netTargetSpeed.Value
+                                        + _manualThrottleInput * accel * dt;
+                        _netTargetSpeed.Value = Mathf.Clamp(newTarget, 0f, maxCap);
+                    }
+                    else
+                    {
+                        // Rilasciato — clampa comunque per gestire cambio degrado runtime
+                        _netTargetSpeed.Value = Mathf.Clamp(_netTargetSpeed.Value, 0f, maxCap);
+                    }
+                    break;
+
+                case NavigationState.Coasting:
+                    // Target invariato — inerzia nello spazio vuoto
+                    break;
+            }
+
+            // 2. Smoothing CurrentSpeed → TargetSpeed
+            float current = _netCurrentSpeed.Value;
+            float target = _netTargetSpeed.Value;
+
+            if (!Mathf.Approximately(current, target))
+            {
+                float diff = target - current;
+                float step = accel * dt;
+
+                if (Mathf.Abs(diff) <= step)
+                    _netCurrentSpeed.Value = target;
+                else
+                    _netCurrentSpeed.Value = current + Mathf.Sign(diff) * step;
+            }
         }
 
         // ── IPowerConsumer ────────────────────────────────────────────────────
@@ -156,15 +279,15 @@ namespace SpaceSurvivor.Ship
             return CurrentNavState switch
             {
                 NavigationState.Autopilot => _data.wattsAutopilot * GetDegradationMults().watts,
-                NavigationState.Manual    => _data.wattsManual    * GetDegradationMults().watts,
-                _                         => 0f
+                NavigationState.Manual => _data.wattsManual * GetDegradationMults().watts,
+                _ => 0f
             };
         }
 
-        public int    GetPriority()       => _data?.powerPriority ?? 6;
-        public bool   IsActive()          => _isPowered;
-        public bool   CanBeDisabled()     => true;
-        public string GetSystemName()     => _data?.displayName ?? "Propulsion System";
+        public int GetPriority() => _data?.powerPriority ?? 6;
+        public bool IsActive() => _isPowered;
+        public bool CanBeDisabled() => true;
+        public string GetSystemName() => _data?.displayName ?? "Propulsion System";
 
         public void SetPowerState(bool isOn)
         {
@@ -184,10 +307,10 @@ namespace SpaceSurvivor.Ship
         }
 
         // ── IRepairable ───────────────────────────────────────────────────────
-        string          IRepairable.GetSystemName()    => GetSystemName();
-        ShipSystemState IRepairable.GetCurrentState()  => HealthToState(CurrentHealthPercent);
-        float           IRepairable.GetHealthPercent() => CurrentHealthPercent;
-        bool            IRepairable.IsRepairable()     => CurrentHealthPercent < 0.75f;
+        string IRepairable.GetSystemName() => GetSystemName();
+        ShipSystemState IRepairable.GetCurrentState() => HealthToState(CurrentHealthPercent);
+        float IRepairable.GetHealthPercent() => CurrentHealthPercent;
+        bool IRepairable.IsRepairable() => CurrentHealthPercent < 0.75f;
 
         RepairThreshold[] IRepairable.GetRepairThresholds()
             => _data?.repairThresholds ?? Array.Empty<RepairThreshold>();
@@ -213,7 +336,7 @@ namespace SpaceSurvivor.Ship
         public void RequestNavigationState(NavigationState newState)
         {
             if (IsServer) RequestNavStateInternal(newState);
-            else          RequestNavStateRpc(newState);
+            else RequestNavStateRpc(newState);
         }
 
         [Rpc(SendTo.Server)]
@@ -253,7 +376,7 @@ namespace SpaceSurvivor.Ship
         public void SetAutopilotAvailable(bool available)
         {
             if (IsServer) SetAutopilotAvailableInternal(available);
-            else          SetAutopilotAvailableRpc(available);
+            else SetAutopilotAvailableRpc(available);
         }
 
         [Rpc(SendTo.Server)]
@@ -273,7 +396,7 @@ namespace SpaceSurvivor.Ship
 
         /// <summary>
         /// Chiamato da FTLDrive durante la carica.
-        /// Sopprime i motori (0W, 0 fuel) e forza ANCHORED.
+        /// Sopprime i motori (0W, 0 fuel, target/current = 0) e forza ANCHORED.
         /// NON è un comando di protezione — è un vincolo fisico del salto FTL.
         /// </summary>
         public void SetFTLOverride(bool ftlActive)
@@ -284,7 +407,10 @@ namespace SpaceSurvivor.Ship
             if (ftlActive)
             {
                 SetNavStateInternal(NavigationState.Anchored);
+                _netTargetSpeed.Value = 0f;
+                _netCurrentSpeed.Value = 0f;
                 _fuelAccumulator = 0f;
+                _manualThrottleInput = 0f;
                 Debug.Log("[PropulsionSystem] FTL override ON — motori spenti");
             }
             else
@@ -297,7 +423,7 @@ namespace SpaceSurvivor.Ship
         public void ApplyDamage(float amount)
         {
             if (IsServer) ApplyDamageInternal(amount);
-            else          ApplyDamageRpc(amount);
+            else ApplyDamageRpc(amount);
         }
 
         [Rpc(SendTo.Server)]
@@ -308,6 +434,28 @@ namespace SpaceSurvivor.Ship
             if (_data == null) return;
             _netHealth.Value = Mathf.Clamp(_netHealth.Value - amount, 0f, _data.maxHealth);
         }
+
+        /// <summary>
+        /// Rev T — chiamato da PilotStation, una volta per frame, mentre il Pilota
+        /// è seduto e NavigationState == Manual. throttle atteso in [-1, +1]:
+        /// +1 = W tenuto (accelera in avanti), -1 = S tenuto (decelera),
+        /// 0 = nessun input (target congelato).
+        ///
+        /// Il target viene spostato con lo stesso rate dell'accelerazione del data —
+        /// scelta di design: sensazione uniforme "leva che risponde con la stessa
+        /// inerzia della nave", nessuna dissociazione tra "quanto veloce muovo
+        /// la leva" e "quanto veloce risponde la nave".
+        /// </summary>
+        public void SetManualThrottleInput(float throttle)
+        {
+            float clamped = Mathf.Clamp(throttle, -1f, 1f);
+
+            if (IsServer) _manualThrottleInput = clamped;
+            else SetManualThrottleInputRpc(clamped);
+        }
+
+        [Rpc(SendTo.Server)]
+        private void SetManualThrottleInputRpc(float throttle) => _manualThrottleInput = throttle;
 
         // ── Fuel Consumption ──────────────────────────────────────────────────
         private void ConsumeFuelTick()
@@ -321,7 +469,7 @@ namespace SpaceSurvivor.Ship
                 ? _data.fuelPerMinAutopilot
                 : _data.fuelPerMinManual;
 
-            fuelPerMin       *= GetDegradationMults().fuel;
+            fuelPerMin *= GetDegradationMults().fuel;
             _fuelAccumulator += (fuelPerMin / 60f) * FuelTickInterval;
 
             int toConsume = Mathf.FloorToInt(_fuelAccumulator);
@@ -371,7 +519,7 @@ namespace SpaceSurvivor.Ship
             {
                 speed = SafeGet(_data.speedMultipliers, idx),
                 watts = SafeGet(_data.wattsMultipliers, idx),
-                fuel  = SafeGet(_data.fuelMultipliers,  idx)
+                fuel = SafeGet(_data.fuelMultipliers, idx)
             };
         }
 
@@ -392,18 +540,52 @@ namespace SpaceSurvivor.Ship
 
         private void OnNavStateChanged(int prev, int curr)
         {
-            // Reset fuel accumulator quando si cambia stato
-            if (IsServer) _fuelAccumulator = 0f;
+            var newState = (NavigationState)curr;
 
-            Debug.Log($"[PropulsionSystem] NavState → {(NavigationState)curr}" +
-                      $" | Demand: {GetPowerDemand():F1}W");
+            // Setup target/current in base al nuovo stato (server-only)
+            if (IsServer)
+            {
+                _fuelAccumulator = 0f;
+
+                switch (newState)
+                {
+                    case NavigationState.Anchored:
+                        // Snap immediato a 0
+                        _netTargetSpeed.Value = 0f;
+                        _netCurrentSpeed.Value = 0f;
+                        _manualThrottleInput = 0f;
+                        break;
+
+                    case NavigationState.Coasting:
+                        // Freeze inerzia: target = current attuale
+                        _netTargetSpeed.Value = _netCurrentSpeed.Value;
+                        _manualThrottleInput = 0f;
+                        break;
+
+                    case NavigationState.Autopilot:
+                        // Target = max cap (poi UpdateThrottleAndSpeed lo mantiene aggiornato)
+                        _netTargetSpeed.Value = MaxSpeedAtDegradation;
+                        _manualThrottleInput = 0f;
+                        break;
+
+                    case NavigationState.Manual:
+                        // Continua da dov'era — il Pilota controllerà con throttle
+                        // (target invariato, _manualThrottleInput azzerato per pulizia,
+                        // sarà il PilotStation a impostarlo ogni frame)
+                        _manualThrottleInput = 0f;
+                        break;
+                }
+            }
+
+            Debug.Log($"[PropulsionSystem] NavState → {newState}" +
+                      $" | Target: {_netTargetSpeed.Value:F1} m/s · Demand: {GetPowerDemand():F1}W");
         }
 
         // ── Upgrade ───────────────────────────────────────────────────────────
         public void ApplyUpgrade(int tierIndex)
         {
             if (IsServer) ApplyUpgradeInternal(tierIndex);
-            else          ApplyUpgradeRpc(tierIndex);
+            else ApplyUpgradeRpc(tierIndex);
         }
 
         [Rpc(SendTo.Server)]
@@ -416,9 +598,9 @@ namespace SpaceSurvivor.Ship
             if (newData == null || newData.tier <= (_data?.tier ?? 0)) return;
 
             float prevMaxHP = _data?.maxHealth ?? 100f;
-            float hpRatio   = _netHealth.Value / prevMaxHP;
+            float hpRatio = _netHealth.Value / prevMaxHP;
 
-            _data            = newData;
+            _data = newData;
             _netHealth.Value = _data.maxHealth * hpRatio;
 
             Debug.Log($"[PropulsionSystem] Upgraded to {_data.displayName}");
@@ -429,14 +611,15 @@ namespace SpaceSurvivor.Ship
         private void OnGUI()
         {
             var mults = GetDegradationMults();
-            GUILayout.BeginArea(new Rect(Screen.width - 240, 10, 230, 290));
+            GUILayout.BeginArea(new Rect(Screen.width - 260, 10, 250, 340));
             GUILayout.BeginVertical("box");
             GUILayout.Label($"[Propulsion] {(IsServer ? "SRV" : "CLT")}");
             GUILayout.Label($"State:  {CurrentNavState}");
             GUILayout.Label($"HP:     {CurrentHealth:F0}/{(_data?.maxHealth ?? 0):F0} ({CurrentHealthPercent * 100:F0}%)");
             GUILayout.Label($"Status: {HealthToState(CurrentHealthPercent)}");
             GUILayout.Label($"Demand: {GetPowerDemand():F1}W");
-            GUILayout.Label($"Speed:  {CurrentSpeed:F0} m/s ×{mults.speed:F2}");
+            GUILayout.Label($"Speed:  {CurrentSpeed:F1} / {TargetSpeed:F1} (max {MaxSpeedAtDegradation:F0}) m/s");
+            GUILayout.Label($"Accel:  {(_data?.accelerationRate ?? 0):F1} × {mults.speed:F2} m/s²");
             GUILayout.Label($"Autopilot: {(_netAutopilotAvailable.Value ? "OK" : "DISABLED")}");
             GUILayout.Label($"FTL Override: {_ftlOverride}");
 
@@ -444,16 +627,21 @@ namespace SpaceSurvivor.Ship
             {
                 GUILayout.Space(4);
                 GUILayout.BeginHorizontal();
-                if (GUILayout.Button("Anchored"))  RequestNavStateInternal(NavigationState.Anchored);
+                if (GUILayout.Button("Anchored")) RequestNavStateInternal(NavigationState.Anchored);
                 if (GUILayout.Button("Autopilot")) RequestNavStateInternal(NavigationState.Autopilot);
                 GUILayout.EndHorizontal();
                 GUILayout.BeginHorizontal();
-                if (GUILayout.Button("Manual"))    RequestNavStateInternal(NavigationState.Manual);
-                if (GUILayout.Button("Coasting"))  RequestNavStateInternal(NavigationState.Coasting);
+                if (GUILayout.Button("Manual")) RequestNavStateInternal(NavigationState.Manual);
+                if (GUILayout.Button("Coasting")) RequestNavStateInternal(NavigationState.Coasting);
                 GUILayout.EndHorizontal();
                 GUILayout.BeginHorizontal();
-                if (GUILayout.Button("-20 HP"))   ApplyDamageInternal(20f);
-                if (GUILayout.Button("-50 HP"))   ApplyDamageInternal(50f);
+                if (GUILayout.Button("Throttle+")) _manualThrottleInput = +1f;
+                if (GUILayout.Button("Throttle-")) _manualThrottleInput = -1f;
+                if (GUILayout.Button("Throttle 0")) _manualThrottleInput = 0f;
+                GUILayout.EndHorizontal();
+                GUILayout.BeginHorizontal();
+                if (GUILayout.Button("-20 HP")) ApplyDamageInternal(20f);
+                if (GUILayout.Button("-50 HP")) ApplyDamageInternal(50f);
                 GUILayout.EndHorizontal();
                 if (GUILayout.Button("Repair 100%")) ((IRepairable)this).ApplyRepair(100f);
             }

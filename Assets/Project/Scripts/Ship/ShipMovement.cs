@@ -5,43 +5,42 @@ using UnityEngine;
 namespace SpaceSurvivor.Ship
 {
     /// <summary>
-    /// ShipMovement — Milestone 3, Blocco 2 (RISCRITTO dopo ampia
-    /// sperimentazione — vedi SESSION_HANDOFF per la cronologia completa di
-    /// tentativi falliti: nave che trasla/ruota davvero nel mondo, con
-    /// player agganciati ad essa via parenting/delta-tracking, si è
-    /// rivelata un terreno di bug profondi — CharacterController che non
-    /// segue piattaforme in movimento è un limite DOCUMENTATO di Unity
-    /// stesso, non risolvibile con workaround lato player).
+    /// ShipMovement — Milestone 3, Blocco 2 + Blocco 3 fase 2 (Rev T).
     ///
-    /// DECISIONE ARCHITETTURALE FINALE: "Nave" non si muove MAI
-    /// fisicamente. Resta esattamente dov'è piazzata in Editor, per
-    /// sempre. Questo script traccia SOLO lo stato LOGICO del movimento:
-    ///   - Eredita NavigationState/CurrentSpeed da PropulsionSystem
-    ///     (nessuna duplicazione di stato, solo lettura)
-    ///   - Accumula un orientamento LOGICO (yaw) per il volo MANUAL,
-    ///     sincronizzato in rete via NetworkVariable
-    ///   - Espone questi dati per: HUD, calcoli di distanza/ETA, e in
-    ///     futuro (Blocco 3+) per muovere in senso INVERSO il mondo
-    ///     esterno (asteroidi, relitti, stazioni) attorno alla nave ferma —
-    ///     pattern comune nei giochi spaziali, ha anche il vantaggio di
-    ///     evitare problemi di precisione a coordinate molto grandi (la
-    ///     nave/il player restano sempre vicino all'origine del mondo).
+    /// DECISIONE ARCHITETTURALE (invariata da Rev Q): "Nave" NON si muove mai
+    /// fisicamente nel mondo. Resta esattamente dov'è piazzata in Editor, per
+    /// sempre. Questo script traccia SOLO lo stato LOGICO del movimento —
+    /// nessuna Transform di "Nave" viene mai spostata o ruotata da qui.
     ///
-    /// USO PREVISTO PER IL MONDO ESTERNO (Blocco 3+):
-    ///   Un futuro "ExternalWorldFollower" (o nome simile), posto sul
-    ///   GameObject radice che conterrà asteroidi/relitti/stazioni visivi,
-    ///   leggerà LogicalForward × CurrentSpeed (velocità) e
-    ///   LogicalYawDegrees (rotazione) per traslare/ruotare quel gruppo in
-    ///   senso INVERSO rispetto a questi valori — dando l'illusione che la
-    ///   nave (ferma) si muova rispetto al mondo (che in realtà si muove
-    ///   lui). Nessun codice di quel sistema esiste ancora: questo script
-    ///   si limita a esporre i dati necessari in modo pulito.
+    /// ESTENSIONE Rev T (verso Blocco 3 fase 2):
+    ///   - Orientamento logico esteso da SCALARE (yaw) a QUATERNION completo
+    ///     (yaw + pitch, no roll). Serve per pilotaggio 3D e per ruotare
+    ///     correttamente il mondo esterno inverso su più assi.
+    ///   - Aggiunta LogicalPosition (Vector3 NetworkVariable) accumulata
+    ///     server-side per il futuro sistema POI (Fase 2).
     ///
-    /// NESSUN Rigidbody, NESSUN NetworkTransform: a differenza dei
-    /// tentativi precedenti, questo script non sposta alcuna Transform —
-    /// è puro stato (NetworkVariable), niente altro.
+    /// AGGIORNAMENTO Rev T post-playtest — sensazione "nave pesante":
+    ///   - INERZIA ROTAZIONALE: yaw e pitch hanno ora un rate corrente
+    ///     (deg/sec) che insegue il target (input × maxRate) con
+    ///     accelerazione angolare finita (data.yawAcceleration /
+    ///     data.pitchAcceleration). La nave "prende" e "perde" la rotazione
+    ///     invece di rispondere istantaneamente al mouse. Rende visibile la
+    ///     pesantezza della nave e permette manovre più teatrali.
+    ///   - NO STEERING A VELOCITÀ ZERO: sotto minSpeedToSteer (default 3 m/s)
+    ///     l'orientamento è bloccato. Semanticamente: senza velocità
+    ///     lineare la nave non ha come ruotare (niente RCS thrusters per ora).
+    ///     Meccanicamente: forza il Pilota ad "avviare" prima di sterzare.
     ///
-    /// DIPENDE DA: PropulsionSystem ✅ (CurrentNavState, CurrentSpeed)
+    /// DESIGN — controllo pilotaggio:
+    ///   - Assi rotazione: yaw + pitch, no roll
+    ///   - Convenzione mouse: FPS standard (mouse su = muso su)
+    ///   - Pitch clamp: ±80°
+    ///   - Roll sempre zero — garantito dalla ricomposizione via
+    ///     Quaternion.Euler(pitch, yaw, 0)
+    ///
+    /// DIPENDE DA: PropulsionSystem (CurrentNavState, CurrentSpeed,
+    ///             MaxSpeedAtDegradation, data.yawAcceleration/pitchAcceleration)
+    /// USATO DA: ExternalWorldFollower, PilotStation, futuro sistema POI
     /// </summary>
     public class ShipMovement : NetworkBehaviour
     {
@@ -51,31 +50,48 @@ namespace SpaceSurvivor.Ship
 
         // ── Steering manuale (logico) ────────────────────────────────────────
         [Header("Steering Manuale (logico — non muove 'Nave')")]
-        [Tooltip("Gradi/secondo di yaw logico a input di sterzata massimo (±1). " +
-                 "Usato in futuro per ruotare il mondo esterno in senso inverso " +
-                 "(Blocco 3+) — non ha alcun effetto visibile finché quel " +
-                 "sistema non esiste.")]
-        [SerializeField] private float manualYawSpeedDegPerSec = 25f;
+        [Tooltip("Rate MASSIMO di yaw in gradi/secondo, a input X massimo (±1). " +
+                 "Il rate corrente insegue questo target con inerzia " +
+                 "(data.yawAcceleration). Default 90 = giro completo in ~4s a " +
+                 "input pieno, dopo aver 'preso' la rotazione.")]
+        [SerializeField] private float manualYawSpeedDegPerSec = 90f;
+
+        [Tooltip("Rate MASSIMO di pitch in gradi/secondo, a input Y massimo (±1). " +
+                 "Convenzione FPS: mouse su = muso su (pitch euler negativo).")]
+        [SerializeField] private float manualPitchSpeedDegPerSec = 60f;
+
+        [Tooltip("Clamp assoluto del pitch in gradi (±). Default 80°.")]
+        [SerializeField] private float pitchClampDegrees = 80f;
+
+        [Tooltip("Velocità lineare minima (m/s) sotto la quale la rotazione è " +
+                 "BLOCCATA. Semantica: senza velocità la nave non ha come " +
+                 "ruotare (niente RCS). Meccanicamente: il Pilota deve avviare " +
+                 "prima di sterzare. Default 3 m/s. Se metti 0, la rotazione è " +
+                 "sempre concessa (comportamento pre-Rev T post-playtest).")]
+        [SerializeField] private float minSpeedToSteer = 3f;
 
         // ── Stato di rete ─────────────────────────────────────────────────────
-        private readonly NetworkVariable<float> _logicalYawDegrees = new NetworkVariable<float>(
-            0f, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Server);
+        private readonly NetworkVariable<Quaternion> _logicalRotation = new NetworkVariable<Quaternion>(
+            Quaternion.identity,
+            NetworkVariableReadPermission.Everyone,
+            NetworkVariableWritePermission.Server);
 
-        // Stato server-only (non serve replicarlo: solo il server lo consuma in FixedUpdate)
-        private float _manualSteerInput; // [-1, 1]
+        private readonly NetworkVariable<Vector3> _logicalPosition = new NetworkVariable<Vector3>(
+            Vector3.zero,
+            NetworkVariableReadPermission.Everyone,
+            NetworkVariableWritePermission.Server);
 
-        /// <summary>Yaw logico cumulativo, gradi — repliacato a tutti i client.</summary>
-        public float LogicalYawDegrees => _logicalYawDegrees.Value;
+        // Stato server-only (non replicato — sono cinematica interna, ricostruita
+        // da input + rotation replicati). Vector2 = (X: yaw input, Y: pitch input).
+        private Vector2 _manualLookInput;
+        private float _currentYawRate;    // deg/sec — insegue input.x × maxYaw con inerzia
+        private float _currentPitchRate;  // deg/sec — insegue input.y × maxPitch con inerzia
 
-        /// <summary>
-        /// Direzione di marcia logica corrente, in coordinate mondo (yaw
-        /// applicato a Vector3.forward). NON la direzione verso cui punta
-        /// "Nave" (che non ruota mai) — è puramente concettuale, pronta per
-        /// il futuro sistema di mondo esterno inverso.
-        /// </summary>
-        public Vector3 LogicalForward => Quaternion.Euler(0f, _logicalYawDegrees.Value, 0f) * Vector3.forward;
+        // ── Proprietà pubbliche ───────────────────────────────────────────────
+        public Quaternion LogicalRotation => _logicalRotation.Value;
+        public Vector3 LogicalPosition => _logicalPosition.Value;
+        public Vector3 LogicalForward => _logicalRotation.Value * Vector3.forward;
 
-        /// <summary>Velocità logica attuale (m/s) — da PropulsionSystem, nessuna duplicazione.</summary>
         public float CurrentSpeed =>
             PropulsionSystem.Instance != null ? PropulsionSystem.Instance.CurrentSpeed : 0f;
 
@@ -104,11 +120,83 @@ namespace SpaceSurvivor.Ship
         private void FixedUpdate()
         {
             if (!IsServer) return;
-            if (CurrentNavState != NavigationState.Manual) return;
-            if (Mathf.Approximately(_manualSteerInput, 0f)) return;
 
-            float delta = _manualSteerInput * manualYawSpeedDegPerSec * Time.fixedDeltaTime;
-            _logicalYawDegrees.Value += delta;
+            UpdateOrientation();
+            UpdatePosition();
+        }
+
+        /// <summary>
+        /// Server-only. Se in MANUAL e velocità ≥ minSpeedToSteer, insegue i
+        /// rate target (input × maxRate) con accelerazione angolare data dal
+        /// PropulsionUpgradeData, poi applica i rate correnti al quaternion.
+        ///
+        /// Quando la nave rallenta sotto minSpeedToSteer, i rate correnti
+        /// vengono lasciati decadere a zero (con la stessa accelerazione) —
+        /// così quando la nave si ferma non c'è uno "stop rotazionale" duro
+        /// che sembra un bug.
+        ///
+        /// Roll garantito a zero dalla composizione via Quaternion.Euler.
+        /// </summary>
+        private void UpdateOrientation()
+        {
+            var propulsion = PropulsionSystem.Instance;
+            bool canSteer = CurrentNavState == NavigationState.Manual
+                         && CurrentSpeed >= minSpeedToSteer;
+
+            float dt = Time.fixedDeltaTime;
+
+            // Rate target: se posso sterzare, insegue l'input; altrimenti decadi a zero.
+            // Convenzione FPS per il pitch: mouse su → muso su → euler.x negativo → segno meno.
+            float targetYawRate = canSteer ? _manualLookInput.x * manualYawSpeedDegPerSec : 0f;
+            float targetPitchRate = canSteer ? -_manualLookInput.y * manualPitchSpeedDegPerSec : 0f;
+
+            // Accelerazione angolare dal data, scalata dal degrado (se disponibile).
+            float yawAccel, pitchAccel;
+            if (propulsion != null && propulsion.YawAcceleration > 0f)
+            {
+                yawAccel = propulsion.YawAcceleration;
+                pitchAccel = propulsion.PitchAcceleration;
+            }
+            else
+            {
+                // Fallback (non dovrebbe mai succedere se PropulsionSystem è spawnato).
+                yawAccel = 60f;
+                pitchAccel = 45f;
+            }
+
+            _currentYawRate = MoveToward(_currentYawRate, targetYawRate, yawAccel * dt);
+            _currentPitchRate = MoveToward(_currentPitchRate, targetPitchRate, pitchAccel * dt);
+
+            // Se nessuno dei due rate è significativo, non toccare la NetworkVariable
+            // (evita scritture inutili e micro-jitter numerico su tempi lunghi).
+            if (Mathf.Abs(_currentYawRate) < 0.01f && Mathf.Abs(_currentPitchRate) < 0.01f)
+                return;
+
+            // Estrai yaw/pitch dalla rotazione corrente, normalizzati in [-180, +180].
+            Vector3 euler = _logicalRotation.Value.eulerAngles;
+            float yaw = NormalizeAngle(euler.y);
+            float pitch = NormalizeAngle(euler.x);
+
+            // Integra i rate correnti nel dt.
+            yaw += _currentYawRate * dt;
+            pitch += _currentPitchRate * dt;
+
+            // Clamp pitch. Roll forzato a 0 dalla ricomposizione euler.
+            pitch = Mathf.Clamp(pitch, -pitchClampDegrees, +pitchClampDegrees);
+
+            _logicalRotation.Value = Quaternion.Euler(pitch, yaw, 0f);
+        }
+
+        /// <summary>
+        /// Server-only. Accumula LogicalPosition da LogicalForward × CurrentSpeed
+        /// in QUALUNQUE nav state con velocità > 0.
+        /// </summary>
+        private void UpdatePosition()
+        {
+            float speed = CurrentSpeed;
+            if (speed <= 0.01f) return;
+
+            _logicalPosition.Value += LogicalForward * speed * Time.fixedDeltaTime;
         }
 
         // =========================================================================
@@ -117,20 +205,46 @@ namespace SpaceSurvivor.Ship
 
         /// <summary>
         /// Chiamato da PilotStation, una volta per frame, mentre il Pilota è
-        /// seduto e NavigationState == Manual. steerX atteso in [-1, 1] (X
-        /// dell'azione Look — mouse/stick). Aggiorna solo lo stato LOGICO
-        /// (LogicalYawDegrees) — non muove né ruota "Nave".
+        /// seduto e NavigationState == Manual. lookDelta atteso in [-1, 1] su
+        /// entrambi gli assi (X = yaw, Y = pitch — dell'azione Look, mouse/stick).
+        /// La sensibilità mouse è applicata a monte in PilotStation, questo
+        /// input arriva già scalato correttamente per device.
         /// </summary>
-        public void SetManualSteerInput(float steerX)
+        public void SetManualLookInput(Vector2 lookDelta)
         {
-            float clamped = Mathf.Clamp(steerX, -1f, 1f);
+            Vector2 clamped = new Vector2(
+                Mathf.Clamp(lookDelta.x, -1f, 1f),
+                Mathf.Clamp(lookDelta.y, -1f, 1f));
 
-            if (IsServer) _manualSteerInput = clamped;
-            else          SetManualSteerInputRpc(clamped);
+            if (IsServer) _manualLookInput = clamped;
+            else SetManualLookInputRpc(clamped);
         }
 
         [Rpc(SendTo.Server)]
-        private void SetManualSteerInputRpc(float steerX) => _manualSteerInput = steerX;
+        private void SetManualLookInputRpc(Vector2 lookDelta) => _manualLookInput = lookDelta;
+
+        // =========================================================================
+        // HELPER
+        // =========================================================================
+
+        /// <summary>
+        /// Sposta 'current' verso 'target' di al massimo 'maxDelta' unità.
+        /// Come Mathf.MoveTowards, esplicitato qui per chiarezza.
+        /// </summary>
+        private static float MoveToward(float current, float target, float maxDelta)
+        {
+            float diff = target - current;
+            if (Mathf.Abs(diff) <= maxDelta) return target;
+            return current + Mathf.Sign(diff) * maxDelta;
+        }
+
+        private static float NormalizeAngle(float angleDeg)
+        {
+            angleDeg %= 360f;
+            if (angleDeg > 180f) angleDeg -= 360f;
+            else if (angleDeg < -180f) angleDeg += 360f;
+            return angleDeg;
+        }
 
         // =========================================================================
         // DEBUG GUI
@@ -138,11 +252,18 @@ namespace SpaceSurvivor.Ship
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
         private void OnGUI()
         {
-            GUILayout.BeginArea(new Rect(10, Screen.height - 90, 320, 80));
+            Vector3 euler = _logicalRotation.Value.eulerAngles;
+            float yaw = NormalizeAngle(euler.y);
+            float pitch = NormalizeAngle(euler.x);
+
+            GUILayout.BeginArea(new Rect(10, Screen.height - 140, 340, 130));
             GUILayout.BeginVertical("box");
             GUILayout.Label($"[ShipMovement] {(IsServer ? "SRV" : "CLT")} (stato logico — 'Nave' non si muove)");
             GUILayout.Label($"NavState: {CurrentNavState} · Speed: {CurrentSpeed:F1} m/s");
-            GUILayout.Label($"Yaw logico: {LogicalYawDegrees:F1}°");
+            GUILayout.Label($"Rotation: yaw {yaw:F1}° · pitch {pitch:F1}°");
+            GUILayout.Label($"Rate: yaw {_currentYawRate:F1}°/s · pitch {_currentPitchRate:F1}°/s");
+            GUILayout.Label($"CanSteer: {(CurrentNavState == NavigationState.Manual && CurrentSpeed >= minSpeedToSteer)}");
+            GUILayout.Label($"LogicalPos: ({_logicalPosition.Value.x:F0}, {_logicalPosition.Value.y:F0}, {_logicalPosition.Value.z:F0})");
             GUILayout.EndVertical();
             GUILayout.EndArea();
         }
