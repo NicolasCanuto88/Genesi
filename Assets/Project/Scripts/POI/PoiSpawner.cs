@@ -327,10 +327,22 @@ namespace SpaceSurvivor.Poi
             Vector3 offset = Quaternion.Euler(pitchRand, yawRand, 0f) * Vector3.forward * distanza;
             Vector3 logicalPos = ship.LogicalPosition + offset;
 
-            // Orientamento del POI su se stesso: totalmente random. Rende
-            // ogni spawn visivamente distinto senza dover configurare
-            // nulla nel PoiData.
-            Quaternion logicalRot = Random.rotationUniform;
+            // Orientamento del POI: preso dalla rotation configurata sul
+            // prefab in Editor. Deterministica per categoria — tutti i POI
+            // dello stesso PoiData hanno lo stesso orientamento (quello del
+            // prefab). Fase 3.1.5 — motivazione:
+            //   Con l'auto-align rotazionale della nave RIMOSSO (Opzione 3
+            //   del Blocco 3.1), la rotazione del POI determina da quale
+            //   lato la nave deve avvicinarsi per attraccare (asse di
+            //   approccio calcolato come poi.LogicalRotation *
+            //   dockingApproachDirectionLocal). Se la rotazione fosse
+            //   casuale, il pilota non avrebbe alcun indizio visivo su da
+            //   dove attraccare — dovrebbe girare intorno a ogni POI a caso.
+            //   Con rotation fissa dal prefab, il modeler può orientare il
+            //   POI in modo che il lato di attracco sia visivamente
+            //   evidente (portello, luce, freccia), coerente per tutti gli
+            //   spawn.
+            Quaternion logicalRot = entry.poiInstancePrefab.transform.rotation;
 
             // Instantiate. La posizione worldspace iniziale è irrilevante —
             // verrà scavalcata dalla formula chiusa del Follower non appena

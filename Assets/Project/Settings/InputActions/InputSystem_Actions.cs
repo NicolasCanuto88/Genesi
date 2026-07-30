@@ -1446,7 +1446,7 @@ public partial class @InputSystem_Actions: IInputActionCollection2, IDisposable
                 {
                     ""name"": """",
                     ""id"": ""53cd7958-353b-4ea0-ae54-691b65cec9ff"",
-                    ""path"": ""<Keyboard>/a"",
+                    ""path"": ""<Keyboard>/1"",
                     ""interactions"": """",
                     ""processors"": """",
                     ""groups"": """",
@@ -1468,7 +1468,7 @@ public partial class @InputSystem_Actions: IInputActionCollection2, IDisposable
                 {
                     ""name"": """",
                     ""id"": ""5f524329-1936-424f-bd2d-c35e8815e04e"",
-                    ""path"": ""<Keyboard>/q"",
+                    ""path"": ""<Keyboard>/2"",
                     ""interactions"": """",
                     ""processors"": """",
                     ""groups"": """",
@@ -1490,7 +1490,7 @@ public partial class @InputSystem_Actions: IInputActionCollection2, IDisposable
                 {
                     ""name"": """",
                     ""id"": ""f3de22f6-cff3-4b3e-a3f7-f3bb0ec084a4"",
-                    ""path"": ""<Keyboard>/f"",
+                    ""path"": ""<Keyboard>/3"",
                     ""interactions"": """",
                     ""processors"": """",
                     ""groups"": """",
@@ -1512,7 +1512,7 @@ public partial class @InputSystem_Actions: IInputActionCollection2, IDisposable
                 {
                     ""name"": """",
                     ""id"": ""b1886f20-01ac-4338-b4d7-146c586615f2"",
-                    ""path"": ""<Keyboard>/g"",
+                    ""path"": ""<Keyboard>/4"",
                     ""interactions"": """",
                     ""processors"": """",
                     ""groups"": """",
@@ -1528,6 +1528,265 @@ public partial class @InputSystem_Actions: IInputActionCollection2, IDisposable
                     ""processors"": """",
                     ""groups"": """",
                     ""action"": ""PilotFTLJump"",
+                    ""isComposite"": false,
+                    ""isPartOfComposite"": false
+                }
+            ]
+        },
+        {
+            ""name"": ""PilotAnchor"",
+            ""id"": ""2b61cd36-6185-4676-956d-bbff1d2a3595"",
+            ""actions"": [
+                {
+                    ""name"": ""ToggleAnchor"",
+                    ""type"": ""Button"",
+                    ""id"": ""43826974-08d9-47b7-a9cf-beeacc4ef45d"",
+                    ""expectedControlType"": """",
+                    ""processors"": """",
+                    ""interactions"": """",
+                    ""initialStateCheck"": false
+                }
+            ],
+            ""bindings"": [
+                {
+                    ""name"": """",
+                    ""id"": ""deaa5cde-c857-4dbc-9fde-2b726c8d8e12"",
+                    ""path"": ""<Keyboard>/t"",
+                    ""interactions"": """",
+                    ""processors"": """",
+                    ""groups"": """",
+                    ""action"": ""ToggleAnchor"",
+                    ""isComposite"": false,
+                    ""isPartOfComposite"": false
+                },
+                {
+                    ""name"": """",
+                    ""id"": ""7d24fa5d-a0a0-4d16-bfbc-849b6e8a838c"",
+                    ""path"": ""<Gamepad>/buttonWest"",
+                    ""interactions"": """",
+                    ""processors"": """",
+                    ""groups"": """",
+                    ""action"": ""ToggleAnchor"",
+                    ""isComposite"": false,
+                    ""isPartOfComposite"": false
+                }
+            ]
+        },
+        {
+            ""name"": ""PilotDocking"",
+            ""id"": ""fe04c5e2-6da2-48de-8760-3b1a44c24eac"",
+            ""actions"": [
+                {
+                    ""name"": ""DockingStrafeXY"",
+                    ""type"": ""Value"",
+                    ""id"": ""dbdf20e2-31ff-44b6-90ba-cf6f897eb8b8"",
+                    ""expectedControlType"": ""Vector2"",
+                    ""processors"": """",
+                    ""interactions"": """",
+                    ""initialStateCheck"": true
+                },
+                {
+                    ""name"": ""DockingStrafeZ"",
+                    ""type"": ""Button"",
+                    ""id"": ""f3378d46-fd23-4ca1-b60c-f78b479d9561"",
+                    ""expectedControlType"": """",
+                    ""processors"": """",
+                    ""interactions"": """",
+                    ""initialStateCheck"": false
+                },
+                {
+                    ""name"": ""ConfirmAnchor"",
+                    ""type"": ""Button"",
+                    ""id"": ""2e69330f-16fd-4db2-889a-023bfc4d6e11"",
+                    ""expectedControlType"": """",
+                    ""processors"": """",
+                    ""interactions"": """",
+                    ""initialStateCheck"": false
+                },
+                {
+                    ""name"": ""CancelDocking"",
+                    ""type"": ""Button"",
+                    ""id"": ""6d68aa7b-3524-49b5-ad39-2ae2d3f731bf"",
+                    ""expectedControlType"": """",
+                    ""processors"": """",
+                    ""interactions"": """",
+                    ""initialStateCheck"": false
+                }
+            ],
+            ""bindings"": [
+                {
+                    ""name"": """",
+                    ""id"": ""af447cd8-9a45-4f89-97d7-e3e56547916f"",
+                    ""path"": ""<Gamepad>/leftStick"",
+                    ""interactions"": """",
+                    ""processors"": """",
+                    ""groups"": """",
+                    ""action"": ""DockingStrafeXY"",
+                    ""isComposite"": false,
+                    ""isPartOfComposite"": false
+                },
+                {
+                    ""name"": ""2D Vector"",
+                    ""id"": ""9ff022ef-ca9e-4234-bc4c-c016028fc158"",
+                    ""path"": ""2DVector"",
+                    ""interactions"": """",
+                    ""processors"": """",
+                    ""groups"": """",
+                    ""action"": ""DockingStrafeXY"",
+                    ""isComposite"": true,
+                    ""isPartOfComposite"": false
+                },
+                {
+                    ""name"": ""Up"",
+                    ""id"": ""2ccf67d3-e16a-431d-8614-f82d313e49cc"",
+                    ""path"": ""<Keyboard>/w"",
+                    ""interactions"": """",
+                    ""processors"": """",
+                    ""groups"": """",
+                    ""action"": ""DockingStrafeXY"",
+                    ""isComposite"": false,
+                    ""isPartOfComposite"": true
+                },
+                {
+                    ""name"": ""Down"",
+                    ""id"": ""59fb23fd-302e-46b5-89c4-68ab37312d8f"",
+                    ""path"": ""<Keyboard>/s"",
+                    ""interactions"": """",
+                    ""processors"": """",
+                    ""groups"": """",
+                    ""action"": ""DockingStrafeXY"",
+                    ""isComposite"": false,
+                    ""isPartOfComposite"": true
+                },
+                {
+                    ""name"": ""Left"",
+                    ""id"": ""51a8d053-d72f-4cfb-bf9d-a51b5c8775c3"",
+                    ""path"": ""<Keyboard>/a"",
+                    ""interactions"": """",
+                    ""processors"": """",
+                    ""groups"": """",
+                    ""action"": ""DockingStrafeXY"",
+                    ""isComposite"": false,
+                    ""isPartOfComposite"": true
+                },
+                {
+                    ""name"": ""Right"",
+                    ""id"": ""dd655524-fbee-4a34-845e-489eaaa77c4f"",
+                    ""path"": ""<Keyboard>/d"",
+                    ""interactions"": """",
+                    ""processors"": """",
+                    ""groups"": """",
+                    ""action"": ""DockingStrafeXY"",
+                    ""isComposite"": false,
+                    ""isPartOfComposite"": true
+                },
+                {
+                    ""name"": ""1D Axis"",
+                    ""id"": ""82f07b19-43c6-4fff-925f-773090bac157"",
+                    ""path"": ""1DAxis"",
+                    ""interactions"": """",
+                    ""processors"": """",
+                    ""groups"": """",
+                    ""action"": ""DockingStrafeZ"",
+                    ""isComposite"": true,
+                    ""isPartOfComposite"": false
+                },
+                {
+                    ""name"": ""Negative"",
+                    ""id"": ""850700d5-24a0-4ad5-8f70-d8f20282519f"",
+                    ""path"": ""<Keyboard>/q"",
+                    ""interactions"": """",
+                    ""processors"": """",
+                    ""groups"": """",
+                    ""action"": ""DockingStrafeZ"",
+                    ""isComposite"": false,
+                    ""isPartOfComposite"": true
+                },
+                {
+                    ""name"": ""Positive"",
+                    ""id"": ""38907d18-c5ef-4576-842e-7faaaabc12f9"",
+                    ""path"": ""<Keyboard>/e"",
+                    ""interactions"": """",
+                    ""processors"": """",
+                    ""groups"": """",
+                    ""action"": ""DockingStrafeZ"",
+                    ""isComposite"": false,
+                    ""isPartOfComposite"": true
+                },
+                {
+                    ""name"": ""1D Axis"",
+                    ""id"": ""5745128f-3ea4-4c9d-99bb-f2ab431ad015"",
+                    ""path"": ""1DAxis"",
+                    ""interactions"": """",
+                    ""processors"": """",
+                    ""groups"": """",
+                    ""action"": ""DockingStrafeZ"",
+                    ""isComposite"": true,
+                    ""isPartOfComposite"": false
+                },
+                {
+                    ""name"": ""Negative"",
+                    ""id"": ""f3f97da2-be52-46cc-84c1-97f66a4c61f5"",
+                    ""path"": ""<Gamepad>/leftTrigger"",
+                    ""interactions"": """",
+                    ""processors"": """",
+                    ""groups"": """",
+                    ""action"": ""DockingStrafeZ"",
+                    ""isComposite"": false,
+                    ""isPartOfComposite"": true
+                },
+                {
+                    ""name"": ""Positive"",
+                    ""id"": ""b3708eb7-a0c1-4477-9d7e-258c0b6befcd"",
+                    ""path"": ""<Gamepad>/rightTrigger"",
+                    ""interactions"": """",
+                    ""processors"": """",
+                    ""groups"": """",
+                    ""action"": ""DockingStrafeZ"",
+                    ""isComposite"": false,
+                    ""isPartOfComposite"": true
+                },
+                {
+                    ""name"": """",
+                    ""id"": ""4b021059-816f-4c27-947b-161e94be7e9b"",
+                    ""path"": ""<Keyboard>/space"",
+                    ""interactions"": """",
+                    ""processors"": """",
+                    ""groups"": """",
+                    ""action"": ""ConfirmAnchor"",
+                    ""isComposite"": false,
+                    ""isPartOfComposite"": false
+                },
+                {
+                    ""name"": """",
+                    ""id"": ""aeca7497-a245-49f7-95d2-3137d37a6748"",
+                    ""path"": ""<Gamepad>/buttonSouth"",
+                    ""interactions"": """",
+                    ""processors"": """",
+                    ""groups"": """",
+                    ""action"": ""ConfirmAnchor"",
+                    ""isComposite"": false,
+                    ""isPartOfComposite"": false
+                },
+                {
+                    ""name"": """",
+                    ""id"": ""5e9a1d13-57af-4516-accb-9dd239627ee1"",
+                    ""path"": ""<Keyboard>/escape"",
+                    ""interactions"": """",
+                    ""processors"": """",
+                    ""groups"": """",
+                    ""action"": ""CancelDocking"",
+                    ""isComposite"": false,
+                    ""isPartOfComposite"": false
+                },
+                {
+                    ""name"": """",
+                    ""id"": ""deff9c09-1799-4ad3-9aa9-c721ff91e4d8"",
+                    ""path"": ""<Gamepad>/buttonEast"",
+                    ""interactions"": """",
+                    ""processors"": """",
+                    ""groups"": """",
+                    ""action"": ""CancelDocking"",
                     ""isComposite"": false,
                     ""isPartOfComposite"": false
                 }
@@ -1635,6 +1894,15 @@ public partial class @InputSystem_Actions: IInputActionCollection2, IDisposable
         m_Pilot_PilotManual = m_Pilot.FindAction("PilotManual", throwIfNotFound: true);
         m_Pilot_PilotShieldToggle = m_Pilot.FindAction("PilotShieldToggle", throwIfNotFound: true);
         m_Pilot_PilotFTLJump = m_Pilot.FindAction("PilotFTLJump", throwIfNotFound: true);
+        // PilotAnchor
+        m_PilotAnchor = asset.FindActionMap("PilotAnchor", throwIfNotFound: true);
+        m_PilotAnchor_ToggleAnchor = m_PilotAnchor.FindAction("ToggleAnchor", throwIfNotFound: true);
+        // PilotDocking
+        m_PilotDocking = asset.FindActionMap("PilotDocking", throwIfNotFound: true);
+        m_PilotDocking_DockingStrafeXY = m_PilotDocking.FindAction("DockingStrafeXY", throwIfNotFound: true);
+        m_PilotDocking_DockingStrafeZ = m_PilotDocking.FindAction("DockingStrafeZ", throwIfNotFound: true);
+        m_PilotDocking_ConfirmAnchor = m_PilotDocking.FindAction("ConfirmAnchor", throwIfNotFound: true);
+        m_PilotDocking_CancelDocking = m_PilotDocking.FindAction("CancelDocking", throwIfNotFound: true);
     }
 
     ~@InputSystem_Actions()
@@ -1642,6 +1910,8 @@ public partial class @InputSystem_Actions: IInputActionCollection2, IDisposable
         UnityEngine.Debug.Assert(!m_Player.enabled, "This will cause a leak and performance issues, InputSystem_Actions.Player.Disable() has not been called.");
         UnityEngine.Debug.Assert(!m_UI.enabled, "This will cause a leak and performance issues, InputSystem_Actions.UI.Disable() has not been called.");
         UnityEngine.Debug.Assert(!m_Pilot.enabled, "This will cause a leak and performance issues, InputSystem_Actions.Pilot.Disable() has not been called.");
+        UnityEngine.Debug.Assert(!m_PilotAnchor.enabled, "This will cause a leak and performance issues, InputSystem_Actions.PilotAnchor.Disable() has not been called.");
+        UnityEngine.Debug.Assert(!m_PilotDocking.enabled, "This will cause a leak and performance issues, InputSystem_Actions.PilotDocking.Disable() has not been called.");
     }
 
     /// <summary>
@@ -2320,6 +2590,231 @@ public partial class @InputSystem_Actions: IInputActionCollection2, IDisposable
     /// Provides a new <see cref="PilotActions" /> instance referencing this action map.
     /// </summary>
     public PilotActions @Pilot => new PilotActions(this);
+
+    // PilotAnchor
+    private readonly InputActionMap m_PilotAnchor;
+    private List<IPilotAnchorActions> m_PilotAnchorActionsCallbackInterfaces = new List<IPilotAnchorActions>();
+    private readonly InputAction m_PilotAnchor_ToggleAnchor;
+    /// <summary>
+    /// Provides access to input actions defined in input action map "PilotAnchor".
+    /// </summary>
+    public struct PilotAnchorActions
+    {
+        private @InputSystem_Actions m_Wrapper;
+
+        /// <summary>
+        /// Construct a new instance of the input action map wrapper class.
+        /// </summary>
+        public PilotAnchorActions(@InputSystem_Actions wrapper) { m_Wrapper = wrapper; }
+        /// <summary>
+        /// Provides access to the underlying input action "PilotAnchor/ToggleAnchor".
+        /// </summary>
+        public InputAction @ToggleAnchor => m_Wrapper.m_PilotAnchor_ToggleAnchor;
+        /// <summary>
+        /// Provides access to the underlying input action map instance.
+        /// </summary>
+        public InputActionMap Get() { return m_Wrapper.m_PilotAnchor; }
+        /// <inheritdoc cref="UnityEngine.InputSystem.InputActionMap.Enable()" />
+        public void Enable() { Get().Enable(); }
+        /// <inheritdoc cref="UnityEngine.InputSystem.InputActionMap.Disable()" />
+        public void Disable() { Get().Disable(); }
+        /// <inheritdoc cref="UnityEngine.InputSystem.InputActionMap.enabled" />
+        public bool enabled => Get().enabled;
+        /// <summary>
+        /// Implicitly converts an <see ref="PilotAnchorActions" /> to an <see ref="InputActionMap" /> instance.
+        /// </summary>
+        public static implicit operator InputActionMap(PilotAnchorActions set) { return set.Get(); }
+        /// <summary>
+        /// Adds <see cref="InputAction.started"/>, <see cref="InputAction.performed"/> and <see cref="InputAction.canceled"/> callbacks provided via <param cref="instance" /> on all input actions contained in this map.
+        /// </summary>
+        /// <param name="instance">Callback instance.</param>
+        /// <remarks>
+        /// If <paramref name="instance" /> is <c>null</c> or <paramref name="instance"/> have already been added this method does nothing.
+        /// </remarks>
+        /// <seealso cref="PilotAnchorActions" />
+        public void AddCallbacks(IPilotAnchorActions instance)
+        {
+            if (instance == null || m_Wrapper.m_PilotAnchorActionsCallbackInterfaces.Contains(instance)) return;
+            m_Wrapper.m_PilotAnchorActionsCallbackInterfaces.Add(instance);
+            @ToggleAnchor.started += instance.OnToggleAnchor;
+            @ToggleAnchor.performed += instance.OnToggleAnchor;
+            @ToggleAnchor.canceled += instance.OnToggleAnchor;
+        }
+
+        /// <summary>
+        /// Removes <see cref="InputAction.started"/>, <see cref="InputAction.performed"/> and <see cref="InputAction.canceled"/> callbacks provided via <param cref="instance" /> on all input actions contained in this map.
+        /// </summary>
+        /// <remarks>
+        /// Calling this method when <paramref name="instance" /> have not previously been registered has no side-effects.
+        /// </remarks>
+        /// <seealso cref="PilotAnchorActions" />
+        private void UnregisterCallbacks(IPilotAnchorActions instance)
+        {
+            @ToggleAnchor.started -= instance.OnToggleAnchor;
+            @ToggleAnchor.performed -= instance.OnToggleAnchor;
+            @ToggleAnchor.canceled -= instance.OnToggleAnchor;
+        }
+
+        /// <summary>
+        /// Unregisters <param cref="instance" /> and unregisters all input action callbacks via <see cref="PilotAnchorActions.UnregisterCallbacks(IPilotAnchorActions)" />.
+        /// </summary>
+        /// <seealso cref="PilotAnchorActions.UnregisterCallbacks(IPilotAnchorActions)" />
+        public void RemoveCallbacks(IPilotAnchorActions instance)
+        {
+            if (m_Wrapper.m_PilotAnchorActionsCallbackInterfaces.Remove(instance))
+                UnregisterCallbacks(instance);
+        }
+
+        /// <summary>
+        /// Replaces all existing callback instances and previously registered input action callbacks associated with them with callbacks provided via <param cref="instance" />.
+        /// </summary>
+        /// <remarks>
+        /// If <paramref name="instance" /> is <c>null</c>, calling this method will only unregister all existing callbacks but not register any new callbacks.
+        /// </remarks>
+        /// <seealso cref="PilotAnchorActions.AddCallbacks(IPilotAnchorActions)" />
+        /// <seealso cref="PilotAnchorActions.RemoveCallbacks(IPilotAnchorActions)" />
+        /// <seealso cref="PilotAnchorActions.UnregisterCallbacks(IPilotAnchorActions)" />
+        public void SetCallbacks(IPilotAnchorActions instance)
+        {
+            foreach (var item in m_Wrapper.m_PilotAnchorActionsCallbackInterfaces)
+                UnregisterCallbacks(item);
+            m_Wrapper.m_PilotAnchorActionsCallbackInterfaces.Clear();
+            AddCallbacks(instance);
+        }
+    }
+    /// <summary>
+    /// Provides a new <see cref="PilotAnchorActions" /> instance referencing this action map.
+    /// </summary>
+    public PilotAnchorActions @PilotAnchor => new PilotAnchorActions(this);
+
+    // PilotDocking
+    private readonly InputActionMap m_PilotDocking;
+    private List<IPilotDockingActions> m_PilotDockingActionsCallbackInterfaces = new List<IPilotDockingActions>();
+    private readonly InputAction m_PilotDocking_DockingStrafeXY;
+    private readonly InputAction m_PilotDocking_DockingStrafeZ;
+    private readonly InputAction m_PilotDocking_ConfirmAnchor;
+    private readonly InputAction m_PilotDocking_CancelDocking;
+    /// <summary>
+    /// Provides access to input actions defined in input action map "PilotDocking".
+    /// </summary>
+    public struct PilotDockingActions
+    {
+        private @InputSystem_Actions m_Wrapper;
+
+        /// <summary>
+        /// Construct a new instance of the input action map wrapper class.
+        /// </summary>
+        public PilotDockingActions(@InputSystem_Actions wrapper) { m_Wrapper = wrapper; }
+        /// <summary>
+        /// Provides access to the underlying input action "PilotDocking/DockingStrafeXY".
+        /// </summary>
+        public InputAction @DockingStrafeXY => m_Wrapper.m_PilotDocking_DockingStrafeXY;
+        /// <summary>
+        /// Provides access to the underlying input action "PilotDocking/DockingStrafeZ".
+        /// </summary>
+        public InputAction @DockingStrafeZ => m_Wrapper.m_PilotDocking_DockingStrafeZ;
+        /// <summary>
+        /// Provides access to the underlying input action "PilotDocking/ConfirmAnchor".
+        /// </summary>
+        public InputAction @ConfirmAnchor => m_Wrapper.m_PilotDocking_ConfirmAnchor;
+        /// <summary>
+        /// Provides access to the underlying input action "PilotDocking/CancelDocking".
+        /// </summary>
+        public InputAction @CancelDocking => m_Wrapper.m_PilotDocking_CancelDocking;
+        /// <summary>
+        /// Provides access to the underlying input action map instance.
+        /// </summary>
+        public InputActionMap Get() { return m_Wrapper.m_PilotDocking; }
+        /// <inheritdoc cref="UnityEngine.InputSystem.InputActionMap.Enable()" />
+        public void Enable() { Get().Enable(); }
+        /// <inheritdoc cref="UnityEngine.InputSystem.InputActionMap.Disable()" />
+        public void Disable() { Get().Disable(); }
+        /// <inheritdoc cref="UnityEngine.InputSystem.InputActionMap.enabled" />
+        public bool enabled => Get().enabled;
+        /// <summary>
+        /// Implicitly converts an <see ref="PilotDockingActions" /> to an <see ref="InputActionMap" /> instance.
+        /// </summary>
+        public static implicit operator InputActionMap(PilotDockingActions set) { return set.Get(); }
+        /// <summary>
+        /// Adds <see cref="InputAction.started"/>, <see cref="InputAction.performed"/> and <see cref="InputAction.canceled"/> callbacks provided via <param cref="instance" /> on all input actions contained in this map.
+        /// </summary>
+        /// <param name="instance">Callback instance.</param>
+        /// <remarks>
+        /// If <paramref name="instance" /> is <c>null</c> or <paramref name="instance"/> have already been added this method does nothing.
+        /// </remarks>
+        /// <seealso cref="PilotDockingActions" />
+        public void AddCallbacks(IPilotDockingActions instance)
+        {
+            if (instance == null || m_Wrapper.m_PilotDockingActionsCallbackInterfaces.Contains(instance)) return;
+            m_Wrapper.m_PilotDockingActionsCallbackInterfaces.Add(instance);
+            @DockingStrafeXY.started += instance.OnDockingStrafeXY;
+            @DockingStrafeXY.performed += instance.OnDockingStrafeXY;
+            @DockingStrafeXY.canceled += instance.OnDockingStrafeXY;
+            @DockingStrafeZ.started += instance.OnDockingStrafeZ;
+            @DockingStrafeZ.performed += instance.OnDockingStrafeZ;
+            @DockingStrafeZ.canceled += instance.OnDockingStrafeZ;
+            @ConfirmAnchor.started += instance.OnConfirmAnchor;
+            @ConfirmAnchor.performed += instance.OnConfirmAnchor;
+            @ConfirmAnchor.canceled += instance.OnConfirmAnchor;
+            @CancelDocking.started += instance.OnCancelDocking;
+            @CancelDocking.performed += instance.OnCancelDocking;
+            @CancelDocking.canceled += instance.OnCancelDocking;
+        }
+
+        /// <summary>
+        /// Removes <see cref="InputAction.started"/>, <see cref="InputAction.performed"/> and <see cref="InputAction.canceled"/> callbacks provided via <param cref="instance" /> on all input actions contained in this map.
+        /// </summary>
+        /// <remarks>
+        /// Calling this method when <paramref name="instance" /> have not previously been registered has no side-effects.
+        /// </remarks>
+        /// <seealso cref="PilotDockingActions" />
+        private void UnregisterCallbacks(IPilotDockingActions instance)
+        {
+            @DockingStrafeXY.started -= instance.OnDockingStrafeXY;
+            @DockingStrafeXY.performed -= instance.OnDockingStrafeXY;
+            @DockingStrafeXY.canceled -= instance.OnDockingStrafeXY;
+            @DockingStrafeZ.started -= instance.OnDockingStrafeZ;
+            @DockingStrafeZ.performed -= instance.OnDockingStrafeZ;
+            @DockingStrafeZ.canceled -= instance.OnDockingStrafeZ;
+            @ConfirmAnchor.started -= instance.OnConfirmAnchor;
+            @ConfirmAnchor.performed -= instance.OnConfirmAnchor;
+            @ConfirmAnchor.canceled -= instance.OnConfirmAnchor;
+            @CancelDocking.started -= instance.OnCancelDocking;
+            @CancelDocking.performed -= instance.OnCancelDocking;
+            @CancelDocking.canceled -= instance.OnCancelDocking;
+        }
+
+        /// <summary>
+        /// Unregisters <param cref="instance" /> and unregisters all input action callbacks via <see cref="PilotDockingActions.UnregisterCallbacks(IPilotDockingActions)" />.
+        /// </summary>
+        /// <seealso cref="PilotDockingActions.UnregisterCallbacks(IPilotDockingActions)" />
+        public void RemoveCallbacks(IPilotDockingActions instance)
+        {
+            if (m_Wrapper.m_PilotDockingActionsCallbackInterfaces.Remove(instance))
+                UnregisterCallbacks(instance);
+        }
+
+        /// <summary>
+        /// Replaces all existing callback instances and previously registered input action callbacks associated with them with callbacks provided via <param cref="instance" />.
+        /// </summary>
+        /// <remarks>
+        /// If <paramref name="instance" /> is <c>null</c>, calling this method will only unregister all existing callbacks but not register any new callbacks.
+        /// </remarks>
+        /// <seealso cref="PilotDockingActions.AddCallbacks(IPilotDockingActions)" />
+        /// <seealso cref="PilotDockingActions.RemoveCallbacks(IPilotDockingActions)" />
+        /// <seealso cref="PilotDockingActions.UnregisterCallbacks(IPilotDockingActions)" />
+        public void SetCallbacks(IPilotDockingActions instance)
+        {
+            foreach (var item in m_Wrapper.m_PilotDockingActionsCallbackInterfaces)
+                UnregisterCallbacks(item);
+            m_Wrapper.m_PilotDockingActionsCallbackInterfaces.Clear();
+            AddCallbacks(instance);
+        }
+    }
+    /// <summary>
+    /// Provides a new <see cref="PilotDockingActions" /> instance referencing this action map.
+    /// </summary>
+    public PilotDockingActions @PilotDocking => new PilotDockingActions(this);
     private int m_KeyboardMouseSchemeIndex = -1;
     /// <summary>
     /// Provides access to the input control scheme.
@@ -2632,5 +3127,56 @@ public partial class @InputSystem_Actions: IInputActionCollection2, IDisposable
         /// <seealso cref="UnityEngine.InputSystem.InputAction.performed" />
         /// <seealso cref="UnityEngine.InputSystem.InputAction.canceled" />
         void OnPilotFTLJump(InputAction.CallbackContext context);
+    }
+    /// <summary>
+    /// Interface to implement callback methods for all input action callbacks associated with input actions defined by "PilotAnchor" which allows adding and removing callbacks.
+    /// </summary>
+    /// <seealso cref="PilotAnchorActions.AddCallbacks(IPilotAnchorActions)" />
+    /// <seealso cref="PilotAnchorActions.RemoveCallbacks(IPilotAnchorActions)" />
+    public interface IPilotAnchorActions
+    {
+        /// <summary>
+        /// Method invoked when associated input action "ToggleAnchor" is either <see cref="UnityEngine.InputSystem.InputAction.started" />, <see cref="UnityEngine.InputSystem.InputAction.performed" /> or <see cref="UnityEngine.InputSystem.InputAction.canceled" />.
+        /// </summary>
+        /// <seealso cref="UnityEngine.InputSystem.InputAction.started" />
+        /// <seealso cref="UnityEngine.InputSystem.InputAction.performed" />
+        /// <seealso cref="UnityEngine.InputSystem.InputAction.canceled" />
+        void OnToggleAnchor(InputAction.CallbackContext context);
+    }
+    /// <summary>
+    /// Interface to implement callback methods for all input action callbacks associated with input actions defined by "PilotDocking" which allows adding and removing callbacks.
+    /// </summary>
+    /// <seealso cref="PilotDockingActions.AddCallbacks(IPilotDockingActions)" />
+    /// <seealso cref="PilotDockingActions.RemoveCallbacks(IPilotDockingActions)" />
+    public interface IPilotDockingActions
+    {
+        /// <summary>
+        /// Method invoked when associated input action "DockingStrafeXY" is either <see cref="UnityEngine.InputSystem.InputAction.started" />, <see cref="UnityEngine.InputSystem.InputAction.performed" /> or <see cref="UnityEngine.InputSystem.InputAction.canceled" />.
+        /// </summary>
+        /// <seealso cref="UnityEngine.InputSystem.InputAction.started" />
+        /// <seealso cref="UnityEngine.InputSystem.InputAction.performed" />
+        /// <seealso cref="UnityEngine.InputSystem.InputAction.canceled" />
+        void OnDockingStrafeXY(InputAction.CallbackContext context);
+        /// <summary>
+        /// Method invoked when associated input action "DockingStrafeZ" is either <see cref="UnityEngine.InputSystem.InputAction.started" />, <see cref="UnityEngine.InputSystem.InputAction.performed" /> or <see cref="UnityEngine.InputSystem.InputAction.canceled" />.
+        /// </summary>
+        /// <seealso cref="UnityEngine.InputSystem.InputAction.started" />
+        /// <seealso cref="UnityEngine.InputSystem.InputAction.performed" />
+        /// <seealso cref="UnityEngine.InputSystem.InputAction.canceled" />
+        void OnDockingStrafeZ(InputAction.CallbackContext context);
+        /// <summary>
+        /// Method invoked when associated input action "ConfirmAnchor" is either <see cref="UnityEngine.InputSystem.InputAction.started" />, <see cref="UnityEngine.InputSystem.InputAction.performed" /> or <see cref="UnityEngine.InputSystem.InputAction.canceled" />.
+        /// </summary>
+        /// <seealso cref="UnityEngine.InputSystem.InputAction.started" />
+        /// <seealso cref="UnityEngine.InputSystem.InputAction.performed" />
+        /// <seealso cref="UnityEngine.InputSystem.InputAction.canceled" />
+        void OnConfirmAnchor(InputAction.CallbackContext context);
+        /// <summary>
+        /// Method invoked when associated input action "CancelDocking" is either <see cref="UnityEngine.InputSystem.InputAction.started" />, <see cref="UnityEngine.InputSystem.InputAction.performed" /> or <see cref="UnityEngine.InputSystem.InputAction.canceled" />.
+        /// </summary>
+        /// <seealso cref="UnityEngine.InputSystem.InputAction.started" />
+        /// <seealso cref="UnityEngine.InputSystem.InputAction.performed" />
+        /// <seealso cref="UnityEngine.InputSystem.InputAction.canceled" />
+        void OnCancelDocking(InputAction.CallbackContext context);
     }
 }

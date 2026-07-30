@@ -5,55 +5,103 @@ using UnityEngine;
 using UnityEngine.InputSystem;
 
 /// <summary>
-/// PilotStation — Milestone 2, esteso in Milestone 3 Blocco 2 (Rev Q/R) e
-/// Blocco 3 fase 2 (Rev T — modello di volo 3D con pitch e throttle).
-/// Postazione fisica del Pilota nel cockpit.
+/// PilotStation — Milestone 2, esteso in Milestone 3 Blocco 2 (Rev Q/R),
+/// Blocco 3 fase 2 (Rev T — modello di volo 3D con pitch e throttle),
+/// e Fase 3 Blocco 3.1 Sotto-step 3.1.4 (input per docking minigioco con
+/// context switching a tre action map).
 ///
 /// PATTERN:
-///   Identico a MedicalStation / EngineeringStation:
 ///   - IInteractable → rilevata da InteractionSystem via raycast
 ///   - Snap player con lerp verso playerSnapPoint
 ///   - Camera ruota verso la plancia al termine della transizione
 ///   - Uscita via Cancel (Esc / B gamepad) con cooldown 0.5s
 ///   - Nessun VirtualCursor (PilotHUD è display-only, nessun click UI)
 ///
-/// AZIONI PILOTA (InputActionReference — assegna in Inspector):
-///   toggleAutopilotAction  → AUTOPILOT ↔ COASTING       [consigliato: A / LStick Click]
-///   toggleManualAction     → MANUAL ↔ COASTING           [consigliato: Q / RStick Click]
-///   shieldToggleAction     → ShieldSystem.TryActivate()  [F / LB]
-///   ftlJumpAction          → FTLDrive.TryInitiateJump()  [G / Y]
-///   throttleAction (Rev T) → asse W/S continuo [-1, +1]  [W/S KB / RT-LT GP]
+/// ARCHITETTURA A TRE ACTION MAP (Fase 3.1.4):
 ///
-/// LOGICA USCITA:
-///   MANUAL attivo     → RequestNavigationState(Coasting)   [nessuno al timone]
-///   AUTOPILOT attivo  → lasciato invariato                 [nave continua da sola]
+///   Le action del pilota sono divise in 3 InputActionMap dedicati, gestiti
+///   dinamicamente in base a NavigationState per evitare conflitti fisici
+///   sui tasti tra volo normale (Pilot map) e minigioco docking:
+///
+///   ┌───────────────┬────────────────────────────────────────┬───────────────────────────────┐
+///   │ Map           │ Contenuto                              │ Attivo                        │
+///   ├───────────────┼────────────────────────────────────────┼───────────────────────────────┤
+///   │ Pilot         │ PilotAutopilot (A), PilotManual (Q),   │ Seduti E                      │
+///   │  (esistente)  │ PilotShieldToggle (F), PilotFTLJump(G) │ navState != Docking/Docked    │
+///   ├───────────────┼────────────────────────────────────────┼───────────────────────────────┤
+///   │ PilotAnchor   │ ToggleAnchor (T KB / X buttonWest GP)  │ Sempre mentre seduti          │
+///   │  (nuovo)      │                                        │                               │
+///   ├───────────────┼────────────────────────────────────────┼───────────────────────────────┤
+///   │ PilotDocking  │ DockingStrafeXY (WASD + LStick),       │ Seduti E                      │
+///   │  (nuovo)      │ DockingStrafeZ (Q/E + Triggers),       │ navState == Docking/Docked    │
+///   │               │ ConfirmAnchor (Space + buttonSouth),   │                               │
+///   │               │ CancelDocking (Esc + buttonEast)       │                               │
+///   └───────────────┴────────────────────────────────────────┴───────────────────────────────┘
+///
+///   Perché ToggleAnchor sta nel suo map dedicato: deve essere premibile SIA
+///   in Manual/Coasting (per iniziare docking) SIA in Docking/Docked (per fare
+///   undock). Se stesse in Pilot map (spento in Docking) non permetterebbe
+///   undock. Se stesse in PilotDocking (spento in Manual) non permetterebbe
+///   start. → Terzo map "sempre-on-mentre-seduti".
+///
+///   Rebind di ToggleAnchor rispetto alla proposta originale (F/Y):
+///   → T (KB) / X buttonWest (GP), per non collidere con Shield(F) / FTL(Y)
+///   del map Pilot.
+///
+/// AZIONI PILOTA (InputActionReference — assegna in Inspector):
+///   toggleAutopilotAction  → AUTOPILOT ↔ COASTING       [A / LStick Click]
+///   toggleManualAction     → MANUAL ↔ COASTING           [Q / RStick Click]
+///   shieldToggleAction     → ShieldSystem.TryActivate()  [F / LB]
+///   ftlJumpAction          → FTLDrive.TryInitiateJump()  [G / Y buttonNorth]
+///   throttleAction (Rev T) → asse W/S continuo [-1, +1]  [W/S KB / RT-LT GP]
+///   toggleAnchorAction  (3.1.4) → context-sensitive: Manual/Coasting +
+///          Anchorable → RequestStartDocking; Docking/Docked → RequestUndock
+///                                                          [T KB / X GP]
+///   dockingStrafeXY (3.1.4) → strafe piano perp POI       [WASD KB / LStick GP]
+///   dockingStrafeZ  (3.1.4) → strafe assiale approach     [Q/E KB / LT-RT GP]
+///   confirmAnchorAction (3.1.4) → Docking only:
+///          conferma attracco se IsInAnchorTolerance      [Space KB / A GP]
+///   cancelDockingAction (3.1.4) → Docking/Docked only:
+///          undock (torna a Manual), resta seduto         [Esc KB / B GP]
+///
+/// SEMANTICA UNDOCK / CANCEL (3.1.4):
+///   Undock via qualsiasi via (ToggleAnchor in Docking/Docked, CancelDocking,
+///   o Esc del map UI) → RequestUndock → Manual (fallback Coasting).
+///   AnchorSystem.RequestUndock gestisce internamente la scelta del target.
+///
+///   IMPORTANTE: durante Docking/Docked, il tasto Cancel del map UI (Esc)
+///   NON alza il pilota dalla postazione. Fa solo undock, il pilota resta
+///   seduto. Uscita dalla postazione richiede un secondo Esc dopo che si è
+///   tornati a Manual/Coasting. Semantica confermata da design 3.1.4.
+///
+/// LOGICA USCITA (TryExitStation):
+///   DOCKING/DOCKED    → RequestUndock (torna a Manual), NON alza il pilota
+///                       (return dopo l'undock). Semantica confermata:
+///                       "cancel durante docking = torna alla guida manuale,
+///                       resta seduto".
+///   MANUAL attivo     → RequestNavigationState(Coasting) [nessuno al timone]
+///   AUTOPILOT attivo  → lasciato invariato               [nave continua da sola]
 ///   ANCHORED/COASTING → lasciato invariato
 ///   FTL_CHARGING/JUMPING → uscita bloccata
 ///
 /// REGOLA INVARIANTE:
 ///   PilotStation è l'unico punto da cui chiamare
-///   FTLDrive.TryInitiateJump(), PropulsionSystem.RequestNavigationState()
-///   e PropulsionSystem.SetManualThrottleInput().
+///   FTLDrive.TryInitiateJump(), PropulsionSystem.RequestNavigationState(),
+///   PropulsionSystem.SetManualThrottleInput(), AnchorSystem.RequestStartDocking(),
+///   AnchorSystem.RequestUndock() e DockingController.SetStrafeInput() /
+///   RequestConfirmAnchor().
 ///
 /// DECISIONE ARCHITETTURALE (Blocco 2): "Nave" NON si muove MAI fisicamente.
-/// Vedi ShipMovement.cs per il dettaglio completo. Il pilotaggio è puramente
-/// LOGICO — steering aggiorna ShipMovement.LogicalRotation (Quaternion), il
-/// throttle aggiorna PropulsionSystem.TargetSpeed. Il mondo esterno
-/// (ExternalWorldFollower) scorre in senso inverso rispetto a questi valori.
-///
-/// BLOCCO 3 fase 2 (Rev T) — modello di volo 3D:
-///   - Look action (X,Y) → ShipMovement.SetManualLookInput(Vector2)
-///     Convenzione FPS: mouse su = muso su. Pitch clampato a ±80° internamente.
-///   - Throttle action (asse) → PropulsionSystem.SetManualThrottleInput(float)
-///     +1 = accelera in avanti, -1 = decelera, 0 = mantieni velocità (inerzia).
-///   - Camera terza persona ancorata a shipChaseCamPoint (figlio fisso di
-///     "Nave", statico). Quando NavState diventa Manual la camera swappa
-///     dalla vista cockpit alla vista esterna.
+/// Vedi ShipMovement.cs. Il pilotaggio è puramente LOGICO — steering aggiorna
+/// ShipMovement.LogicalRotation, throttle aggiorna PropulsionSystem.TargetSpeed,
+/// strafe (Docking) aggiorna ShipMovement.LogicalPosition direttamente.
 ///
 /// DIPENDE DA: PropulsionSystem ✅ · FTLDrive ✅ · ShieldSystem ✅
 ///   ShipMovement (Blocco 2) · shipChaseCamPoint da creare in Editor come
-///   figlio fisso di "Nave" · nuova action "Throttle" nell'asset InputActions.
-/// Multiplayer (M3+): aggiungere role-check (solo il Pilota può usare questa postazione).
+///   figlio fisso di "Nave" · action "Throttle" nell'asset InputActions ·
+///   AnchorSystem (3.1.2) · DockingController (3.1.3) · nuovi map
+///   `PilotAnchor` (1 action) e `PilotDocking` (4 action) nell'asset
+///   InputActions (3.1.4 — vedi istruzioni Editor).
 /// </summary>
 [RequireComponent(typeof(BoxCollider))]
 public class PilotStation : MonoBehaviour, IInteractable
@@ -66,9 +114,28 @@ public class PilotStation : MonoBehaviour, IInteractable
     [Header("HUD — Volo esterno MANUAL (Screen Space Overlay)")]
     [Tooltip("PilotFlightHUD (Rev T): HUD sovrapposto durante il volo in vista " +
              "terza persona. Toggle mutualmente esclusivo con PilotHUD — visibile " +
-             "solo quando EnterThirdPersonChaseCam è attivo. Se lasciato vuoto, " +
-             "il volo MANUAL non ha HUD visibile (degradazione elegante).")]
+             "solo quando EnterThirdPersonChaseCam è attivo.")]
     [SerializeField] private PilotFlightHUD flightHUD;
+
+    [Header("HUD — Minigioco Docking (Fase 3.1.5)")]
+    [Tooltip("GameObject del Canvas World Space del minigioco di docking " +
+             "(DockingMinigame_Canvas). Fratello del PilotHUD_Canvas sotto lo " +
+             "stesso GameObject 'Monitor'. Attivato quando NavigationState " +
+             "diventa Docking (contemporaneamente PilotHUD viene chiuso), " +
+             "disattivato al ritorno a Manual/Coasting/Anchored/Autopilot/Docked " +
+             "(PilotHUD riaperto). Se lasciato vuoto, nessuna UI del minigioco " +
+             "viene mostrata — degradazione elegante, il minigioco resta " +
+             "giocabile alla cieca leggendo il pannello Debug di DockingController.")]
+    [SerializeField] private GameObject dockingMinigameCanvas;
+
+    [Header("HUD — Minigioco Docking (Fase 3.1.5)")]
+    [Tooltip("Canvas World Space del minigioco di attracco — fratello di " +
+             "PilotHUD_Canvas sotto lo stesso GameObject 'Monitor'. Attivato " +
+             "quando NavigationState == Docking, disattivato altrimenti. " +
+             "Il PilotHUD_Canvas si spegne quando questo si accende (i due " +
+             "monitor si alternano). In Docked si torna al PilotHUD (che " +
+             "mostrerà 'DOCKED TO [POI]' in 3.1.6). Se null, il minigioco " +
+             "gira senza feedback visivo — degradazione elegante.")]
 
     // ── Player Positioning ────────────────────────────────────────────────
     [Header("Player Positioning")]
@@ -83,8 +150,7 @@ public class PilotStation : MonoBehaviour, IInteractable
              "la nave non si muove mai — vedi nota architetturale in testa al " +
              "file), posizionato dietro/sopra la plancia, orientato lungo la " +
              "prua. Nessun asset necessario — solo un Transform vuoto. Se " +
-             "lasciato vuoto, il pilotaggio MANUAL resta in prima persona " +
-             "(vista cockpit invariata).")]
+             "lasciato vuoto, il pilotaggio MANUAL resta in prima persona.")]
     [SerializeField] private Transform shipChaseCamPoint;
 
     // ── Input ─────────────────────────────────────────────────────────────
@@ -104,18 +170,47 @@ public class PilotStation : MonoBehaviour, IInteractable
     [Tooltip("Throttle W/S (Rev T). Value type / Axis 1D. Consigliato: " +
              "1D Axis Composite → Negative: <Keyboard>/s + <Gamepad>/leftTrigger; " +
              "Positive: <Keyboard>/w + <Gamepad>/rightTrigger. Se lasciato vuoto, " +
-             "il throttle in MANUAL è sempre 0 — la nave mantiene sempre la velocità " +
-             "corrente (utile per test isolati di sterzata).")]
+             "il throttle in MANUAL è sempre 0.")]
     [SerializeField] private InputActionReference throttleAction;
+
+    [Header("Input — Docking (Fase 3.1.4)")]
+    [Tooltip("Toggle context-sensitive dell'ancoraggio (map PilotAnchor). " +
+             "Manual/Coasting + POI Anchorable → RequestStartDocking; " +
+             "Docking/Docked → RequestUndock. Button type. Consigliato: T (KB) / " +
+             "X buttonWest (GP). Il map PilotAnchor è sempre attivo mentre " +
+             "seduti — necessario perché ToggleAnchor deve triggerarsi sia " +
+             "in avvicinamento che a manovra in corso.")]
+    [SerializeField] private InputActionReference toggleAnchorAction;
+
+    [Tooltip("Strafe piano perpendicolare all'asse di approccio del POI durante " +
+             "Docking (map PilotDocking). Value / Vector 2. Consigliato: 2D " +
+             "Vector Composite WASD + <Gamepad>/leftStick. Attivo solo in " +
+             "Docking/Docked (context switching automatico).")]
+    [SerializeField] private InputActionReference dockingStrafeXYAction;
+
+    [Tooltip("Strafe assiale (avvicina/allontana) lungo l'asse di approccio del POI " +
+             "durante Docking (map PilotDocking). Value / Axis 1D. Consigliato: " +
+             "1D Axis Composite → Negative: <Keyboard>/q + <Gamepad>/leftTrigger; " +
+             "Positive: <Keyboard>/e + <Gamepad>/rightTrigger. Positive = " +
+             "avvicinati al POI.")]
+    [SerializeField] private InputActionReference dockingStrafeZAction;
+
+    [Tooltip("Conferma attracco durante Docking (map PilotDocking): se " +
+             "IsInAnchorTolerance, transiziona a Docked. Button type. " +
+             "Consigliato: Space (KB) / A buttonSouth (GP).")]
+    [SerializeField] private InputActionReference confirmAnchorAction;
+
+    [Tooltip("Cancel del docking (map PilotDocking) — undock, resta seduto. " +
+             "Semantica: torna a Manual (fallback Coasting) senza alzare il " +
+             "pilota. Doppione funzionale del Cancel UI map (Esc) durante " +
+             "Docking/Docked: entrambi fanno undock senza uscire dalla postazione. " +
+             "Button type. Consigliato: Esc (KB) / B buttonEast (GP).")]
+    [SerializeField] private InputActionReference cancelDockingAction;
 
     [Header("Sensibilità input (Rev T)")]
     [Tooltip("Moltiplicatore applicato al delta del mouse per l'action Look prima " +
-             "di passarlo a ShipMovement. Il New Input System restituisce i movimenti " +
-             "del mouse in unità arbitrarie che possono spesso saturare il clamp " +
-             "[-1, +1] interno, rendendo la sterzata a mouse iper-reattiva rispetto " +
-             "allo stick. Il gamepad NON è scalato — il suo stick è già in [-1, +1] " +
-             "e la sensibilità naturale è corretta. Default 0.15 — da tarare in " +
-             "playtest, ma parte come 'nave grossa e pesante'.")]
+             "di passarlo a ShipMovement. Il gamepad non è scalato — stick già in " +
+             "[-1, +1]. Default 0.15 — 'nave grossa e pesante'.")]
     [SerializeField, Range(0.01f, 1f)] private float mouseSensitivity = 0.15f;
 
     // ── Stato interno ─────────────────────────────────────────────────────
@@ -140,6 +235,14 @@ public class PilotStation : MonoBehaviour, IInteractable
     private bool isChaseCamActive;
     private NavigationState lastPolledNavState;
 
+    // Fase 3.1.4 — cache dei tre action map per abilitazione/disabilitazione
+    // dinamica. Risolti in EnterStation dalle action reference assegnate in
+    // Inspector: una qualsiasi action di un dato map basta per risalire al map
+    // via .action.actionMap.
+    private InputActionMap pilotMap;
+    private InputActionMap pilotAnchorMap;
+    private InputActionMap pilotDockingMap;
+
     private float interactionCooldown;
     private const float COOLDOWN_DURATION = 0.5f;
 
@@ -155,13 +258,9 @@ public class PilotStation : MonoBehaviour, IInteractable
     private void Start()
     {
         // FIX (Rev Q): NON impostare più hudCanvas.worldCamera = Camera.main
-        // qui — stesso bug "camera sbagliata risolta una volta sola al
-        // caricamento scena" già fixato in EngineeringStation.cs/
-        // MedicalStation.cs (vedi quei file per la spiegazione completa).
-        // PilotHUD è display-only (nessun click UI, vedi nota in testa al
-        // file) quindi qui non causava pannelli "bloccati" — ma la stessa
-        // assegnazione corretta avviene comunque in EnterStation() per
-        // coerenza ed eventuali usi futuri non puramente display-only.
+        // qui — assegnazione ora in EnterStation() per la camera del player
+        // che entra effettivamente. Vedi commenti nei file MedicalStation /
+        // EngineeringStation per la spiegazione completa.
     }
 
     private void Update()
@@ -210,17 +309,11 @@ public class PilotStation : MonoBehaviour, IInteractable
             return;
         }
 
-        // FIX (Rev Q) — stesso pattern di EngineeringStation.cs/MedicalStation.cs:
-        // assegna la camera del giocatore che sta EFFETTIVAMENTE entrando ora,
-        // non più Camera.main risolto una volta sola in Start().
+        // FIX (Rev Q) — assegna la camera del giocatore che entra ora.
         if (hudCanvas != null)
             hudCanvas.worldCamera = playerCamera;
 
-        // Recupera Cancel/Look action da PlayerInput: usa la reference assegnata
-        // in Inspector se presente, altrimenti fallback sul PlayerInput
-        // dell'interactor stesso (stesso pattern MedicalStation.EnterStation —
-        // bug fix: prima mancava il fallback, lasciando cancelAction null se il
-        // campo Inspector non era assegnato, ed Esc non usciva mai).
+        // Recupera Cancel/Look action da PlayerInput
         PlayerInput pi = playerInputReference != null
             ? playerInputReference
             : interactor.GetComponent<PlayerInput>();
@@ -228,17 +321,10 @@ public class PilotStation : MonoBehaviour, IInteractable
         if (pi != null)
         {
             cancelAction = pi.actions.FindAction("Cancel");
-            // Blocco 2: azione "Look" del Player map — libera mentre
-            // PlayerController è disabilitato (non la consuma più nessuno),
-            // riusata qui per lo steering MANUAL logico. Nessuna modifica
-            // all'asset Input Actions necessaria.
             lookAction = pi.actions.FindAction("Look");
         }
 
-        // Salva stato originale del player — posizione/rotazione ASSOLUTE
-        // nel mondo, semplici: "Nave" non si muove mai (vedi nota
-        // architetturale in testa al file), quindi non serve nessuna
-        // matematica relativa alla nave.
+        // Salva stato originale del player
         originalPlayerPosition = interactor.transform.position;
         originalPlayerRotation = interactor.transform.rotation;
         originalCameraRotation = playerCamera.transform.localRotation;
@@ -258,8 +344,20 @@ public class PilotStation : MonoBehaviour, IInteractable
 
         isUsingStation = true;
 
-        // Registra callback azioni pilota
+        // Registra callback azioni pilota + cache riferimenti ai tre map
         BindPilotActions();
+        CachePilotMaps();
+
+        // Fase 3.1.4 — imposta lo stato iniziale dei tre map in base al
+        // navState corrente al momento della seduta:
+        //  - Pilot map ON se non stiamo entrando durante Docking/Docked
+        //  - PilotAnchor sempre ON
+        //  - PilotDocking ON solo se stiamo entrando in Docking/Docked
+        //    (raro edge case: un altro pilota ha lasciato la nave in Docked
+        //    e ora prendo il timone)
+        bool isInDockingState = lastPolledNavState == NavigationState.Docking
+                             || lastPolledNavState == NavigationState.Docked;
+        ApplyMapActivation(isInDockingState);
 
         // Attiva HUD
         if (pilotHUD != null)
@@ -334,26 +432,40 @@ public class PilotStation : MonoBehaviour, IInteractable
             }
         }
 
-        // Riporta SEMPRE la camera sotto il player prima di qualunque altra
-        // logica di uscita: TransitionFromStation lavora su
-        // playerCamera.transform.localRotation assumendo che il parent sia
-        // di nuovo quello originale, altrimenti il lerp finale sarebbe nello
-        // spazio locale sbagliato (quello di shipChaseCamPoint).
-        // false = non riorientare al monitor (TransitionFromStation ci pensa già).
+        // FASE 3.1.4 — SEMANTICA CANCEL DURANTE DOCKING/DOCKED:
+        // Cancel (Esc / B) durante Docking o Docked NON alza il pilota dalla
+        // postazione. Esegue solo undock (torna a Manual, fallback Coasting)
+        // e il pilota resta seduto. Uscita dalla postazione richiede un
+        // secondo Cancel dopo la transizione a Manual/Coasting.
+        // Confermato da design: "Cancel_docking = torna alla guida manuale,
+        // Exit_from_docking = stessa cosa".
+        var ps = PropulsionSystem.Instance;
+        if (ps != null
+            && (ps.CurrentNavState == NavigationState.Docking
+                || ps.CurrentNavState == NavigationState.Docked))
+        {
+            Debug.Log("[PilotStation] Cancel durante Docking/Docked — undock, resta seduto.");
+            AnchorSystem.Instance?.RequestUndock();
+            return; // Non alziamo il pilota.
+        }
+
+        // Riporta la camera sotto il player prima dell'uscita
         ExitThirdPersonChaseCam(restoreLookAtCockpit: false);
 
-        // Azzera input pilota logici — evita che valori "congelati" restino
-        // attivi sul server dopo che il Pilota si è alzato.
+        // Azzera input pilota logici
         ShipMovement.Instance?.SetManualLookInput(Vector2.zero);
         PropulsionSystem.Instance?.SetManualThrottleInput(0f);
+        DockingController.Instance?.SetStrafeInput(Vector3.zero);
 
         interactionCooldown = COOLDOWN_DURATION;
         isUsingStation = false;
 
-        // MANUAL attivo → COASTING: nessuno al timone, la nave mantiene l'inerzia
-        // (PropulsionSystem in COASTING congela TargetSpeed = CurrentSpeed, la
-        // nave continua a viaggiare alla velocità corrente indefinitamente —
-        // Rev T, coerente con "spazio vuoto, nessun attrito").
+        // MANUAL attivo → COASTING (nessuno al timone).
+        // NB: se veniamo dall'undock durante docking (branch sopra), navState
+        // ora è Manual → questo check trasformerà a Coasting correttamente
+        // solo se il pilota preme Cancel una SECONDA volta dopo l'undock;
+        // ma il branch sopra ritorna prima, quindi qui arriviamo solo da
+        // Manual/Coasting/Autopilot/Anchored.
         if (PropulsionSystem.Instance != null
             && PropulsionSystem.Instance.CurrentNavState == NavigationState.Manual)
         {
@@ -362,6 +474,7 @@ public class PilotStation : MonoBehaviour, IInteractable
         }
 
         UnbindPilotActions();
+        DisableAllPilotMaps();
 
         if (pilotHUD != null)
         {
@@ -369,11 +482,15 @@ public class PilotStation : MonoBehaviour, IInteractable
             pilotHUD.gameObject.SetActive(false);
         }
 
-        // Rev T — sicurezza: se per qualche motivo il FlightHUD è ancora
-        // aperto (es. uscita brutale mentre in MANUAL), chiudilo. In caso
-        // normale ExitThirdPersonChaseCam sopra ha già chiamato Close().
+        // Rev T — sicurezza: chiudi FlightHUD se ancora aperto
         if (flightHUD != null && flightHUD.gameObject.activeSelf)
             flightHUD.Close();
+
+        // Fase 3.1.5 — sicurezza: nascondi il canvas del minigioco se ancora
+        // attivo. Caso raro perché il branch iniziale di TryExitStation gestisce
+        // Cancel-durante-Docking senza alzare il pilota, ma comunque idempotente.
+        if (dockingMinigameCanvas != null && dockingMinigameCanvas.activeSelf)
+            dockingMinigameCanvas.SetActive(false);
 
         StartCoroutine(TransitionFromStation());
     }
@@ -401,14 +518,9 @@ public class PilotStation : MonoBehaviour, IInteractable
 
         playerController.enabled = wasPlayerControllerEnabled;
 
-        // FIX — currentVelocity è un campo persistente in PlayerController
-        // per smussare accelerazione/decelerazione: disabilitare il
-        // componente non lo azzera, resta congelato alla velocità che il
-        // player aveva nell'istante di EnterStation. Senza questo,
-        // riattivando il componente il player riprenderebbe per qualche
-        // frame a muoversi nella direzione di prima di sedersi. Stesso
-        // identico bug latente in MedicalStation/EngineeringStation —
-        // stesso fix applicabile lì allo stesso modo.
+        // FIX — currentVelocity persistente in PlayerController: azzeriamo
+        // per evitare che il player riprenda per qualche frame la velocità
+        // di prima della seduta.
         playerController.ResetVelocity();
 
         if (characterController != null)
@@ -416,42 +528,84 @@ public class PilotStation : MonoBehaviour, IInteractable
     }
 
     // =========================================================================
-    // PILOTAGGIO MANUALE — steering logico + throttle + camera terza persona
+    // PILOTAGGIO — steering logico + throttle + strafe docking + camera terza persona
     // =========================================================================
 
-    /// <summary>
-    /// Eseguito ogni frame mentre seduti (non in transizione). Rileva i
-    /// cambi di NavigationState per scambiare la camera cockpit/terza
-    /// persona, e mentre MANUAL è attivo inoltra:
-    ///   - Look (Vector2) → ShipMovement.SetManualLookInput (yaw + pitch logici)
-    ///   - Throttle (float) → PropulsionSystem.SetManualThrottleInput
-    ///
-    /// Nulla di tutto questo muove "Nave" fisicamente — vedi nota
-    /// architetturale in testa al file.
-    /// </summary>
     private void PollManualFlightState()
     {
         var ps = PropulsionSystem.Instance;
         NavigationState navState = ps != null ? ps.CurrentNavState : NavigationState.Anchored;
 
+        // Camera swap + context switching dei map su transizioni di stato
         if (navState != lastPolledNavState)
         {
+            // Camera: Manual ↔ non-Manual (chase cam)
             if (navState == NavigationState.Manual)
                 EnterThirdPersonChaseCam();
             else if (lastPolledNavState == NavigationState.Manual)
                 ExitThirdPersonChaseCam();
+
+            // Fase 3.1.4 — context switching Pilot ↔ PilotDocking sulla base
+            // di ingresso/uscita da Docking/Docked. PilotAnchor resta sempre
+            // ON mentre seduti (non serve toccarlo qui).
+            bool wasInDockingState = (lastPolledNavState == NavigationState.Docking
+                                   || lastPolledNavState == NavigationState.Docked);
+            bool isInDockingState = (navState == NavigationState.Docking
+                                  || navState == NavigationState.Docked);
+
+            if (wasInDockingState != isInDockingState)
+                ApplyMapActivation(isInDockingState);
+
+            // Fase 3.1.5 — HUD swap PilotHUD ↔ DockingMinigameCanvas.
+            // Il DockingMinigameCanvas è attivo SOLO in Docking (fase attiva del
+            // minigioco). In Docked il PilotHUD torna attivo per mostrare
+            // "DOCKED TO [POI]" (3.1.6). In Manual la chase cam è già gestita
+            // sopra (PilotHUD.Close + FlightHUD.Open) — se veniamo da Docking
+            // e passiamo direttamente a Manual (edge case: cancel + toggle
+            // manual rapido), il PilotHUD verrà comunque chiuso da
+            // EnterThirdPersonChaseCam. Coerente.
+            //
+            // IMPORTANTE: uso gameObject.SetActive() sul PilotHUD, non solo
+            // Close(): Close() disattiva la logica interna dell'HUD ma NON
+            // nasconde il Canvas (che resta visualmente presente). Per far
+            // "spegnere" il monitor durante Docking (i due canvas fratelli
+            // sono sovrapposti), serve disabilitare il GameObject.
+            bool wasInDockingActive = (lastPolledNavState == NavigationState.Docking);
+            bool isInDockingActive = (navState == NavigationState.Docking);
+            if (wasInDockingActive != isInDockingActive)
+            {
+                if (isInDockingActive)
+                {
+                    // Entrata in Docking: mostra minigame canvas, spegni PilotHUD
+                    if (pilotHUD != null)
+                    {
+                        pilotHUD.Close();
+                        pilotHUD.gameObject.SetActive(false);
+                    }
+                    if (dockingMinigameCanvas != null) dockingMinigameCanvas.SetActive(true);
+                }
+                else
+                {
+                    // Uscita da Docking: nascondi minigame canvas, riaccendi PilotHUD
+                    // (a meno che stiamo transitando verso Manual — in quel caso
+                    // la chase cam gestisce la vista esterna e PilotHUD deve
+                    // restare chiuso; EnterThirdPersonChaseCam sopra ha già
+                    // richiamato pilotHUD.Close ma il GameObject dobbiamo
+                    // decidere qui se riaccenderlo).
+                    if (dockingMinigameCanvas != null) dockingMinigameCanvas.SetActive(false);
+                    if (pilotHUD != null && navState != NavigationState.Manual)
+                    {
+                        pilotHUD.gameObject.SetActive(true);
+                        pilotHUD.Open();
+                    }
+                }
+            }
 
             lastPolledNavState = navState;
         }
 
         if (navState == NavigationState.Manual)
         {
-            // Look — yaw (X) e pitch (Y), convenzione FPS gestita in ShipMovement.
-            // Sensibilità mouse applicata a monte: il New Input System restituisce
-            // il delta mouse in unità che spesso saturano il clamp [-1, +1] di
-            // ShipMovement, mentre lo stick gamepad è già naturalmente in [-1, +1].
-            // Scaliamo solo se l'ultimo device che ha triggerato l'action è una
-            // tastiera/mouse; altrimenti passiamo il vettore invariato.
             Vector2 lookDelta = lookAction != null
                 ? lookAction.ReadValue<Vector2>()
                 : Vector2.zero;
@@ -461,28 +615,38 @@ public class PilotStation : MonoBehaviour, IInteractable
 
             ShipMovement.Instance?.SetManualLookInput(lookDelta);
 
-            // Throttle — asse continuo W/S. Se non assegnato in Inspector,
-            // resta 0 (nave mantiene velocità corrente) — degradazione elegante.
             float throttle = throttleAction != null && throttleAction.action != null
                 ? throttleAction.action.ReadValue<float>()
                 : 0f;
             ps?.SetManualThrottleInput(throttle);
+
+            // Azzera strafe di docking (per pulizia server-side)
+            DockingController.Instance?.SetStrafeInput(Vector3.zero);
         }
-        else
+        else if (navState == NavigationState.Docking)
         {
+            // Fase 3.1.4 — polling strafe RCS 3D per il minigioco di docking.
+            Vector2 strafeXY = dockingStrafeXYAction != null && dockingStrafeXYAction.action != null
+                ? dockingStrafeXYAction.action.ReadValue<Vector2>()
+                : Vector2.zero;
+            float strafeZ = dockingStrafeZAction != null && dockingStrafeZAction.action != null
+                ? dockingStrafeZAction.action.ReadValue<float>()
+                : 0f;
+            DockingController.Instance?.SetStrafeInput(new Vector3(strafeXY.x, strafeXY.y, strafeZ));
+
+            // Azzera Look + Throttle
             ShipMovement.Instance?.SetManualLookInput(Vector2.zero);
             ps?.SetManualThrottleInput(0f);
         }
+        else
+        {
+            // Anchored, Coasting, Autopilot, Docked: nessun input attivo.
+            ShipMovement.Instance?.SetManualLookInput(Vector2.zero);
+            ps?.SetManualThrottleInput(0f);
+            DockingController.Instance?.SetStrafeInput(Vector3.zero);
+        }
     }
 
-    /// <summary>
-    /// Riparenta la camera del player su shipChaseCamPoint (figlio fisso di
-    /// "Nave" — la nave non si muove mai, quindi questo punto è
-    /// staticamente corretto) per la vista esterna in terza persona. No-op
-    /// se shipChaseCamPoint non è assegnato in Inspector — in quel caso il
-    /// pilotaggio MANUAL resta in vista cockpit (degradazione elegante,
-    /// nessun errore).
-    /// </summary>
     private void EnterThirdPersonChaseCam()
     {
         if (isChaseCamActive || shipChaseCamPoint == null || playerCamera == null) return;
@@ -492,25 +656,10 @@ public class PilotStation : MonoBehaviour, IInteractable
         playerCamera.transform.localRotation = Quaternion.identity;
         isChaseCamActive = true;
 
-        // Rev T — swap HUD cockpit → HUD di volo. Il PilotHUD della plancia
-        // è dietro alla vista terza persona (non guardato dal Pilota), il
-        // FlightHUD Screen Space Overlay è sempre visibile davanti.
         if (pilotHUD != null) pilotHUD.Close();
         if (flightHUD != null) flightHUD.Open();
     }
 
-    /// <summary>
-    /// Riporta la camera sotto il player (parent/posizione originali salvati
-    /// in EnterStation). Se <paramref name="restoreLookAtCockpit"/> è true
-    /// (default), riorienta anche la camera verso il monitor tramite
-    /// LookAtCockpitRoutine — usato quando torniamo da MANUAL a COASTING
-    /// restando seduti alla postazione. Se false, la camera resta come
-    /// pare — usato in fase di uscita dalla postazione, dove il lerp
-    /// finale di TransitionFromStation ci pensa già.
-    ///
-    /// Idempotente: sicuro da chiamare anche se la chase cam non era
-    /// attiva (esce subito senza toccare nulla).
-    /// </summary>
     private void ExitThirdPersonChaseCam(bool restoreLookAtCockpit = true)
     {
         if (!isChaseCamActive || playerCamera == null) return;
@@ -519,17 +668,65 @@ public class PilotStation : MonoBehaviour, IInteractable
         playerCamera.transform.localPosition = originalCameraLocalPosition;
         isChaseCamActive = false;
 
-        // Rev T — swap HUD di volo → HUD cockpit. FlightHUD scompare (siamo
-        // di nuovo in vista cockpit), PilotHUD torna a mostrare la piena
-        // strumentazione sul monitor.
         if (flightHUD != null) flightHUD.Close();
         if (pilotHUD != null) pilotHUD.Open();
 
-        // Se richiesto (caso "resto seduto"), riorienta al monitor come
-        // faceva TransitionToStation dopo lo snap: stesso LookAtCockpitRoutine
-        // → stessa vista cockpit di quando ci si è appena seduti.
         if (restoreLookAtCockpit && cameraLookAtPoint != null)
             StartCoroutine(LookAtCockpitRoutine());
+    }
+
+    // =========================================================================
+    // GESTIONE ACTION MAP (Fase 3.1.4)
+    // =========================================================================
+
+    /// <summary>
+    /// Cache dei riferimenti ai tre action map (Pilot, PilotAnchor,
+    /// PilotDocking) partendo da una action di ciascuno. Chiamato una volta
+    /// in EnterStation dopo BindPilotActions. Se una action reference è
+    /// null in Inspector, il map corrispondente resta null e le operazioni
+    /// di enable/disable sono no-op (degradazione elegante).
+    /// </summary>
+    private void CachePilotMaps()
+    {
+        pilotMap = toggleAutopilotAction?.action?.actionMap;
+        pilotAnchorMap = toggleAnchorAction?.action?.actionMap;
+        pilotDockingMap = dockingStrafeXYAction?.action?.actionMap;
+    }
+
+    /// <summary>
+    /// Attiva/disattiva i tre map in base allo stato di docking.
+    /// - PilotAnchor: sempre ON quando questa funzione è chiamata (siamo
+    ///   seduti — solo lo Cancel del map UI è "globalmente" attivo, il
+    ///   ToggleAnchor deve essere premibile in tutti gli stati seduti).
+    /// - Pilot: ON quando NON in Docking/Docked
+    /// - PilotDocking: ON quando in Docking/Docked
+    /// </summary>
+    private void ApplyMapActivation(bool inDockingState)
+    {
+        pilotAnchorMap?.Enable(); // Sempre ON mentre seduti
+
+        if (inDockingState)
+        {
+            pilotMap?.Disable();
+            pilotDockingMap?.Enable();
+        }
+        else
+        {
+            pilotMap?.Enable();
+            pilotDockingMap?.Disable();
+        }
+    }
+
+    /// <summary>
+    /// Disabilita tutti e tre i map — chiamato in TryExitStation quando il
+    /// pilota si alza dalla postazione. I map tornano a essere gestiti dalle
+    /// impostazioni default dell'InputActionAsset (tipicamente disabled).
+    /// </summary>
+    private void DisableAllPilotMaps()
+    {
+        pilotMap?.Disable();
+        pilotAnchorMap?.Disable();
+        pilotDockingMap?.Disable();
     }
 
     // =========================================================================
@@ -550,11 +747,26 @@ public class PilotStation : MonoBehaviour, IInteractable
         if (ftlJumpAction?.action != null)
             ftlJumpAction.action.performed += OnFTLJump;
 
-        // Throttle action: enable esplicito (le action Value non si abilitano
-        // automaticamente solo dal reading — dipende dal PlayerInput setup).
-        // Rev T: se non assegnato o già enabled, no-op.
+        // Throttle action: NON serve enable esplicito qui — il map di
+        // appartenenza (Pilot) sarà abilitato da ApplyMapActivation.
+        // Tenuto per compatibilità retroattiva se qualcuno usa Throttle in
+        // un map diverso dal Pilot (edge case).
         if (throttleAction?.action != null && !throttleAction.action.enabled)
             throttleAction.action.Enable();
+
+        // Fase 3.1.4 — callback docking:
+        //   button actions con callback performed (toggle/confirm/cancel)
+        //   value actions lette in polling (strafe XY/Z)
+        // Le action si abiliteranno tramite ApplyMapActivation (Enable del map
+        // di appartenenza).
+        if (toggleAnchorAction?.action != null)
+            toggleAnchorAction.action.performed += OnToggleAnchor;
+
+        if (confirmAnchorAction?.action != null)
+            confirmAnchorAction.action.performed += OnConfirmAnchor;
+
+        if (cancelDockingAction?.action != null)
+            cancelDockingAction.action.performed += OnCancelDocking;
     }
 
     private void UnbindPilotActions()
@@ -571,22 +783,21 @@ public class PilotStation : MonoBehaviour, IInteractable
         if (ftlJumpAction?.action != null)
             ftlJumpAction.action.performed -= OnFTLJump;
 
-        // Throttle action: non la disabilitiamo (potrebbe essere condivisa con
-        // la Player map — non è nostra da spegnere in modo aggressivo). Il
-        // polling in PollManualFlightState smetterà comunque di leggerla
-        // quando isUsingStation == false.
+        // Fase 3.1.4 — unsubscribe docking
+        if (toggleAnchorAction?.action != null)
+            toggleAnchorAction.action.performed -= OnToggleAnchor;
+
+        if (confirmAnchorAction?.action != null)
+            confirmAnchorAction.action.performed -= OnConfirmAnchor;
+
+        if (cancelDockingAction?.action != null)
+            cancelDockingAction.action.performed -= OnCancelDocking;
     }
 
     // =========================================================================
     // CALLBACK AZIONI PILOTA
     // =========================================================================
 
-    /// <summary>
-    /// Toggle AUTOPILOT ↔ COASTING.
-    /// Regola invariante: mai automatico, solo dalla postazione.
-    /// PropulsionSystem.RequestNavigationState() valida internamente
-    /// se l'autopilota è disponibile (AsteroidField lo blocca).
-    /// </summary>
     private void OnToggleAutopilot(InputAction.CallbackContext _)
     {
         var ps = PropulsionSystem.Instance;
@@ -594,7 +805,6 @@ public class PilotStation : MonoBehaviour, IInteractable
 
         if (ps.CurrentNavState == NavigationState.Autopilot)
         {
-            // Spegni autopilota → inerzia
             ps.RequestNavigationState(NavigationState.Coasting);
         }
         else
@@ -609,10 +819,6 @@ public class PilotStation : MonoBehaviour, IInteractable
         }
     }
 
-    /// <summary>
-    /// Toggle MANUAL ↔ COASTING.
-    /// Obbligatorio in ZoneEvent.AsteroidField (autopilota non disponibile).
-    /// </summary>
     private void OnToggleManual(InputAction.CallbackContext _)
     {
         var ps = PropulsionSystem.Instance;
@@ -624,33 +830,118 @@ public class PilotStation : MonoBehaviour, IInteractable
             ps.RequestNavigationState(NavigationState.Manual);
     }
 
-    /// <summary>
-    /// Toggle scudi ON/OFF — esclusiva del Pilota (tasto F / LB gamepad).
-    /// TryActivate() gestisce internamente spin-up, off e stati non validi.
-    /// </summary>
     private void OnShieldToggle(InputAction.CallbackContext _)
     {
         ShieldSystem.Instance?.TryActivate();
     }
 
-    /// <summary>
-    /// Avvia salto FTL. Mai automatico — solo dalla PilotStation.
-    /// TryInitiateJump() nega se: non Ready, OFFLINE, non alimentato.
-    /// </summary>
     private void OnFTLJump(InputAction.CallbackContext _)
     {
         FTLDrive.Instance?.TryInitiateJump();
     }
 
     /// <summary>
+    /// Fase 3.1.4 — Toggle context-sensitive dell'ancoraggio (map PilotAnchor).
+    ///
+    /// Manual/Coasting + POI Anchorable → RequestStartDocking
+    /// Docking/Docked → RequestUndock (torna a Manual, fallback Coasting)
+    /// Altri stati (Anchored / Autopilot) → warning log + no-op
+    /// </summary>
+    private void OnToggleAnchor(InputAction.CallbackContext _)
+    {
+        var ps = PropulsionSystem.Instance;
+        var an = AnchorSystem.Instance;
+        if (ps == null || an == null)
+        {
+            Debug.LogWarning("[PilotStation] ToggleAnchor: sistemi ship non pronti.");
+            return;
+        }
+
+        var navState = ps.CurrentNavState;
+
+        switch (navState)
+        {
+            case NavigationState.Manual:
+            case NavigationState.Coasting:
+                if (an.CurrentAnchorabilityState != AnchorabilityState.Anchorable)
+                {
+                    Debug.LogWarning($"[PilotStation] ToggleAnchor: nessun POI ancorabile " +
+                                     $"(stato: {an.CurrentAnchorabilityState}).");
+                    return;
+                }
+                an.RequestStartDocking();
+                break;
+
+            case NavigationState.Docking:
+            case NavigationState.Docked:
+                an.RequestUndock();
+                break;
+
+            default:
+                Debug.LogWarning($"[PilotStation] ToggleAnchor: azione non valida in stato {navState}.");
+                break;
+        }
+    }
+
+    /// <summary>
+    /// Fase 3.1.4 — Conferma attracco durante Docking. Attivo solo in
+    /// NavigationState.Docking (per costruzione: il map PilotDocking è
+    /// disabilitato negli altri stati). Il controllo interno resta per
+    /// robustezza in caso di race condition (transizione di stato tra
+    /// input firing e callback execution).
+    /// </summary>
+    private void OnConfirmAnchor(InputAction.CallbackContext _)
+    {
+        var ps = PropulsionSystem.Instance;
+        var dc = DockingController.Instance;
+        if (ps == null || dc == null)
+        {
+            Debug.LogWarning("[PilotStation] ConfirmAnchor: sistemi ship non pronti.");
+            return;
+        }
+
+        if (ps.CurrentNavState != NavigationState.Docking)
+        {
+            Debug.LogWarning($"[PilotStation] ConfirmAnchor: attivo solo in Docking " +
+                             $"(stato attuale: {ps.CurrentNavState}).");
+            return;
+        }
+
+        dc.RequestConfirmAnchor();
+    }
+
+    /// <summary>
+    /// Fase 3.1.4 — Cancel dedicato del minigioco docking (map PilotDocking).
+    /// Fa esattamente ciò che fa il ToggleAnchor durante Docking/Docked:
+    /// undock (torna a Manual, fallback Coasting), il pilota resta seduto.
+    ///
+    /// Doppione funzionale con il Cancel del map UI (Esc): quando il pilota
+    /// preme Esc durante Docking/Docked, il TryExitStation gestisce la stessa
+    /// semantica (vedi branch nell'inizio di TryExitStation). L'esistenza di
+    /// entrambi non causa problemi — le due callback fanno lo stesso lavoro
+    /// e RequestUndock è idempotente rispetto a chiamate doppie (il secondo
+    /// tentativo trova già navState non in Docking/Docked e ritorna).
+    /// </summary>
+    private void OnCancelDocking(InputAction.CallbackContext _)
+    {
+        var ps = PropulsionSystem.Instance;
+        var an = AnchorSystem.Instance;
+        if (ps == null || an == null) return;
+
+        if (ps.CurrentNavState != NavigationState.Docking
+            && ps.CurrentNavState != NavigationState.Docked)
+        {
+            Debug.LogWarning($"[PilotStation] CancelDocking: non in Docking/Docked " +
+                             $"(stato: {ps.CurrentNavState}).");
+            return;
+        }
+
+        an.RequestUndock();
+    }
+
+    /// <summary>
     /// Rev T — determina se l'action Look è stata triggerata l'ultima volta
     /// da un mouse. Usato per applicare mouseSensitivity solo in quel caso.
-    /// Il gamepad non ha bisogno di scaling (stick già in [-1, +1]).
-    ///
-    /// Nota: activeControl può essere null se nessun device ha appena
-    /// scritto sull'action — trattiamo quel caso come "non mouse", scelta
-    /// sicura (peggio non scaliamo il mouse per un frame che scaliamo lo
-    /// stick per errore).
     /// </summary>
     private bool IsLookFromMouse()
     {

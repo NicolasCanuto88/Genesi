@@ -52,6 +52,13 @@ namespace SpaceSurvivor.Ship
         [Tooltip("Watt consumati in MANUAL. Moltiplicati per degradazione.")]
         public float wattsManual = 80f;
 
+        [Tooltip("Watt consumati in DOCKING (Fase 3 Blocco 3.1). RCS thrusters + " +
+                 "computer di allineamento. Tipicamente tra Autopilot e Manual — " +
+                 "manovra manuale ma con thrusters piccoli, non motori principali. " +
+                 "Moltiplicato per degradazione. Attivo solo durante il minigioco; " +
+                 "in DOCKED la nave è ferma e il consumo è 0.")]
+        public float wattsDocking = 60f;
+
         [Tooltip("Priority PowerManager. 6 = sotto scudi (7), sopra luci (3).")]
         public int powerPriority = 6;
 

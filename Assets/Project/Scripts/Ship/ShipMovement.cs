@@ -5,7 +5,9 @@ using UnityEngine;
 namespace SpaceSurvivor.Ship
 {
     /// <summary>
-    /// ShipMovement — Milestone 3, Blocco 2 + Blocco 3 fase 2 (Rev T).
+    /// ShipMovement — Milestone 3, Blocco 2 + Blocco 3 fase 2 (Rev T),
+    /// esteso Fase 3 Blocco 3.1 (Sotto-step 3.1.3) con setter server-only
+    /// per DockingController (strafe RCS + auto-align rotazionale).
     ///
     /// DECISIONE ARCHITETTURALE (invariata da Rev Q): "Nave" NON si muove mai
     /// fisicamente nel mondo. Resta esattamente dov'è piazzata in Editor, per
@@ -31,6 +33,19 @@ namespace SpaceSurvivor.Ship
     ///     lineare la nave non ha come ruotare (niente RCS thrusters per ora).
     ///     Meccanicamente: forza il Pilota ad "avviare" prima di sterzare.
     ///
+    /// ESTENSIONE Fase 3 3.1.3 — API per DockingController:
+    ///   - SetLogicalPosition(Vector3): server-only setter, usato dal
+    ///     DockingController per applicare lo strafe RCS durante Docking.
+    ///     In Docking CurrentSpeed=0 → UpdatePosition() qui è inerte (early
+    ///     return), quindi la scrittura del DockingController non entra in
+    ///     conflitto con l'integrazione throttle Rev T.
+    ///   - SetLogicalRotation(Quaternion): server-only setter, usato dal
+    ///     DockingController per l'auto-align rotazionale (interpolazione
+    ///     shortest-arc verso l'allineamento pancia-approachAxis del POI).
+    ///     In Docking CurrentNavState != Manual → UpdateOrientation() qui
+    ///     lascia decadere i rate a zero e non scrive la NetVar (early
+    ///     return se rate insignificanti), quindi zero conflitto.
+    ///
     /// DESIGN — controllo pilotaggio:
     ///   - Assi rotazione: yaw + pitch, no roll
     ///   - Convenzione mouse: FPS standard (mouse su = muso su)
@@ -40,7 +55,8 @@ namespace SpaceSurvivor.Ship
     ///
     /// DIPENDE DA: PropulsionSystem (CurrentNavState, CurrentSpeed,
     ///             MaxSpeedAtDegradation, data.yawAcceleration/pitchAcceleration)
-    /// USATO DA: ExternalWorldFollower, PilotStation, futuro sistema POI
+    /// USATO DA: ExternalWorldFollower, PilotStation, DockingController,
+    ///           futuro sistema POI
     /// </summary>
     public class ShipMovement : NetworkBehaviour
     {
@@ -135,6 +151,11 @@ namespace SpaceSurvivor.Ship
         /// così quando la nave si ferma non c'è uno "stop rotazionale" duro
         /// che sembra un bug.
         ///
+        /// In Docking/Docked (Fase 3): CurrentNavState != Manual → canSteer=false
+        /// → rate decadono a zero → early return se insignificanti. Il
+        /// DockingController scrive direttamente _logicalRotation via
+        /// SetLogicalRotation, senza conflitto.
+        ///
         /// Roll garantito a zero dalla composizione via Quaternion.Euler.
         /// </summary>
         private void UpdateOrientation()
@@ -190,6 +211,10 @@ namespace SpaceSurvivor.Ship
         /// <summary>
         /// Server-only. Accumula LogicalPosition da LogicalForward × CurrentSpeed
         /// in QUALUNQUE nav state con velocità > 0.
+        ///
+        /// In Docking/Docked (Fase 3): PropulsionSystem forza CurrentSpeed=0 →
+        /// early return. Il DockingController scrive _logicalPosition
+        /// direttamente via SetLogicalPosition (strafe RCS), senza conflitto.
         /// </summary>
         private void UpdatePosition()
         {
@@ -222,6 +247,41 @@ namespace SpaceSurvivor.Ship
 
         [Rpc(SendTo.Server)]
         private void SetManualLookInputRpc(Vector2 lookDelta) => _manualLookInput = lookDelta;
+
+        /// <summary>
+        /// Fase 3 3.1.3 — server-only setter di LogicalPosition, chiamato dal
+        /// DockingController per applicare lo strafe RCS durante Docking.
+        /// Fuori da Docking (in Manual/Autopilot) il PropulsionSystem integra
+        /// LogicalForward × CurrentSpeed tramite UpdatePosition() sopra — non
+        /// dovrebbe essere chiamato in quegli stati (la validazione della
+        /// coerenza è responsabilità del chiamante, tipicamente
+        /// DockingController che gira solo se stato == Docking).
+        /// </summary>
+        public void SetLogicalPosition(Vector3 newPos)
+        {
+            if (!IsServer)
+            {
+                Debug.LogError("[ShipMovement] SetLogicalPosition called on client — ignored.");
+                return;
+            }
+            _logicalPosition.Value = newPos;
+        }
+
+        /// <summary>
+        /// Fase 3 3.1.3 — server-only setter di LogicalRotation, chiamato dal
+        /// DockingController per l'auto-align rotazionale (shortest-arc slerp
+        /// verso l'allineamento pancia-approachAxis del POI, pesato sulla
+        /// progressione di avvicinamento).
+        /// </summary>
+        public void SetLogicalRotation(Quaternion newRot)
+        {
+            if (!IsServer)
+            {
+                Debug.LogError("[ShipMovement] SetLogicalRotation called on client — ignored.");
+                return;
+            }
+            _logicalRotation.Value = newRot;
+        }
 
         // =========================================================================
         // HELPER

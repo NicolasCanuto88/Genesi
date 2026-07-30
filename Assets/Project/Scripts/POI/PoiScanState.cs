@@ -1,7 +1,7 @@
 namespace SpaceSurvivor.Poi
 {
     /// <summary>
-    /// Stato di scansione di un PoiInstance — Milestone 3, Blocco 3, Sottofase 2b.
+    /// Stato di scansione di un PoiInstance — Milestone 3, Blocco 3.
     ///
     /// Progressione naturale attesa (server-authoritative, replicata via
     /// NetworkVariable&lt;PoiScanState&gt; su PoiInstance):
@@ -18,25 +18,23 @@ namespace SpaceSurvivor.Poi
     ///              logica dalla nave è entro il raggio.
     ///
     ///   Scanned  → il team ha eseguito uno scan attivo dal PoiInstance da
-    ///              vicino (dipende da: azione utente nella ScannerUI — 2b/
-    ///              Blocco 3 Fase 3). Sblocca eventuali informazioni aggiuntive
-    ///              future (loot preview con Scanner T2+, "Deep Scan").
+    ///              vicino (dipende da: azione utente nella ScannerUI). Sblocca
+    ///              eventuali informazioni aggiuntive future (loot preview con
+    ///              Scanner T2+, "Deep Scan").
     ///
-    /// NOTE FUTURE (registrate ma NON implementate in 2b):
-    ///
-    ///   Anchored — quando la nave si ancorerà al relitto (Blocco 3 Fase 3
-    ///              con lo stato NavigationState.Anchored su PropulsionSystem)
-    ///              servirà un ulteriore stato per marcare il POI come "punto
-    ///              di ancoraggio attivo" e triggerare l'eventuale attivazione
-    ///              di collider/interior per l'abbordaggio. In 2b non ci
-    ///              arriviamo — lo aggiungeremo in coda a questo enum quando
-    ///              lo scriveremo davvero, per evitare di lasciare stati morti
-    ///              nel codice.
+    ///   Anchored → [Fase 3 Blocco 3.1] la nave si è ancorata a questo POI
+    ///              tramite il minigioco di docking. Stato terminale del loop
+    ///              di attracco. Un solo POI alla volta può essere Anchored
+    ///              per una data nave — l'unicità è garantita da
+    ///              PropulsionSystem.AnchoredPoiId lato server. In uscita da
+    ///              Docked, torna a Scanned (era necessariamente già stato
+    ///              scansionato per essere ancorabile).
     /// </summary>
     public enum PoiScanState : byte
     {
         Unknown = 0,
         Detected = 1,
-        Scanned = 2
+        Scanned = 2,
+        Anchored = 3
     }
 }

@@ -3,7 +3,8 @@ using UnityEngine;
 namespace SpaceSurvivor.Poi
 {
     /// <summary>
-    /// PoiData — Milestone 3, Blocco 3, Sottofase 2b.
+    /// PoiData — Milestone 3, Blocco 3, Sottofase 2b (esteso Blocco 3.1
+    /// Fase 3 per direzione di approccio all'ancoraggio).
     ///
     /// Descrittore statico di una CATEGORIA di POI (Point of Interest).
     /// Un'istanza di questo ScriptableObject rappresenta un archetipo (es.
@@ -25,14 +26,19 @@ namespace SpaceSurvivor.Poi
     ///   di più. Il potenziamento "Deep Scan" (Scanner T2+) che mostra il
     ///   loot potenziale è registrato come idea futura ma NON implementato
     ///   qui — quando esisterà un LootTable, allora si aggiungerà il campo.
-    ///   Aggiungerlo ora in bianco sarebbe cargo culting.
     ///
-    /// CAMPI DORMIENTI PER IL FUTURO (Blocco 3 Fase 3+ / Blocco 4):
-    ///   I campi della sezione "Collisione (dormiente)" sono presenti da
-    ///   ora perché il futuro PoiCollisionSystem li leggerà da PoiData
-    ///   senza dover riaprire il prefab. NON usati in 2b: il PoiVisual non
-    ///   ha collider e nessun sistema legge questi valori. Servono solo a
-    ///   stabilire i default sensati quando il sistema sarà scritto.
+    /// CAMPI ATTIVI IN 3.1 (Fase 3 Blocco 1 — Ancoraggio):
+    ///   - dockingApproachDirection: direzione di attracco in local space
+    ///     del PoiVisual. Il DockingController proietta la posizione della
+    ///     nave su questo asse per calcolare LateralError e AxialDistance.
+    ///   - dockingRadius: attivato da AnchorSystem come raggio dentro cui
+    ///     l'ancoraggio è disponibile (candidato ancorabile).
+    ///
+    /// CAMPI ATTIVI IN 3.2 (Fase 3 Blocco 2 — Impatto):
+    ///   - hardCollisionRadius: soglia di impatto pieno (danno + inerzia POI)
+    ///   - softCollisionRadius: soglia di urto leggero
+    ///   - warningRadius: soglia warning UI
+    ///   - mass: usata dal calcolo di trasferimento momento POI ↔ nave
     ///
     /// DIPENDE DA: ExternalWorldFollower (Rev T.2) sul prefab visuale — deve
     ///             essere già presente come componente del prefab
@@ -84,33 +90,59 @@ namespace SpaceSurvivor.Poi
         [Range(0f, 90f)]
         [SerializeField] private float spawnPitchRangeDeg = 30f;
 
-        // ── Collisione (DORMIENTE — non usata in 2b) ─────────────────────────
-        [Header("Collisione (dormiente — usata in Fase 3+)")]
-        [Tooltip("[Fase 3+] Distanza sotto la quale un impatto è considerato " +
-                 "pieno: massimo danno, freeze forzato. Non usato in 2b.")]
+        // ── Ancoraggio (Fase 3 Blocco 3.1 — attivo) ──────────────────────────
+        [Header("Ancoraggio (Fase 3 Blocco 3.1)")]
+        [Tooltip("Direzione di approccio all'ancoraggio, in local space del " +
+                 "PoiVisual (verrà normalizzata a runtime). Convenzione: la " +
+                 "nave deve avvicinarsi al POI lungo questo asse per completare " +
+                 "l'attracco. Esempi: (0,1,0) = attracco dall'alto; " +
+                 "(1,0,0) = attracco dal lato +X; per stazioni con hangar, " +
+                 "puntare verso il portello. Default (0,1,0) = dall'alto, " +
+                 "sensato per relitti piatti.")]
+        [SerializeField] private Vector3 dockingApproachDirection = Vector3.up;
+
+        // ── Collisione (Fase 3 Blocco 3.2 — dormiente in 3.1) ────────────────
+        [Header("Collisione (Fase 3+)")]
+        [Tooltip("Distanza sotto la quale un impatto è considerato pieno: " +
+                 "massimo danno, freeze forzato. In 3.1 rileva l'evento " +
+                 "OnHardCollision (nessun consumer ancora); in 3.2 applica " +
+                 "danno e trasferisce inerzia al POI.")]
         [Min(0f)]
         [SerializeField] private float hardCollisionRadius = 30f;
 
-        [Tooltip("[Fase 3+] Distanza sotto la quale l'urto è \"leggero\": danno " +
-                 "proporzionale a velocità, la nave può ancora manovrare. Non " +
-                 "usato in 2b.")]
+        [Tooltip("[Fase 3.2] Distanza sotto la quale l'urto è \"leggero\": " +
+                 "danno proporzionale a velocità, la nave può ancora manovrare. " +
+                 "Non usato in 3.1.")]
         [Min(0f)]
         [SerializeField] private float softCollisionRadius = 50f;
 
-        [Tooltip("[Fase 3+] Distanza a cui la UI mostra warning \"TROPPO VICINO, " +
-                 "RIDURRE VELOCITÀ\". Non usato in 2b.")]
+        [Tooltip("[Fase 3.2] Distanza a cui la UI mostra warning \"TROPPO " +
+                 "VICINO, RIDURRE VELOCITÀ\". Non usato in 3.1.")]
         [Min(0f)]
         [SerializeField] private float warningRadius = 100f;
 
-        [Tooltip("[Fase 3+] Distanza entro cui il pilota può iniziare la " +
-                 "manovra di ancoraggio (attracco). Non usato in 2b.")]
+        [Tooltip("[Fase 3.1] Distanza entro cui l'ancoraggio è disponibile — " +
+                 "AnchorSystem tratta questo POI come candidato ancorabile " +
+                 "quando la nave si trova entro questo raggio (in aggiunta a " +
+                 "ScanState >= Detected).")]
         [Min(0f)]
         [SerializeField] private float dockingRadius = 200f;
 
-        [Tooltip("[Fase 3+] Massa logica del POI, usata per il calcolo del " +
+        [Tooltip("[Fase 3.1.5] Apertura totale del cono di approccio, in gradi. " +
+                 "Il pilota può iniziare docking solo se si trova entro questo " +
+                 "cono (metà angolo per lato) attorno all'asse di approccio del " +
+                 "POI (dockingApproachDirection). Default 60° = 30° per lato. " +
+                 "Coerente col cono visuale (mesh trasparente) sul prefab: " +
+                 "quello che il pilota vede DEVE matchare questo valore, " +
+                 "altrimenti la percezione del pilota è dissociata dalla " +
+                 "meccanica reale.")]
+        [Range(10f, 180f)]
+        [SerializeField] private float dockingConeAngleDeg = 60f;
+
+        [Tooltip("[Fase 3.2] Massa logica del POI, usata per il calcolo del " +
                  "trasferimento di momento durante l'impatto. Unità arbitrarie " +
                  "— il bilanciamento sarà relativo alla massa della nave. Non " +
-                 "usato in 2b.")]
+                 "usato in 3.1.")]
         [Min(0.1f)]
         [SerializeField] private float mass = 100f;
 
@@ -123,12 +155,38 @@ namespace SpaceSurvivor.Poi
         public float SpawnDistanceMax => spawnDistanceMax;
         public float SpawnPitchRangeDeg => spawnPitchRangeDeg;
 
-        // Campi dormienti — esposti già come property per non dover cambiare
-        // firma quando il PoiCollisionSystem li userà davvero.
+        /// <summary>
+        /// Direzione di approccio in LOCAL space del PoiVisual, normalizzata.
+        /// Se l'inspector contiene un vettore zero (edge case) restituisce
+        /// Vector3.up come fallback sensato.
+        /// </summary>
+        public Vector3 DockingApproachDirectionLocal
+        {
+            get
+            {
+                var d = dockingApproachDirection;
+                if (d.sqrMagnitude < 1e-6f) return Vector3.up;
+                return d.normalized;
+            }
+        }
+
+        // Campi dormienti/attivi Fase 3 — property pubbliche.
         public float HardCollisionRadius => hardCollisionRadius;
         public float SoftCollisionRadius => softCollisionRadius;
         public float WarningRadius => warningRadius;
         public float DockingRadius => dockingRadius;
+        public float DockingConeAngleDeg => dockingConeAngleDeg;
+
+        /// <summary>
+        /// Coseno della metà-apertura del cono di approccio. Calcolato al volo
+        /// da dockingConeAngleDeg. Il check server-side in AnchorSystem è:
+        ///   Dot(fromPoiToShip.normalized, approachAxisWorld) >= DockingConeMinDot
+        /// Con angolo 60° totale (30° per lato): cos(30°) ≈ 0.866.
+        /// Con angolo 180° totale (90° per lato = semisfera): cos(90°) = 0.
+        /// </summary>
+        public float DockingConeMinDot =>
+            Mathf.Cos(dockingConeAngleDeg * 0.5f * Mathf.Deg2Rad);
+
         public float Mass => mass;
 
         // ── Validation ───────────────────────────────────────────────────────
@@ -139,7 +197,7 @@ namespace SpaceSurvivor.Poi
                 spawnDistanceMax = spawnDistanceMin;
             }
 
-            // Coerenza dei raggi dormienti — utile anche se non usati adesso,
+            // Coerenza dei raggi — utile anche per i campi non ancora usati,
             // così quando li useremo non troveremo config sballate.
             if (softCollisionRadius < hardCollisionRadius)
             {

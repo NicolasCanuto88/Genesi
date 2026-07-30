@@ -5,32 +5,40 @@ using UnityEngine;
 namespace SpaceSurvivor.Ship
 {
     // ─── Enum NavigationState ─────────────────────────────────────────────────
-    // Definito qui — usato da PilotStation, PilotHUD, FTLDrive.
+    // Definito qui — usato da PilotStation, PilotHUD, FTLDrive, AnchorSystem.
 
     public enum NavigationState
     {
-        Anchored,   // nave ferma, 0W, 0 fuel
+        Anchored,   // nave ferma a riposo (base default), 0W, 0 fuel
         Coasting,   // inerzia (Pilota fuori postazione o OFFLINE), 0W, 0 fuel
         Autopilot,  // rotta automatica verso POI, 50W, 0.5 fuel/min
-        Manual      // controllo diretto Pilota, 80W, 1.0 fuel/min
+        Manual,     // controllo diretto Pilota, 80W, 1.0 fuel/min
+        Docking,    // [Fase 3 Blocco 3.1] minigioco di attracco attivo (strafe RCS),
+                    // 60W, 0 fuel — la nave non usa motori principali, solo thrusters
+        Docked      // [Fase 3 Blocco 3.1] attracco completato, nave ferma ancorata
+                    // a un POI, 0W, 0 fuel. AnchoredPoiId identifica il POI.
     }
 
     // ─── PropulsionSystem ─────────────────────────────────────────────────────
 
     /// <summary>
-    /// PropulsionSystem — Milestone 2, esteso Rev T per modello di volo 3D.
+    /// PropulsionSystem — Milestone 2, esteso Rev T per modello di volo 3D,
+    /// esteso Fase 3 Blocco 3.1 per ancoraggio a POI (Docking/Docked).
     /// NetworkBehaviour + IPowerConsumer + IRepairable.
     ///
     /// RESPONSABILITÀ:
-    ///   - Gestisce NavigationState (ANCHORED/COASTING/AUTOPILOT/MANUAL)
+    ///   - Gestisce NavigationState
+    ///     (Anchored / Coasting / Autopilot / Manual / Docking / Docked)
     ///   - Consuma watt da PowerManager in base allo stato
     ///   - Consuma FuelCell da InventorySystem ogni secondo (server)
     ///   - Implementa IRepairable → pannello fisico in sala motori
     ///   - Riceve SetAutopilotAvailable() da ZoneManager (AsteroidField)
     ///   - Riceve SetFTLOverride() da FTLDrive durante la carica
+    ///   - Espone AnchoredPoiId (Fase 3 Blocco 3.1) come riferimento al POI
+    ///     attualmente ancorato; scritto server-side da AnchorSystem
     ///
     /// MODELLO DI VOLO (Rev T — modello arcade throttle target):
-    ///   - CurrentSpeed è ora dinamico (NetworkVariable), non più sempre al max.
+    ///   - CurrentSpeed è dinamico (NetworkVariable), non più sempre al max.
     ///   - TargetSpeed è la velocità verso cui CurrentSpeed accelera con rate
     ///     _data.accelerationRate (scalato dal degrado).
     ///   - In MANUAL, il Pilota preme W/S → SetManualThrottleInput(±1) →
@@ -42,13 +50,19 @@ namespace SpaceSurvivor.Ship
     ///   - In COASTING, TargetSpeed = CurrentSpeed al momento della
     ///     transizione (freeze inerzia — spazio vuoto, nessun attrito).
     ///   - In ANCHORED, TargetSpeed = CurrentSpeed = 0 (snap immediato).
+    ///   - In DOCKING (3.1), CurrentSpeed = TargetSpeed = 0. La traslazione
+    ///     avviene tramite strafe RCS gestito da DockingController, che
+    ///     modifica direttamente ship.LogicalPosition senza passare per
+    ///     CurrentSpeed. Il modello throttle Rev T è quindi "sospeso".
+    ///   - In DOCKED, come Anchored: 0/0, tutto fermo. Il POI ancorato è
+    ///     identificato da AnchoredPoiId.
     ///
     /// LETTORI DEL MOVIMENTO:
     ///   ShipMovement legge CurrentSpeed e CurrentNavState per accumulare
-    ///   LogicalPosition e per esporre LogicalForward. Il mondo esterno
-    ///   (ExternalWorldFollower) usa LogicalForward × CurrentSpeed come
-    ///   velocità inversa. In M2 il sistema è puramente logico — nessun
-    ///   Rigidbody, "Nave" non si muove mai fisicamente.
+    ///   LogicalPosition e per esporre LogicalForward. In DOCKING/DOCKED,
+    ///   CurrentSpeed = 0 → nessuna traslazione via il modello Rev T;
+    ///   il DockingController scriverà ship.LogicalPosition direttamente
+    ///   per lo strafe.
     ///
     /// REPAIR PANEL:
     ///   Assegna questa istanza come repairableTarget al RepairPanel
@@ -94,6 +108,14 @@ namespace SpaceSurvivor.Ship
         private readonly NetworkVariable<float> _netTargetSpeed =
             new(0f, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Server);
 
+        // Fase 3 Blocco 3.1 — POI attualmente ancorato (0 = nessuno).
+        // Scritto server-side da AnchorSystem durante le transizioni
+        // Docking→Docked e Docked→Coasting. Contiene NetworkObjectId del
+        // PoiInstance, permettendo a chiunque di risolvere il POI concreto
+        // via NetworkManager.Singleton.SpawnManager.SpawnedObjects.
+        private readonly NetworkVariable<ulong> _netAnchoredPoiId =
+            new(0ul, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Server);
+
         // ── Runtime (server) ──────────────────────────────────────────────────
         private PropulsionUpgradeData _data;
         private PowerManager _powerManager;
@@ -130,6 +152,13 @@ namespace SpaceSurvivor.Ship
         public float PitchAcceleration => _data != null
                                           ? _data.pitchAcceleration * GetDegradationMults().speed : 0f;
 
+        /// <summary>
+        /// Fase 3 Blocco 3.1 — NetworkObjectId del POI attualmente ancorato,
+        /// o 0 se la nave non è ancorata. Scritto server-side da AnchorSystem.
+        /// Coerente con CurrentNavState: != 0 solo se stato è Docking o Docked.
+        /// </summary>
+        public ulong AnchoredPoiId => _netAnchoredPoiId.Value;
+
         // ── Lifecycle NGO ─────────────────────────────────────────────────────
         public override void OnNetworkSpawn()
         {
@@ -145,6 +174,7 @@ namespace SpaceSurvivor.Ship
             _netAutopilotAvailable.Value = true;
             _netCurrentSpeed.Value = 0f;
             _netTargetSpeed.Value = 0f;
+            _netAnchoredPoiId.Value = 0ul;
 
             _netHealth.OnValueChanged += OnHealthChanged;
             _netNavState.OnValueChanged += OnNavStateChanged;
@@ -205,6 +235,11 @@ namespace SpaceSurvivor.Ship
         ///   COASTING  → target congelato, current inseguirà (di solito già uguale)
         ///   AUTOPILOT → target = MaxSpeedAtDegradation (si aggiorna col degrado)
         ///   MANUAL    → target += throttle × accelerationRate × dt (clamp)
+        ///   DOCKING   → target/current forzati a 0 (Fase 3 3.1). Lo strafe RCS
+        ///               è gestito da DockingController scrivendo direttamente
+        ///               ship.LogicalPosition. Il throttle main è sospeso.
+        ///   DOCKED    → target/current forzati a 0. Come Anchored ma con
+        ///               AnchoredPoiId != 0.
         /// </summary>
         private void UpdateThrottleAndSpeed()
         {
@@ -253,6 +288,14 @@ namespace SpaceSurvivor.Ship
                 case NavigationState.Coasting:
                     // Target invariato — inerzia nello spazio vuoto
                     break;
+
+                case NavigationState.Docking:
+                case NavigationState.Docked:
+                    // Fase 3 Blocco 3.1 — throttle main sospeso, tutto a 0.
+                    // Il DockingController gestisce lo strafe scrivendo
+                    // direttamente ship.LogicalPosition.
+                    _netTargetSpeed.Value = 0f;
+                    break;
             }
 
             // 2. Smoothing CurrentSpeed → TargetSpeed
@@ -280,6 +323,8 @@ namespace SpaceSurvivor.Ship
             {
                 NavigationState.Autopilot => _data.wattsAutopilot * GetDegradationMults().watts,
                 NavigationState.Manual => _data.wattsManual * GetDegradationMults().watts,
+                NavigationState.Docking => _data.wattsDocking * GetDegradationMults().watts,
+                // Anchored, Coasting, Docked → 0W
                 _ => 0f
             };
         }
@@ -296,7 +341,15 @@ namespace SpaceSurvivor.Ship
 
             if (!isOn)
             {
-                // Perdita energia → coasting forzato
+                // Perdita energia → coasting forzato.
+                // Se in Docking/Docked, il pilota viene sbalzato in Coasting
+                // (l'ancoraggio non sopravvive alla perdita di potenza —
+                // AnchorSystem ripulirà AnchoredPoiId nel suo callback su
+                // OnNavStateChanged. In 3.1.1 lo azzeriamo qui direttamente
+                // per sicurezza, anche se ridondante.)
+                if (_netAnchoredPoiId.Value != 0ul)
+                    _netAnchoredPoiId.Value = 0ul;
+
                 SetNavStateInternal(NavigationState.Coasting);
                 Debug.LogWarning("[PropulsionSystem] Power OFF — COASTING forzato");
             }
@@ -330,8 +383,18 @@ namespace SpaceSurvivor.Ship
         /// <summary>
         /// Richiede cambio di stato di navigazione.
         /// Validazione: non AUTOPILOT se AutopilotAvailable=false,
-        /// non MANUAL/AUTOPILOT se sistema OFFLINE o FTL attivo.
-        /// Chiamabile da qualsiasi client (PilotStation).
+        /// non MANUAL/AUTOPILOT/DOCKING/DOCKED se sistema OFFLINE o FTL attivo.
+        /// Chiamabile da qualsiasi client (PilotStation, AnchorSystem).
+        ///
+        /// NOTA Fase 3 Blocco 3.1:
+        ///   Docking/Docked sono tipicamente richiesti solo da AnchorSystem
+        ///   (che valida ulteriormente la presenza di un candidato ancorabile),
+        ///   ma questa API non blocca ingressi arbitrari — la validazione
+        ///   aggiuntiva è responsabilità del chiamante. In particolare,
+        ///   l'ingresso a Docked senza aver prima settato AnchoredPoiId
+        ///   produce uno stato "docked a nessuno", inconsistente ma non
+        ///   crashogeno; TODO in 3.1.2 valutare se rendere hard-only via
+        ///   metodo dedicato.
         /// </summary>
         public void RequestNavigationState(NavigationState newState)
         {
@@ -357,6 +420,8 @@ namespace SpaceSurvivor.Ship
                 return;
             }
 
+            // OFFLINE: solo Coasting/Anchored permessi. Docking/Docked bloccati
+            // automaticamente da questo check perché non compaiono nell'allowlist.
             if (HealthToState(CurrentHealthPercent) == ShipSystemState.Offline
                 && newState != NavigationState.Coasting
                 && newState != NavigationState.Anchored)
@@ -366,6 +431,23 @@ namespace SpaceSurvivor.Ship
             }
 
             SetNavStateInternal(newState);
+        }
+
+        /// <summary>
+        /// Fase 3 Blocco 3.1 — setta il POI attualmente ancorato (o 0 per
+        /// disancorare). Server-only, chiamato da AnchorSystem durante le
+        /// transizioni Docking→Docked (set) e Docked→Coasting (clear).
+        /// NON esegue di per sé cambio di NavigationState: quello resta
+        /// responsabilità di AnchorSystem tramite RequestNavigationState.
+        /// </summary>
+        public void SetAnchoredPoiId(ulong poiNetworkObjectId)
+        {
+            if (!IsServer)
+            {
+                Debug.LogError("[PropulsionSystem] SetAnchoredPoiId called on client — ignored.");
+                return;
+            }
+            _netAnchoredPoiId.Value = poiNetworkObjectId;
         }
 
         /// <summary>
@@ -406,6 +488,10 @@ namespace SpaceSurvivor.Ship
 
             if (ftlActive)
             {
+                // Se ancorati, disancoriamo prima del salto FTL.
+                if (_netAnchoredPoiId.Value != 0ul)
+                    _netAnchoredPoiId.Value = 0ul;
+
                 SetNavStateInternal(NavigationState.Anchored);
                 _netTargetSpeed.Value = 0f;
                 _netCurrentSpeed.Value = 0f;
@@ -445,6 +531,12 @@ namespace SpaceSurvivor.Ship
         /// scelta di design: sensazione uniforme "leva che risponde con la stessa
         /// inerzia della nave", nessuna dissociazione tra "quanto veloce muovo
         /// la leva" e "quanto veloce risponde la nave".
+        ///
+        /// NOTA Fase 3 3.1: in Docking/Docked il throttle input viene ignorato
+        /// dall'UpdateThrottleAndSpeed (target forzato a 0). Il PilotStation
+        /// dovrebbe già smettere di inviare throttle in questi stati, ma se
+        /// arriva comunque, viene semplicemente scritto in _manualThrottleInput
+        /// senza effetto — nessun rischio.
         /// </summary>
         public void SetManualThrottleInput(float throttle)
         {
@@ -462,6 +554,11 @@ namespace SpaceSurvivor.Ship
         {
             if (!_isPowered || _data == null || InventorySystem.Instance == null) return;
 
+            // Solo Autopilot e Manual consumano carburante.
+            // Docking/Docked/Coasting/Anchored → 0 fuel.
+            // (Il consumo Docking è solo elettrico via wattsDocking; MVP scelta —
+            //  se emergerà exploit "resto in Docking a costo zero", valutare
+            //  aggiunta di fuelPerMinDocking basso.)
             var state = CurrentNavState;
             if (state != NavigationState.Autopilot && state != NavigationState.Manual) return;
 
@@ -530,8 +627,17 @@ namespace SpaceSurvivor.Ship
             if (IsServer && HealthToState(CurrentHealthPercent) == ShipSystemState.Offline)
             {
                 var state = CurrentNavState;
-                if (state == NavigationState.Autopilot || state == NavigationState.Manual)
+                if (state == NavigationState.Autopilot
+                    || state == NavigationState.Manual
+                    || state == NavigationState.Docking
+                    || state == NavigationState.Docked)
+                {
+                    // Se ancorati, disancoriamo forzatamente.
+                    if (_netAnchoredPoiId.Value != 0ul)
+                        _netAnchoredPoiId.Value = 0ul;
+
                     SetNavStateInternal(NavigationState.Coasting);
+                }
             }
 
             // Notifica PowerManager per aggiornare il demand
@@ -574,6 +680,16 @@ namespace SpaceSurvivor.Ship
                         // sarà il PilotStation a impostarlo ogni frame)
                         _manualThrottleInput = 0f;
                         break;
+
+                    case NavigationState.Docking:
+                    case NavigationState.Docked:
+                        // Fase 3 3.1 — snap a 0 come Anchored. Lo strafe RCS
+                        // (in Docking) è gestito da DockingController scrivendo
+                        // direttamente ship.LogicalPosition.
+                        _netTargetSpeed.Value = 0f;
+                        _netCurrentSpeed.Value = 0f;
+                        _manualThrottleInput = 0f;
+                        break;
                 }
             }
 
@@ -611,7 +727,7 @@ namespace SpaceSurvivor.Ship
         private void OnGUI()
         {
             var mults = GetDegradationMults();
-            GUILayout.BeginArea(new Rect(Screen.width - 260, 10, 250, 340));
+            GUILayout.BeginArea(new Rect(Screen.width - 260, 10, 250, 400));
             GUILayout.BeginVertical("box");
             GUILayout.Label($"[Propulsion] {(IsServer ? "SRV" : "CLT")}");
             GUILayout.Label($"State:  {CurrentNavState}");
@@ -622,6 +738,7 @@ namespace SpaceSurvivor.Ship
             GUILayout.Label($"Accel:  {(_data?.accelerationRate ?? 0):F1} × {mults.speed:F2} m/s²");
             GUILayout.Label($"Autopilot: {(_netAutopilotAvailable.Value ? "OK" : "DISABLED")}");
             GUILayout.Label($"FTL Override: {_ftlOverride}");
+            GUILayout.Label($"AnchoredPoi: {_netAnchoredPoiId.Value}");
 
             if (IsServer)
             {
@@ -633,6 +750,10 @@ namespace SpaceSurvivor.Ship
                 GUILayout.BeginHorizontal();
                 if (GUILayout.Button("Manual")) RequestNavStateInternal(NavigationState.Manual);
                 if (GUILayout.Button("Coasting")) RequestNavStateInternal(NavigationState.Coasting);
+                GUILayout.EndHorizontal();
+                GUILayout.BeginHorizontal();
+                if (GUILayout.Button("Docking")) RequestNavStateInternal(NavigationState.Docking);
+                if (GUILayout.Button("Docked")) RequestNavStateInternal(NavigationState.Docked);
                 GUILayout.EndHorizontal();
                 GUILayout.BeginHorizontal();
                 if (GUILayout.Button("Throttle+")) _manualThrottleInput = +1f;

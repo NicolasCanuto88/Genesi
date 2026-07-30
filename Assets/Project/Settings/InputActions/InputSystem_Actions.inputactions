@@ -1360,7 +1360,7 @@
                 {
                     "name": "",
                     "id": "53cd7958-353b-4ea0-ae54-691b65cec9ff",
-                    "path": "<Keyboard>/a",
+                    "path": "<Keyboard>/1",
                     "interactions": "",
                     "processors": "",
                     "groups": "",
@@ -1382,7 +1382,7 @@
                 {
                     "name": "",
                     "id": "5f524329-1936-424f-bd2d-c35e8815e04e",
-                    "path": "<Keyboard>/q",
+                    "path": "<Keyboard>/2",
                     "interactions": "",
                     "processors": "",
                     "groups": "",
@@ -1404,7 +1404,7 @@
                 {
                     "name": "",
                     "id": "f3de22f6-cff3-4b3e-a3f7-f3bb0ec084a4",
-                    "path": "<Keyboard>/f",
+                    "path": "<Keyboard>/3",
                     "interactions": "",
                     "processors": "",
                     "groups": "",
@@ -1426,7 +1426,7 @@
                 {
                     "name": "",
                     "id": "b1886f20-01ac-4338-b4d7-146c586615f2",
-                    "path": "<Keyboard>/g",
+                    "path": "<Keyboard>/4",
                     "interactions": "",
                     "processors": "",
                     "groups": "",
@@ -1442,6 +1442,265 @@
                     "processors": "",
                     "groups": "",
                     "action": "PilotFTLJump",
+                    "isComposite": false,
+                    "isPartOfComposite": false
+                }
+            ]
+        },
+        {
+            "name": "PilotAnchor",
+            "id": "2b61cd36-6185-4676-956d-bbff1d2a3595",
+            "actions": [
+                {
+                    "name": "ToggleAnchor",
+                    "type": "Button",
+                    "id": "43826974-08d9-47b7-a9cf-beeacc4ef45d",
+                    "expectedControlType": "",
+                    "processors": "",
+                    "interactions": "",
+                    "initialStateCheck": false
+                }
+            ],
+            "bindings": [
+                {
+                    "name": "",
+                    "id": "deaa5cde-c857-4dbc-9fde-2b726c8d8e12",
+                    "path": "<Keyboard>/t",
+                    "interactions": "",
+                    "processors": "",
+                    "groups": "",
+                    "action": "ToggleAnchor",
+                    "isComposite": false,
+                    "isPartOfComposite": false
+                },
+                {
+                    "name": "",
+                    "id": "7d24fa5d-a0a0-4d16-bfbc-849b6e8a838c",
+                    "path": "<Gamepad>/buttonWest",
+                    "interactions": "",
+                    "processors": "",
+                    "groups": "",
+                    "action": "ToggleAnchor",
+                    "isComposite": false,
+                    "isPartOfComposite": false
+                }
+            ]
+        },
+        {
+            "name": "PilotDocking",
+            "id": "fe04c5e2-6da2-48de-8760-3b1a44c24eac",
+            "actions": [
+                {
+                    "name": "DockingStrafeXY",
+                    "type": "Value",
+                    "id": "dbdf20e2-31ff-44b6-90ba-cf6f897eb8b8",
+                    "expectedControlType": "Vector2",
+                    "processors": "",
+                    "interactions": "",
+                    "initialStateCheck": true
+                },
+                {
+                    "name": "DockingStrafeZ",
+                    "type": "Button",
+                    "id": "f3378d46-fd23-4ca1-b60c-f78b479d9561",
+                    "expectedControlType": "",
+                    "processors": "",
+                    "interactions": "",
+                    "initialStateCheck": false
+                },
+                {
+                    "name": "ConfirmAnchor",
+                    "type": "Button",
+                    "id": "2e69330f-16fd-4db2-889a-023bfc4d6e11",
+                    "expectedControlType": "",
+                    "processors": "",
+                    "interactions": "",
+                    "initialStateCheck": false
+                },
+                {
+                    "name": "CancelDocking",
+                    "type": "Button",
+                    "id": "6d68aa7b-3524-49b5-ad39-2ae2d3f731bf",
+                    "expectedControlType": "",
+                    "processors": "",
+                    "interactions": "",
+                    "initialStateCheck": false
+                }
+            ],
+            "bindings": [
+                {
+                    "name": "",
+                    "id": "af447cd8-9a45-4f89-97d7-e3e56547916f",
+                    "path": "<Gamepad>/leftStick",
+                    "interactions": "",
+                    "processors": "",
+                    "groups": "",
+                    "action": "DockingStrafeXY",
+                    "isComposite": false,
+                    "isPartOfComposite": false
+                },
+                {
+                    "name": "2D Vector",
+                    "id": "9ff022ef-ca9e-4234-bc4c-c016028fc158",
+                    "path": "2DVector",
+                    "interactions": "",
+                    "processors": "",
+                    "groups": "",
+                    "action": "DockingStrafeXY",
+                    "isComposite": true,
+                    "isPartOfComposite": false
+                },
+                {
+                    "name": "Up",
+                    "id": "2ccf67d3-e16a-431d-8614-f82d313e49cc",
+                    "path": "<Keyboard>/w",
+                    "interactions": "",
+                    "processors": "",
+                    "groups": "",
+                    "action": "DockingStrafeXY",
+                    "isComposite": false,
+                    "isPartOfComposite": true
+                },
+                {
+                    "name": "Down",
+                    "id": "59fb23fd-302e-46b5-89c4-68ab37312d8f",
+                    "path": "<Keyboard>/s",
+                    "interactions": "",
+                    "processors": "",
+                    "groups": "",
+                    "action": "DockingStrafeXY",
+                    "isComposite": false,
+                    "isPartOfComposite": true
+                },
+                {
+                    "name": "Left",
+                    "id": "51a8d053-d72f-4cfb-bf9d-a51b5c8775c3",
+                    "path": "<Keyboard>/a",
+                    "interactions": "",
+                    "processors": "",
+                    "groups": "",
+                    "action": "DockingStrafeXY",
+                    "isComposite": false,
+                    "isPartOfComposite": true
+                },
+                {
+                    "name": "Right",
+                    "id": "dd655524-fbee-4a34-845e-489eaaa77c4f",
+                    "path": "<Keyboard>/d",
+                    "interactions": "",
+                    "processors": "",
+                    "groups": "",
+                    "action": "DockingStrafeXY",
+                    "isComposite": false,
+                    "isPartOfComposite": true
+                },
+                {
+                    "name": "1D Axis",
+                    "id": "82f07b19-43c6-4fff-925f-773090bac157",
+                    "path": "1DAxis",
+                    "interactions": "",
+                    "processors": "",
+                    "groups": "",
+                    "action": "DockingStrafeZ",
+                    "isComposite": true,
+                    "isPartOfComposite": false
+                },
+                {
+                    "name": "Negative",
+                    "id": "850700d5-24a0-4ad5-8f70-d8f20282519f",
+                    "path": "<Keyboard>/q",
+                    "interactions": "",
+                    "processors": "",
+                    "groups": "",
+                    "action": "DockingStrafeZ",
+                    "isComposite": false,
+                    "isPartOfComposite": true
+                },
+                {
+                    "name": "Positive",
+                    "id": "38907d18-c5ef-4576-842e-7faaaabc12f9",
+                    "path": "<Keyboard>/e",
+                    "interactions": "",
+                    "processors": "",
+                    "groups": "",
+                    "action": "DockingStrafeZ",
+                    "isComposite": false,
+                    "isPartOfComposite": true
+                },
+                {
+                    "name": "1D Axis",
+                    "id": "5745128f-3ea4-4c9d-99bb-f2ab431ad015",
+                    "path": "1DAxis",
+                    "interactions": "",
+                    "processors": "",
+                    "groups": "",
+                    "action": "DockingStrafeZ",
+                    "isComposite": true,
+                    "isPartOfComposite": false
+                },
+                {
+                    "name": "Negative",
+                    "id": "f3f97da2-be52-46cc-84c1-97f66a4c61f5",
+                    "path": "<Gamepad>/leftTrigger",
+                    "interactions": "",
+                    "processors": "",
+                    "groups": "",
+                    "action": "DockingStrafeZ",
+                    "isComposite": false,
+                    "isPartOfComposite": true
+                },
+                {
+                    "name": "Positive",
+                    "id": "b3708eb7-a0c1-4477-9d7e-258c0b6befcd",
+                    "path": "<Gamepad>/rightTrigger",
+                    "interactions": "",
+                    "processors": "",
+                    "groups": "",
+                    "action": "DockingStrafeZ",
+                    "isComposite": false,
+                    "isPartOfComposite": true
+                },
+                {
+                    "name": "",
+                    "id": "4b021059-816f-4c27-947b-161e94be7e9b",
+                    "path": "<Keyboard>/space",
+                    "interactions": "",
+                    "processors": "",
+                    "groups": "",
+                    "action": "ConfirmAnchor",
+                    "isComposite": false,
+                    "isPartOfComposite": false
+                },
+                {
+                    "name": "",
+                    "id": "aeca7497-a245-49f7-95d2-3137d37a6748",
+                    "path": "<Gamepad>/buttonSouth",
+                    "interactions": "",
+                    "processors": "",
+                    "groups": "",
+                    "action": "ConfirmAnchor",
+                    "isComposite": false,
+                    "isPartOfComposite": false
+                },
+                {
+                    "name": "",
+                    "id": "5e9a1d13-57af-4516-accb-9dd239627ee1",
+                    "path": "<Keyboard>/escape",
+                    "interactions": "",
+                    "processors": "",
+                    "groups": "",
+                    "action": "CancelDocking",
+                    "isComposite": false,
+                    "isPartOfComposite": false
+                },
+                {
+                    "name": "",
+                    "id": "deff9c09-1799-4ad3-9aa9-c721ff91e4d8",
+                    "path": "<Gamepad>/buttonEast",
+                    "interactions": "",
+                    "processors": "",
+                    "groups": "",
+                    "action": "CancelDocking",
                     "isComposite": false,
                     "isPartOfComposite": false
                 }

@@ -1,0 +1,636 @@
+using System;
+using Unity.Netcode;
+using UnityEngine;
+using SpaceSurvivor.Poi;
+
+namespace SpaceSurvivor.Ship
+{
+    /// <summary>
+    /// DockingController — Milestone 3 Fase 3 Blocco 3.1 (Sotto-step 3.1.3).
+    /// NetworkBehaviour singleton — GameObject dedicato figlio di Nave.
+    ///
+    /// RESPONSABILITÀ:
+    ///   Gestisce il minigioco di attracco attivo durante
+    ///   NavigationState.Docking. Server-authoritative su geometria, input,
+    ///   auto-align rotazionale; espone via NetworkVariable i valori che la
+    ///   UI del minigioco (3.1.5) leggerà per rendere cerchio dinamico +
+    ///   cornice fissa + prompt di conferma.
+    ///
+    /// FLUSSO DI VITA:
+    ///   1. Ingresso Docking (via AnchorSystem in 3.1.2 → PropulsionSystem):
+    ///      HandleEnterDocking() cattura _currentPoi, calcola geometria
+    ///      congelata (approachAxis, base perpendicolare, initialAxial,
+    ///      initialShipRotation, targetShipRotation).
+    ///   2. Update server-only (solo se stato == Docking):
+    ///      - Timer freeze thrusters post-collisione (LATCH)
+    ///      - Applica strafe RCS a ship.LogicalPosition
+    ///      - Ricalcola geometria (axial, lateral, distance)
+    ///      - Auto-align rotazionale: slerp shortest-arc, pesato su
+    ///        progressione (reversibile)
+    ///      - Check hard collision → fire OnHardCollision + latch + freeze
+    ///      - Check out-of-range → force undock a Coasting
+    ///      - Aggiorna NetVar per la UI
+    ///   3. RequestConfirmAnchor (chiamato in 3.1.4 dal PilotStation):
+    ///      se IsInAnchorTolerance → transiziona Docking → Docked,
+    ///      setta PoiInstance.ScanState = Anchored.
+    ///   4. Uscita da Docking (verso Docked, o forzata a Coasting):
+    ///      HandleExitDocking() ripulisce cache e flag.
+    ///
+    /// GEOMETRIA DEL MINIGIOCO:
+    ///   L'asse di approccio è congelato all'ingresso Docking:
+    ///     approachAxisWorld = poi.LogicalRotation * poi.DockingApproachDirectionLocal
+    ///   Rappresenta la direzione da cui la nave deve venire (es. "sopra"
+    ///   il POI). Vettore utile per il calcolo:
+    ///     fromPoiToShip = ship.LogicalPosition - poi.LogicalPosition
+    ///   Componenti:
+    ///     axial   = Dot(fromPoiToShip, approachAxis)  → distanza lungo asse.
+    ///               Positivo = nave sul lato di approccio, deve ridurre
+    ///               axial per avvicinarsi. Negativo = ha superato il POI.
+    ///     lateral = |fromPoiToShip - approachAxis * axial|
+    ///               → scostamento perpendicolare all'asse.
+    ///
+    /// AUTO-ALIGN ROTAZIONALE (shortest-arc, reversibile, basato su progressione):
+    ///   All'ingresso Docking:
+    ///     initialShipRotation = ship.LogicalRotation
+    ///     currentShipDownGlobal = initialShipRotation * Vector3.down
+    ///     correction = Quaternion.FromToRotation(currentShipDownGlobal,
+    ///                                            approachAxisWorld)
+    ///     targetShipRotation = correction * initialShipRotation
+    ///   Ogni tick:
+    ///     t = 1 - Clamp01((axial - finalDockingDistance) /
+    ///                     (initialAxial - finalDockingDistance))
+    ///     ship.LogicalRotation = Slerp(initialShipRotation,
+    ///                                  targetShipRotation, t)
+    ///   Reversibile: se il pilota indietreggia, axial cresce, t scende, la
+    ///   rotazione torna verso initialShipRotation. Motivata narrativamente
+    ///   da "computer di allineamento + RCS di precisione" (consumo 60W in
+    ///   PropulsionSystem).
+    ///   Convenzione universale docking cilindro/cilindro: nessuna rotazione
+    ///   azimutale attorno all'asse di approccio — la nave allinea SOLO la
+    ///   pancia, l'angolo di roll rispetto all'asse resta quello d'ingresso.
+    ///
+    /// STRAFE INPUT (X/Y/Z, in Vector3):
+    ///   Base X/Y = piano perpendicolare all'asse di approccio, derivata dal
+    ///     frame del POI (canonica, indipendente dalla nave).
+    ///   Convenzione input:
+    ///     input.z > 0 → avvicinati al POI (axial diminuisce)
+    ///     input.z < 0 → allontanati (axial aumenta)
+    ///     input.x     → strafe destra/sinistra nel piano perp
+    ///     input.y     → strafe su/giù nel piano perp
+    ///   Velocità: strafeSpeedRcs (default 10 u/s).
+    ///
+    /// COLLISION + LATCH:
+    ///   Se distance(nave, POI) < poi.Data.HardCollisionRadius:
+    ///     - Se _hasFiredCollisionThisSession == false: fire OnHardCollision,
+    ///       attiva freeze thrusters postCollisionThrusterFreezeSeconds,
+    ///       setta latch.
+    ///     - Il latch si sblocca quando la nave esce di nuovo dal
+    ///       HardCollisionRadius × 1.2 (histeresi).
+    ///   Il minigioco continua durante il freeze (input strafe ignorato,
+    ///   ma geometria e auto-align continuano ad aggiornarsi).
+    ///
+    /// OUT-OF-RANGE (uscita forzata):
+    ///   Se axial > maxDockingAxialRange, axial < -maxDockingAxialRange, o
+    ///   lateral > maxDockingLateralRange → transizione a Coasting (via
+    ///   AnchorSystem.RequestUndock che azzera anche AnchoredPoiId e riporta
+    ///   ScanState del POI, mantenendo coerenza).
+    ///
+    /// DIPENDE DA:
+    ///   PropulsionSystem (Instance, CurrentNavState, AnchoredPoiId,
+    ///     RequestNavigationState) ·
+    ///   ShipMovement (Instance, LogicalPosition/Rotation + setter server) ·
+    ///   AnchorSystem (Instance, RequestUndock) ·
+    ///   PoiInstance / PoiRegistry (risoluzione POI da NetworkObjectId) ·
+    ///   NetworkManager.SpawnManager (lookup NetworkObject)
+    ///
+    /// dipende da setup Editor: GameObject dedicato figlio di Nave, con
+    ///   NetworkObject + DockingController. Fratello di PropulsionSystem,
+    ///   ShipMovement, AnchorSystem.
+    /// </summary>
+    public class DockingController : NetworkBehaviour
+    {
+        // ── Singleton ─────────────────────────────────────────────────────────
+        public static DockingController Instance { get; private set; }
+        public static event Action OnInstanceReady;
+
+        // ── Tuning (SerializeField — modificabili da inspector; in futuro
+        //    passibili di bonus/malus di ruolo del pilota) ──────────────────
+        [Header("Strafe RCS")]
+        [Tooltip("Velocità dei thrusters RCS durante Docking (u/s). Applicata a " +
+                 "tutti gli assi (X/Y/Z). Default 10 u/s — sensazione di manovra " +
+                 "fine. Coerente con maxSpeedToStartDocking (30) del AnchorSystem: " +
+                 "abbastanza lenta da essere controllabile ma non frustrante.")]
+        [Min(0.1f)]
+        [SerializeField] private float strafeSpeedRcs = 10f;
+
+        [Header("Attracco — tolleranze e target")]
+        [Tooltip("Distanza assiale ideale dalla superficie del POI al momento " +
+                 "dello snap a Docked. Default 40 u/s con HardCollisionRadius=30 " +
+                 "→ buffer di 10m rispetto alla collisione. La UI (Convenzione B) " +
+                 "usa questo valore per sapere quando il cerchio combacia con " +
+                 "la cornice.")]
+        [Min(1f)]
+        [SerializeField] private float finalDockingDistance = 40f;
+
+        [Tooltip("Tolleranza sulla distanza assiale finale. IsInAnchorTolerance " +
+                 "richiede |axial - finalDockingDistance| <= questo valore. " +
+                 "Default ±5m.")]
+        [Min(0.1f)]
+        [SerializeField] private float axialDockingTolerance = 5f;
+
+        [Tooltip("Tolleranza sullo scostamento laterale (magnitude del vettore " +
+                 "lateral). IsInAnchorTolerance richiede lateralError <= questo " +
+                 "valore. Default 15m — corrisponde al cerchio 'ben centrato' " +
+                 "nella cornice sulla UI del minigioco.")]
+        [Min(0.1f)]
+        [SerializeField] private float lateralTolerance = 15f;
+
+        [Header("Uscita forzata (out-of-range)")]
+        [Tooltip("Scostamento laterale massimo prima di transizione automatica " +
+                 "a Coasting (uscita dal minigioco). Deve essere > lateralTolerance " +
+                 "per lasciare margine di manovra. Default 100m.")]
+        [Min(1f)]
+        [SerializeField] private float maxDockingLateralRange = 100f;
+
+        [Tooltip("Distanza assiale massima (in valore assoluto) prima di uscita " +
+                 "forzata. Il pilota può ancora indietreggiare fino a questa " +
+                 "distanza, oppure superare il POI di questa distanza. Deve " +
+                 "essere > DockingRadius del POI (200) per non triggerare " +
+                 "immediatamente all'ingresso. Default 400m.")]
+        [Min(1f)]
+        [SerializeField] private float maxDockingAxialRange = 400f;
+
+        [Header("Collisione")]
+        [Tooltip("Durata del freeze thrusters dopo un HardCollision (secondi). " +
+                 "Durante il freeze, gli input strafe sono ignorati. Feedback " +
+                 "teatrale 'assorbi urto'. Default 1.0s.")]
+        [Min(0f)]
+        [SerializeField] private float postCollisionThrusterFreezeSeconds = 1.0f;
+
+        [Tooltip("Fattore di isteresi sul rilascio del LATCH di collisione. Il " +
+                 "flag _hasFiredCollisionThisSession si sblocca quando la " +
+                 "distanza al POI supera HardCollisionRadius × questo fattore. " +
+                 "Default 1.2 (20% oltre il raggio di collisione). Previene " +
+                 "spam di eventi se il pilota 'oscilla' al bordo.")]
+        [Min(1.01f)]
+        [SerializeField] private float collisionReleaseHysteresis = 1.2f;
+
+        // ── Network Variables (readable dalla UI del minigioco) ───────────────
+
+        /// <summary>Scostamento laterale corrente (magnitude del vettore lateral) in u.</summary>
+        private readonly NetworkVariable<float> _netLateralError =
+            new(0f, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Server);
+
+        /// <summary>
+        /// Fase 3.1.5 — Scostamento laterale come Vector2 nella base perpendicolare
+        /// del POI: X = componente lungo _perpBasisX, Y = componente lungo _perpBasisY.
+        /// Per costruzione LateralOffset.magnitude == LateralError. Serve alla UI del
+        /// minigioco (3.1.5) per posizionare il cerchio dinamico sul canvas: la sola
+        /// magnitudine (LateralError) non basta, serve la direzione nel piano perp.
+        /// Server-authoritative.
+        /// </summary>
+        private readonly NetworkVariable<Vector2> _netLateralOffset =
+            new(Vector2.zero, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Server);
+
+        /// <summary>Distanza corrente lungo l'asse di approccio (Dot fromPoiToShip · approachAxis) in u.</summary>
+        private readonly NetworkVariable<float> _netAxialDistance =
+            new(0f, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Server);
+
+        /// <summary>Distanza assiale al momento dell'ingresso Docking, congelata.
+        /// La UI usa questo per calcolare la scala del cerchio (Convenzione B).</summary>
+        private readonly NetworkVariable<float> _netInitialAxialDistance =
+            new(0f, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Server);
+
+        /// <summary>true se lateralError e axialDistance sono entrambi entro tolleranza — attivo prompt confirm.</summary>
+        private readonly NetworkVariable<bool> _netIsInAnchorTolerance =
+            new(false, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Server);
+
+        /// <summary>
+        /// Fase 3.1.5 — DockingRadius del POI corrente (dal PoiData). Congelato
+        /// all'ingresso Docking. Serve alla UI per mappare AxialDistance a
+        /// scala del cerchio in modo che il rapporto "vicinanza al target vs
+        /// distanza di partenza" sia sempre lo stesso: a axial = DockingRadius
+        /// → cerchio minimo; a axial = FinalDockingDistance → cerchio massimo.
+        /// Non usiamo InitialAxialDistance perché varia (dipende da dove il
+        /// pilota preme T) — la UI diventerebbe imprevedibile.
+        /// </summary>
+        private readonly NetworkVariable<float> _netDockingRadiusReference =
+            new(200f, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Server);
+
+        // ── Runtime (server-only) ─────────────────────────────────────────────
+        private Vector3 _strafeInput; // ricevuto via RPC, in convenzione (X=right, Y=up, Z=forward)
+        private PoiInstance _currentPoi;
+
+        // Frame di riferimento congelato all'ingresso Docking:
+        private Vector3 _approachAxisWorld;
+        private Vector3 _perpBasisX;
+        private Vector3 _perpBasisY;
+
+        // Auto-align rotazionale:
+        private Quaternion _initialShipRotation;
+        private Quaternion _targetShipRotation;
+        private float _initialAxialDistanceCached;
+
+        // Collision LATCH + freeze timer:
+        private bool _hasFiredCollisionThisSession;
+        private float _thrusterFreezeRemaining;
+
+        // Monitoring transizioni di stato (nessun evento OnNavStateChanged su
+        // PropulsionSystem — lo osserviamo internamente).
+        private NavigationState _previousNavState = NavigationState.Anchored;
+
+        // ── Evento pubblico ───────────────────────────────────────────────────
+
+        /// <summary>
+        /// Fire server-side quando si verifica un HardCollision durante Docking.
+        /// Parametro: velocità stimata all'impatto (u/s). In 3.1 non ha
+        /// consumer effettivi; in 3.2 il sistema danno + risposta fisica POI
+        /// si abbonerà a questo evento.
+        /// </summary>
+        public event Action<float> OnHardCollision;
+
+        // ── Accessors pubblici ────────────────────────────────────────────────
+        public float LateralError => _netLateralError.Value;
+        public Vector2 LateralOffset => _netLateralOffset.Value;
+        public float AxialDistance => _netAxialDistance.Value;
+        public float InitialAxialDistance => _netInitialAxialDistance.Value;
+        public bool IsInAnchorTolerance => _netIsInAnchorTolerance.Value;
+
+        // Tuning esposti per la UI del minigioco (3.1.5): la UI legge da qui
+        // invece di duplicare i SerializeField in Inspector, evitando drift.
+        public float FinalDockingDistance => finalDockingDistance;
+        public float AxialDockingTolerance => axialDockingTolerance;
+        public float LateralTolerance => lateralTolerance;
+        public float MaxDockingLateralRange => maxDockingLateralRange;
+        public float DockingRadiusReference => _netDockingRadiusReference.Value;
+
+        // ── Lifecycle NGO ─────────────────────────────────────────────────────
+        public override void OnNetworkSpawn()
+        {
+            Instance = this;
+            _previousNavState = NavigationState.Anchored;
+            OnInstanceReady?.Invoke();
+        }
+
+        public override void OnNetworkDespawn()
+        {
+            if (Instance == this) Instance = null;
+        }
+
+        // ── Update (server-only) ──────────────────────────────────────────────
+        private void Update()
+        {
+            if (!IsServer) return;
+
+            var propulsion = PropulsionSystem.Instance;
+            if (propulsion == null) return;
+
+            NavigationState currentState = propulsion.CurrentNavState;
+
+            // Rileva transizioni di stato (enter/exit Docking)
+            if (currentState != _previousNavState)
+            {
+                if (currentState == NavigationState.Docking
+                    && _previousNavState != NavigationState.Docking)
+                {
+                    HandleEnterDocking();
+                }
+                else if (_previousNavState == NavigationState.Docking
+                         && currentState != NavigationState.Docking)
+                {
+                    HandleExitDocking();
+                }
+                _previousNavState = currentState;
+            }
+
+            if (currentState == NavigationState.Docking)
+            {
+                RunDockingTick();
+            }
+        }
+
+        // =========================================================================
+        // ENTER / EXIT DOCKING
+        // =========================================================================
+
+        private void HandleEnterDocking()
+        {
+            var propulsion = PropulsionSystem.Instance;
+            var movement = ShipMovement.Instance;
+            if (propulsion == null || movement == null)
+            {
+                Debug.LogError("[DockingController] EnterDocking: sistemi ship non pronti.");
+                return;
+            }
+
+            // Risolvi POI da AnchoredPoiId (settato da AnchorSystem prima della
+            // transizione di stato).
+            ulong poiId = propulsion.AnchoredPoiId;
+            _currentPoi = ResolvePoi(poiId);
+            if (_currentPoi == null)
+            {
+                Debug.LogError($"[DockingController] EnterDocking: POI con NetworkObjectId {poiId} non trovato.");
+                return;
+            }
+
+            // Calcola approachAxis in world space (congelato per tutta la sessione
+            // Docking — non riflette rotazioni successive del POI, che comunque
+            // non dovrebbero accadere per POI passivi).
+            _approachAxisWorld = (_currentPoi.LogicalRotation
+                                * _currentPoi.Data.DockingApproachDirectionLocal).normalized;
+
+            // Base perpendicolare all'asse di approccio, derivata dal frame POI.
+            // Convenzione canonica: usa world-up come helper; se troppo parallelo,
+            // fallback su world-forward. Q_frame_XY confermato: base derivata dal
+            // POI, indipendente dalla nave.
+            Vector3 helper = Mathf.Abs(Vector3.Dot(_approachAxisWorld, Vector3.up)) > 0.99f
+                ? Vector3.forward
+                : Vector3.up;
+            _perpBasisX = Vector3.Cross(_approachAxisWorld, helper).normalized;
+            _perpBasisY = Vector3.Cross(_perpBasisX, _approachAxisWorld).normalized;
+
+            // Fase 3.1.5 — auto-align RIMOSSO (Opzione 3). La rotation della
+            // nave resta quella d'entrata Docking per tutta la sessione.
+            // _initialShipRotation è conservata per debug/diagnostica ma
+            // _targetShipRotation non è più calcolata né usata.
+            _initialShipRotation = movement.LogicalRotation;
+            _targetShipRotation = _initialShipRotation;
+
+            // Calcola geometria iniziale
+            Vector3 fromPoiToShip = movement.LogicalPosition - _currentPoi.LogicalPosition;
+            _initialAxialDistanceCached = Vector3.Dot(fromPoiToShip, _approachAxisWorld);
+
+            // Guardia numerica: se initialAxial ≈ finalDockingDistance (pilota
+            // entra già praticamente in posizione), evitiamo divisione per zero
+            // nel calcolo di t. Un buffer minimo di 1u basta.
+            if (Mathf.Abs(_initialAxialDistanceCached - finalDockingDistance) < 1f)
+            {
+                _initialAxialDistanceCached = finalDockingDistance + 1f;
+            }
+
+            _netInitialAxialDistance.Value = _initialAxialDistanceCached;
+            _netDockingRadiusReference.Value = _currentPoi.Data.DockingRadius;
+
+            // Reset flags collisione + strafe input
+            _hasFiredCollisionThisSession = false;
+            _thrusterFreezeRemaining = 0f;
+            _strafeInput = Vector3.zero;
+
+            Debug.Log($"[DockingController] EnterDocking → POI {_currentPoi.Data.DisplayName}, " +
+                      $"axial iniziale {_initialAxialDistanceCached:F1}u, " +
+                      $"approachAxis {_approachAxisWorld}");
+        }
+
+        private void HandleExitDocking()
+        {
+            Debug.Log("[DockingController] ExitDocking — cleanup");
+            _currentPoi = null;
+            _strafeInput = Vector3.zero;
+            _thrusterFreezeRemaining = 0f;
+            _hasFiredCollisionThisSession = false;
+            _netLateralError.Value = 0f;
+            _netLateralOffset.Value = Vector2.zero;
+            _netAxialDistance.Value = 0f;
+            _netInitialAxialDistance.Value = 0f;
+            _netIsInAnchorTolerance.Value = false;
+        }
+
+        // =========================================================================
+        // DOCKING TICK — server-only, ogni frame durante Docking
+        // =========================================================================
+
+        private void RunDockingTick()
+        {
+            var movement = ShipMovement.Instance;
+            if (movement == null || _currentPoi == null) return;
+
+            float dt = Time.deltaTime;
+
+            // 1. Timer freeze thrusters (post-collisione)
+            if (_thrusterFreezeRemaining > 0f)
+            {
+                _thrusterFreezeRemaining -= dt;
+                if (_thrusterFreezeRemaining < 0f) _thrusterFreezeRemaining = 0f;
+            }
+
+            // 2. Integra strafe RCS su ship.LogicalPosition (solo se non freezato)
+            //    Convenzione: input.z > 0 = avvicinati al POI = riduci axial =
+            //    muovi la nave nella direzione OPPOSTA all'approachAxis (perché
+            //    approachAxis punta "da dove si arriva", quindi avvicinandosi al
+            //    POI si va contro-asse).
+            if (_thrusterFreezeRemaining <= 0f
+                && _strafeInput.sqrMagnitude > 1e-6f)
+            {
+                Vector3 delta =
+                      _perpBasisX * (_strafeInput.x * strafeSpeedRcs * dt)
+                    + _perpBasisY * (_strafeInput.y * strafeSpeedRcs * dt)
+                    + (-_approachAxisWorld) * (_strafeInput.z * strafeSpeedRcs * dt);
+
+                movement.SetLogicalPosition(movement.LogicalPosition + delta);
+            }
+
+            // 3. Ricalcola geometria dopo lo strafe
+            Vector3 fromPoiToShip = movement.LogicalPosition - _currentPoi.LogicalPosition;
+            float axial = Vector3.Dot(fromPoiToShip, _approachAxisWorld);
+            Vector3 axialComp = _approachAxisWorld * axial;
+            Vector3 lateralVec = fromPoiToShip - axialComp;
+            float lateralErr = lateralVec.magnitude;
+            float distanceToPoi = fromPoiToShip.magnitude;
+
+            // 4. Auto-align rotazione — RIMOSSO in Fase 3.1.5 (Opzione 3).
+            //    La nave conserva la rotation d'entrata durante tutto il Docking.
+            //    Motivazioni:
+            //    - Rimuove lo snap iniziale (t alto al primo tick produceva
+            //      salto brusco della rotation)
+            //    - Rimuove il "salto al ritorno in Manual" (causato da
+            //      ShipMovement.UpdateOrientation che forzava Quaternion.Euler
+            //      con pitch clamp + roll zero, rifiutando rotation "capovolte"
+            //      prodotte dall'auto-align)
+            //    - Coerente con "docking cilindro/cilindro" (nessuna convenzione
+            //      azimutale) e con la rotation del POI ora deterministica dal
+            //      prefab (PoiSpawner Fase 3.1.5): il modeler orienta il POI
+            //      così che il lato di attracco sia visivamente evidente
+            //    - Il pilota è responsabile di essere in rotation ragionevole
+            //      quando preme T (rotation d'entrata = rotation durante tutto
+            //      il Docking = rotation al ritorno in Manual)
+            //    La base perpendicolare X/Y del strafe resta derivata dal frame
+            //    POI (Q_frame_XY), quindi il minigioco funziona correttamente
+            //    indipendentemente dall'orientamento della nave.
+
+            // 5. Detection hard collision + LATCH con isteresi
+            float hardR = _currentPoi.Data.HardCollisionRadius;
+            if (!_hasFiredCollisionThisSession && distanceToPoi < hardR)
+            {
+                _hasFiredCollisionThisSession = true;
+                _thrusterFreezeRemaining = postCollisionThrusterFreezeSeconds;
+
+                // Velocità stimata all'impatto: intensità dello strafe corrente
+                // (approssimazione ragionevole — in 3.2 potrà essere raffinata
+                // se serve). Con strafeSpeedRcs=10 u/s e input.magnitude=1,
+                // velocity ≈ 10 u/s.
+                float impactVelocity = _strafeInput.magnitude * strafeSpeedRcs;
+                OnHardCollision?.Invoke(impactVelocity);
+
+                Debug.LogWarning($"[DockingController] HARD COLLISION! " +
+                                 $"dist={distanceToPoi:F1}u (radius={hardR:F1}u), " +
+                                 $"impactVelocity≈{impactVelocity:F1}u/s. " +
+                                 $"Thrusters freezati per {postCollisionThrusterFreezeSeconds:F1}s.");
+            }
+            else if (_hasFiredCollisionThisSession
+                     && distanceToPoi > hardR * collisionReleaseHysteresis)
+            {
+                _hasFiredCollisionThisSession = false;
+            }
+
+            // 6. Detection out-of-range → uscita forzata
+            bool outOfRange = lateralErr > maxDockingLateralRange
+                           || Mathf.Abs(axial) > maxDockingAxialRange;
+            if (outOfRange)
+            {
+                Debug.LogWarning($"[DockingController] Out-of-range — undock forzato. " +
+                                 $"lateral={lateralErr:F1}u (max {maxDockingLateralRange:F1}), " +
+                                 $"axial={axial:F1}u (max ±{maxDockingAxialRange:F1}).");
+                // AnchorSystem.RequestUndock è l'API canonica che azzera
+                // AnchoredPoiId, riporta ScanState del POI a Scanned, e
+                // transiziona a Coasting.
+                if (AnchorSystem.Instance != null)
+                    AnchorSystem.Instance.RequestUndock();
+                else
+                    PropulsionSystem.Instance?.RequestNavigationState(NavigationState.Coasting);
+                return;
+            }
+
+            // 7. Update NetVar per la UI
+            bool inTol = lateralErr <= lateralTolerance
+                      && Mathf.Abs(axial - finalDockingDistance) <= axialDockingTolerance;
+
+            // Proietto il vettore laterale sulla base perpendicolare per esporre
+            // il Vector2 alla UI (3.1.5). LateralOffset.magnitude == LateralError
+            // per costruzione — la UI usa X/Y per posizionare il cerchio.
+            Vector2 lateralOffset = new Vector2(
+                Vector3.Dot(lateralVec, _perpBasisX),
+                Vector3.Dot(lateralVec, _perpBasisY)
+            );
+
+            if (!Mathf.Approximately(_netLateralError.Value, lateralErr))
+                _netLateralError.Value = lateralErr;
+            if ((_netLateralOffset.Value - lateralOffset).sqrMagnitude > 1e-4f)
+                _netLateralOffset.Value = lateralOffset;
+            if (!Mathf.Approximately(_netAxialDistance.Value, axial))
+                _netAxialDistance.Value = axial;
+            if (_netIsInAnchorTolerance.Value != inTol)
+                _netIsInAnchorTolerance.Value = inTol;
+        }
+
+        // =========================================================================
+        // API PUBBLICA
+        // =========================================================================
+
+        /// <summary>
+        /// Chiamato dal PilotStation (3.1.4), una volta per frame durante Docking.
+        /// input.x = strafe destra/sinistra nel piano perp del POI
+        /// input.y = strafe su/giù nel piano perp del POI
+        /// input.z = avanti (verso POI) / indietro (allontanamento)
+        /// Ogni componente attesa in [-1, +1].
+        /// </summary>
+        public void SetStrafeInput(Vector3 input)
+        {
+            Vector3 clamped = new Vector3(
+                Mathf.Clamp(input.x, -1f, 1f),
+                Mathf.Clamp(input.y, -1f, 1f),
+                Mathf.Clamp(input.z, -1f, 1f));
+
+            if (IsServer) _strafeInput = clamped;
+            else SetStrafeInputRpc(clamped);
+        }
+
+        [Rpc(SendTo.Server)]
+        private void SetStrafeInputRpc(Vector3 input) => _strafeInput = input;
+
+        /// <summary>
+        /// Chiamato dal PilotStation (3.1.4) quando il pilota preme "Confirm
+        /// Anchor" nel minigioco. Se in tolleranza, transiziona Docking →
+        /// Docked e setta PoiInstance.ScanState = Anchored.
+        /// </summary>
+        public void RequestConfirmAnchor()
+        {
+            if (IsServer) RequestConfirmAnchorInternal();
+            else RequestConfirmAnchorRpc();
+        }
+
+        [Rpc(SendTo.Server)]
+        private void RequestConfirmAnchorRpc() => RequestConfirmAnchorInternal();
+
+        private void RequestConfirmAnchorInternal()
+        {
+            var propulsion = PropulsionSystem.Instance;
+            if (propulsion == null) return;
+
+            if (propulsion.CurrentNavState != NavigationState.Docking)
+            {
+                Debug.LogWarning($"[DockingController] ConfirmAnchor rifiutato — " +
+                                 $"stato attuale {propulsion.CurrentNavState} (atteso Docking).");
+                return;
+            }
+
+            if (!_netIsInAnchorTolerance.Value)
+            {
+                Debug.LogWarning("[DockingController] ConfirmAnchor rifiutato — " +
+                                 "non in tolleranza.");
+                return;
+            }
+
+            if (_currentPoi != null)
+            {
+                _currentPoi.SetScanState(PoiScanState.Anchored);
+            }
+
+            propulsion.RequestNavigationState(NavigationState.Docked);
+            Debug.Log($"[DockingController] ANCHOR CONFERMATO → DOCKED su POI " +
+                      $"{(_currentPoi != null ? _currentPoi.Data.DisplayName : "?")}");
+        }
+
+        // =========================================================================
+        // HELPER
+        // =========================================================================
+
+        private static PoiInstance ResolvePoi(ulong networkObjectId)
+        {
+            if (networkObjectId == 0ul) return null;
+            if (NetworkManager.Singleton == null) return null;
+            if (NetworkManager.Singleton.SpawnManager == null) return null;
+
+            if (!NetworkManager.Singleton.SpawnManager.SpawnedObjects
+                    .TryGetValue(networkObjectId, out var no))
+                return null;
+            if (no == null) return null;
+            return no.GetComponent<PoiInstance>();
+        }
+
+        // =========================================================================
+        // DEBUG GUI (solo lettura — cursore-safe)
+        // =========================================================================
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+        private void OnGUI()
+        {
+            GUILayout.BeginArea(new Rect(Screen.width - 260, Screen.height - 200, 250, 190));
+            GUILayout.BeginVertical("box");
+            GUILayout.Label($"[Docking] {(IsServer ? "SRV" : "CLT")}");
+            string poiLabel = _currentPoi != null && _currentPoi.Data != null
+                ? _currentPoi.Data.DisplayName : "-";
+            GUILayout.Label($"POI:      {poiLabel}");
+            GUILayout.Label($"Axial:    {_netAxialDistance.Value:F1}u " +
+                            $"(init {_netInitialAxialDistance.Value:F1})");
+            GUILayout.Label($"Target:   {finalDockingDistance:F1} ±{axialDockingTolerance:F1}");
+            GUILayout.Label($"Lateral:  {_netLateralError.Value:F1}u " +
+                            $"(tol {lateralTolerance:F1})");
+            GUILayout.Label($"InTol:    {_netIsInAnchorTolerance.Value}");
+            GUILayout.Label($"Freeze:   {_thrusterFreezeRemaining:F2}s");
+            GUILayout.Label($"Latch:    {_hasFiredCollisionThisSession}");
+            GUILayout.Label($"Strafe:   {_strafeInput}");
+            GUILayout.EndVertical();
+            GUILayout.EndArea();
+        }
+#endif
+    }
+}
