@@ -1,18 +1,23 @@
 using TMPro;
 using SpaceSurvivor.Ship;
 using SpaceSurvivor.Ship.Systems;
+using SpaceSurvivor.Poi;
+using Unity.Netcode;
 using UnityEngine;
 
 /// <summary>
-/// PilotHUD — Milestone 2, esteso Rev T (velocità corrente/target/max).
+/// PilotHUD — Milestone 2, esteso Rev T (velocità), Rev W (Docking/Anchor 3.1.6).
 /// Dashboard cockpit del Pilota. Canvas World Space, display-only.
 ///
 /// SEZIONI:
 ///   Zona       — tipo zona + evento attivo (icona emoji + label)
 ///   Navigazione — stato corrente (colore + label) + warning autopilota
+///                  esteso Rev W con stati Docking / Docked
 ///   Propulsione — fuel cells + velocità corrente/target/max (Rev T)
 ///   FTL        — stato + barra carica (Charging) + timer MM:SS (Cooldown/Lockout)
 ///   Scudi      — stato (Off/SpinUp/On) + HP + SciFiSegmentedBar
+///   Docking    — [Rev W] "DOCKED TO [POI]" quando NavState == Docked
+///                        + prompt di ancoraggio quando ancorabile / troppo veloce
 ///
 /// AGGIORNAMENTO:
 ///   InvokeRepeating(RefreshAll, 0.25s) in Open() — sospeso in Close().
@@ -26,6 +31,7 @@ using UnityEngine;
 ///
 /// DIPENDE DA:
 ///   PropulsionSystem · FTLDrive · ShieldSystem · ZoneManager · InventorySystem
+///   AnchorSystem · PoiInstance (via NetworkManager.SpawnManager)
 /// </summary>
 public class PilotHUD : MonoBehaviour, IDashboardPanel
 {
@@ -45,7 +51,8 @@ public class PilotHUD : MonoBehaviour, IDashboardPanel
     // =========================================================================
 
     [Header("— Navigazione —")]
-    [Tooltip("Label stato navigazione: ANCORATA / INERZIA / AUTOPILOTA / MANUALE / FTL…")]
+    [Tooltip("Label stato navigazione: ANCORATA / INERZIA / AUTOPILOTA / MANUALE / " +
+             "FTL / ATTRACCO / ATTRACCATA…")]
     [SerializeField] private TextMeshProUGUI labelNavState;
 
     [Tooltip("Panel attivato quando l'autopilota NON è disponibile (AsteroidField)")]
@@ -125,6 +132,40 @@ public class PilotHUD : MonoBehaviour, IDashboardPanel
     [SerializeField] private SciFiSegmentedBar barShieldHP;
 
     // =========================================================================
+    // SEZIONE DOCKING / ANCHOR (Rev W — Blocco 3.1.6)
+    // =========================================================================
+
+    [Header("— Docking / Anchor (Rev W) —")]
+    [Tooltip("Label mostrata quando la nave è ATTRACCATA a un POI. " +
+             "Formato: 'ATTRACCATA A: [displayName]'. Vuota se NavState != Docked. " +
+             "Opzionale — se null, no-op.")]
+    [SerializeField] private TextMeshProUGUI labelDockingStatus;
+
+    [Tooltip("Label prompt di ancoraggio. Mostrata quando AnchorabilityState == Anchorable " +
+             "(prompt di ingresso) o InRangeTooFast (warning velocità). " +
+             "Vuota altrimenti. Opzionale — se null, no-op.")]
+    [SerializeField] private TextMeshProUGUI labelAnchorPrompt;
+
+    [Tooltip("Testo mostrato quando AnchorabilityState == Anchorable. " +
+             "Modificabile in inspector per test di gameplay / rebind futuri.")]
+    [SerializeField]
+    private string anchorPromptAnchorable =
+        "▲ ANCORAGGIO DISPONIBILE — premi [T/X] per iniziare";
+
+    [Tooltip("Testo mostrato quando AnchorabilityState == InRangeTooFast. " +
+             "Modificabile in inspector per tuning UX.")]
+    [SerializeField]
+    private string anchorPromptTooFast =
+        "▼ TROPPO VELOCE — rallenta per poter attraccare";
+
+    [Tooltip("Prefisso label docking status. Modificabile in inspector.")]
+    [SerializeField] private string dockingStatusPrefix = "ATTRACCATA A: ";
+
+    [Tooltip("Fallback per il nome del POI se non risolvibile lato client " +
+             "(SpawnManager non ha ancora l'oggetto, o PoiInstance senza Data).")]
+    [SerializeField] private string dockingStatusUnknownPoiName = "POI SCONOSCIUTO";
+
+    // =========================================================================
     // COLORI DI STATO
     // =========================================================================
 
@@ -137,6 +178,19 @@ public class PilotHUD : MonoBehaviour, IDashboardPanel
     [SerializeField] private Color colorWarning = new Color(1.00f, 0.50f, 0.00f);
     [SerializeField] private Color colorOn = new Color(0.20f, 1.00f, 0.50f);
     [SerializeField] private Color colorOff = new Color(0.40f, 0.40f, 0.40f);
+
+    [Header("— Colori Docking (Rev W) —")]
+    [Tooltip("Colore label NavState quando NavigationState == Docking (attracco in corso).")]
+    [SerializeField] private Color colorDocking = new Color(0.00f, 0.80f, 1.00f);
+
+    [Tooltip("Colore label NavState quando NavigationState == Docked (attraccata).")]
+    [SerializeField] private Color colorDocked = new Color(0.20f, 1.00f, 0.50f);
+
+    [Tooltip("Colore label prompt quando Anchorable (invito ad attraccare).")]
+    [SerializeField] private Color colorAnchorPromptOk = new Color(0.20f, 1.00f, 0.50f);
+
+    [Tooltip("Colore label prompt quando InRangeTooFast (warning velocità).")]
+    [SerializeField] private Color colorAnchorPromptTooFast = new Color(1.00f, 0.70f, 0.10f);
 
     // =========================================================================
     // IDashboardPanel
@@ -172,6 +226,7 @@ public class PilotHUD : MonoBehaviour, IDashboardPanel
         RefreshSpeed();
         RefreshFTL();
         RefreshShields();
+        RefreshDocking();
     }
 
     // ── Zona ─────────────────────────────────────────────────────────────
@@ -219,6 +274,8 @@ public class PilotHUD : MonoBehaviour, IDashboardPanel
                 NavigationState.Coasting => ("INERZIA", colorCoasting),
                 NavigationState.Autopilot => ("AUTOPILOTA", colorAutopilot),
                 NavigationState.Manual => ("MANUALE", colorManual),
+                NavigationState.Docking => ("ATTRACCO IN CORSO", colorDocking),
+                NavigationState.Docked => ("ATTRACCATA", colorDocked),
                 _ => ("---", Color.white)
             };
         }
@@ -411,6 +468,110 @@ public class PilotHUD : MonoBehaviour, IDashboardPanel
             if (barShieldHP != null)
                 barShieldHP.SetValue(0f);
         }
+    }
+
+    // ── Docking / Anchor (Rev W — Blocco 3.1.6) ──────────────────────────
+
+    /// <summary>
+    /// Rev W — mostra due feedback complementari:
+    ///
+    /// 1. labelDockingStatus: "ATTRACCATA A: [displayName]" quando la nave è
+    ///    fisicamente attraccata (NavigationState.Docked). Vuota altrimenti.
+    ///    Non mostrata durante Docking (in progress): quella fase è già
+    ///    coperta dal DockingMinigame_Canvas dedicato + labelNavState
+    ///    ("ATTRACCO IN CORSO").
+    ///
+    /// 2. labelAnchorPrompt: prompt contestuale basato su AnchorabilityState
+    ///    di AnchorSystem.
+    ///    - Anchorable      → invito ad attraccare (verde)
+    ///    - InRangeTooFast  → warning velocità (ambra)
+    ///    - None            → label vuota
+    ///    Il prompt viene soppresso se il pilota è già in Docking/Docked (non
+    ///    ha più senso "premi T per iniziare" se sei già dentro).
+    ///
+    /// RISOLUZIONE POI displayName — client-side:
+    ///   PoiRegistry è server-only. Sul client uso
+    ///   NetworkManager.SpawnManager.SpawnedObjects[id]. Se la lookup fallisce
+    ///   (race di spawn, id stale), mostro dockingStatusUnknownPoiName come
+    ///   fallback invece di lasciare vuoto: rende visibile un eventuale bug
+    ///   di sync in playtest.
+    /// </summary>
+    private void RefreshDocking()
+    {
+        var ps = PropulsionSystem.Instance;
+        var anchor = AnchorSystem.Instance;
+
+        // — labelDockingStatus: solo se Docked —
+        if (labelDockingStatus != null)
+        {
+            if (ps != null && ps.CurrentNavState == NavigationState.Docked)
+            {
+                string poiName = ResolvePoiDisplayName(ps.AnchoredPoiId);
+                labelDockingStatus.text = dockingStatusPrefix + poiName;
+                labelDockingStatus.color = colorDocked;
+            }
+            else
+            {
+                labelDockingStatus.text = "";
+            }
+        }
+
+        // — labelAnchorPrompt: solo se NON in Docking/Docked —
+        if (labelAnchorPrompt != null)
+        {
+            bool inDockingPhase = ps != null
+                && (ps.CurrentNavState == NavigationState.Docking
+                    || ps.CurrentNavState == NavigationState.Docked);
+
+            if (anchor == null || inDockingPhase)
+            {
+                labelAnchorPrompt.text = "";
+                return;
+            }
+
+            switch (anchor.CurrentAnchorabilityState)
+            {
+                case AnchorabilityState.Anchorable:
+                    labelAnchorPrompt.text = anchorPromptAnchorable;
+                    labelAnchorPrompt.color = colorAnchorPromptOk;
+                    break;
+
+                case AnchorabilityState.InRangeTooFast:
+                    labelAnchorPrompt.text = anchorPromptTooFast;
+                    labelAnchorPrompt.color = colorAnchorPromptTooFast;
+                    break;
+
+                case AnchorabilityState.None:
+                default:
+                    labelAnchorPrompt.text = "";
+                    break;
+            }
+        }
+    }
+
+    /// <summary>
+    /// Risolve il displayName di un POI da NetworkObjectId sul client.
+    /// PoiRegistry è server-only quindi qui uso NetworkManager.SpawnManager.
+    /// Ritorna dockingStatusUnknownPoiName se non risolvibile.
+    /// </summary>
+    private string ResolvePoiDisplayName(ulong poiNetworkObjectId)
+    {
+        if (poiNetworkObjectId == 0ul) return dockingStatusUnknownPoiName;
+
+        var nm = NetworkManager.Singleton;
+        if (nm == null || nm.SpawnManager == null) return dockingStatusUnknownPoiName;
+
+        if (!nm.SpawnManager.SpawnedObjects.TryGetValue(poiNetworkObjectId, out var netObj)
+            || netObj == null)
+        {
+            return dockingStatusUnknownPoiName;
+        }
+
+        var poi = netObj.GetComponent<PoiInstance>();
+        if (poi == null || poi.Data == null) return dockingStatusUnknownPoiName;
+
+        string name = poi.Data.DisplayName;
+        return string.IsNullOrEmpty(name) ? dockingStatusUnknownPoiName : name;
     }
 
     // =========================================================================
