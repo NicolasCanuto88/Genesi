@@ -128,7 +128,7 @@ namespace SpaceSurvivor.Poi
         [Min(0f)]
         [SerializeField] private float dockingRadius = 200f;
 
-        [Tooltip("[Fase 3.1.5] Apertura totale del cono di approccio, in gradi. " +
+        [Tooltip("[Fase 3.1] Apertura totale del cono di approccio, in gradi. " +
                  "Il pilota può iniziare docking solo se si trova entro questo " +
                  "cono (metà angolo per lato) attorno all'asse di approccio del " +
                  "POI (dockingApproachDirection). Default 60° = 30° per lato. " +
@@ -138,6 +138,22 @@ namespace SpaceSurvivor.Poi
                  "meccanica reale.")]
         [Range(10f, 180f)]
         [SerializeField] private float dockingConeAngleDeg = 60f;
+
+        [Tooltip("[Fase 3.1 — D5, Rev W] Distanza entro cui il MeshRenderer del " +
+                 "cono di attracco (GameObject 'Cylinder' del prefab POI) è " +
+                 "abilitato. Sopra questo raggio il cono è invisibile a tutti, " +
+                 "sotto è visibile SOLO alla camera del pilota locale seduto " +
+                 "(vedi PilotStation D9 + layer DockingConeVisual).\n\n" +
+                 "Design: il cono serve a comunicare al pilota da che lato " +
+                 "attraccare — informazione utile SOLO a distanza operativa. " +
+                 "Mostrarlo da lontano rovinerebbe la lettura dello spazio " +
+                 "(troppi coni visibili contemporaneamente su POI multipli).\n\n" +
+                 "Default 200m: allineato a dockingRadius per far coincidere " +
+                 "\"entri nella zona di attracco\" con \"vedi il cono\". " +
+                 "Modificabile in inspector per tuning indipendente in playtest " +
+                 "senza toccare la gameplay-critical dockingRadius.")]
+        [Min(0f)]
+        [SerializeField] private float coneVisibilityRadius = 200f;
 
         [Tooltip("[Fase 3.2] Massa logica del POI, usata per il calcolo del " +
                  "trasferimento di momento durante l'impatto. Unità arbitrarie " +
@@ -176,6 +192,7 @@ namespace SpaceSurvivor.Poi
         public float WarningRadius => warningRadius;
         public float DockingRadius => dockingRadius;
         public float DockingConeAngleDeg => dockingConeAngleDeg;
+        public float ConeVisibilityRadius => coneVisibilityRadius;
 
         /// <summary>
         /// Coseno della metà-apertura del cono di approccio. Calcolato al volo

@@ -1,6 +1,7 @@
 using System;
 using Unity.Netcode;
 using UnityEngine;
+using UnityEngine.Serialization;
 using SpaceSurvivor.Poi;
 
 namespace SpaceSurvivor.Ship
@@ -69,25 +70,68 @@ namespace SpaceSurvivor.Ship
     ///   azimutale attorno all'asse di approccio — la nave allinea SOLO la
     ///   pancia, l'angolo di roll rispetto all'asse resta quello d'ingresso.
     ///
-    /// STRAFE INPUT (X/Y/Z, in Vector3):
-    ///   Base X/Y = piano perpendicolare all'asse di approccio, derivata dal
-    ///     frame del POI (canonica, indipendente dalla nave).
-    ///   Convenzione input:
+    /// STRAFE INPUT — MODELLO INERZIALE (Rev W — D7/D8):
+    ///   Modello di volo con integrazione a due fasi: input → accelerazione →
+    ///   velocità → posizione. Con stabilizzazione RCS per-asse (2C β).
+    ///     acceleration_world =
+    ///       (_perpBasisX * input.x + _perpBasisY * input.y
+    ///        + (-_approachAxisWorld) * input.z) * rcsThrustPower
+    ///     _strafeVelocity += acceleration_world * dt
+    ///     STABILIZZAZIONE PER-ASSE (2C β, Rev W hotfix):
+    ///       per ogni asse (X/Y/Z del frame POI), se |input[asse]| <
+    ///       inputDeadZone, la componente della velocity su quell'asse è
+    ///       ridotta di stabilizingThrustPower * dt (senza overshoot, si ferma
+    ///       esattamente a zero). Modelli i "thrusters di stabilizzazione RCS"
+    ///       che tengono ferma la nave sugli assi non-comandati.
+    ///     _strafeVelocity clamped a magnitude <= maxRcsVelocity
+    ///     newPos = ship.LogicalPosition + _strafeVelocity * dt
+    ///
+    ///   Convenzione input invariata rispetto al modello legacy:
     ///     input.z > 0 → avvicinati al POI (axial diminuisce)
     ///     input.z < 0 → allontanati (axial aumenta)
     ///     input.x     → strafe destra/sinistra nel piano perp
     ///     input.y     → strafe su/giù nel piano perp
-    ///   Velocità: strafeSpeedRcs (default 10 u/s).
     ///
-    /// COLLISION + LATCH:
-    ///   Se distance(nave, POI) < poi.Data.HardCollisionRadius:
-    ///     - Se _hasFiredCollisionThisSession == false: fire OnHardCollision,
-    ///       attiva freeze thrusters postCollisionThrusterFreezeSeconds,
-    ///       setta latch.
-    ///     - Il latch si sblocca quando la nave esce di nuovo dal
-    ///       HardCollisionRadius × 1.2 (histeresi).
-    ///   Il minigioco continua durante il freeze (input strafe ignorato,
-    ///   ma geometria e auto-align continuano ad aggiornarsi).
+    ///   Coerenza multiplayer (4B): _strafeVelocity è server-only, NON
+    ///   replicato via NetworkVariable. Gli altri client vedono il movimento
+    ///   attraverso la replica di ship.LogicalPosition tramite
+    ///   ExternalWorldFollower. Nessuna latenza percepita — nessun HUD
+    ///   consuma la velocità direttamente.
+    ///
+    ///   Rilascio input: la stabilizzazione per-asse riduce la velocità sugli
+    ///   assi rilasciati a rate lineare stabilizingThrustPower. Il pilota può
+    ///   comunque applicare controspinta esplicita per fermarsi più
+    ///   rapidamente (rcsThrustPower > stabilizingThrustPower). Impostare
+    ///   stabilizingThrustPower=0 per tornare a Newton puro (2B).
+    ///
+    /// COLLISION — CLAMP POSIZIONALE HARD + SLIDE TANGENZIALE (Rev W — D8):
+    ///   Prima di applicare newPos, controllo se sfora HardCollisionRadius:
+    ///     candidateFromPoi = newPos - poi.LogicalPosition
+    ///     if (|candidateFromPoi| < HardCollisionRadius && useHardPositionClamp):
+    ///       radialDir = candidateFromPoi.normalized (verso outward)
+    ///       newPos    = poi.LogicalPosition + radialDir * HardCollisionRadius
+    ///       radialSpeed = Dot(_strafeVelocity, radialDir)
+    ///       if (radialSpeed < 0):   // sta ancora andando verso il POI
+    ///         if (!latch): fire OnHardCollision(|radialSpeed|), setta latch
+    ///         _strafeVelocity -= radialDir * radialSpeed
+    ///         // → radiale azzerata, tangenziale preservata (slide)
+    ///
+    ///   INVARIANTE: distance(ship, poi) >= HardCollisionRadius sempre. La
+    ///   mesh del POI è fisicamente inattraversabile, indipendentemente da
+    ///   quanto veloce si arrivi.
+    ///
+    ///   OnHardCollision(impactVelocity) ora emette la componente RADIALE
+    ///   della velocità server-side al contatto (Rev W). Semantica
+    ///   fisicamente motivata per il consumer di Blocco 3.2 (danno hull
+    ///   proporzionale all'impatto perpendicolare, non alla velocità totale).
+    ///
+    ///   Il latch (_hasFiredCollisionThisSession) previene spam di eventi
+    ///   se il pilota resta al bordo. Rilasciato quando distance >
+    ///   HardCollisionRadius * collisionReleaseHysteresis (default 1.2×).
+    ///
+    ///   NB: postCollisionThrusterFreezeSeconds RIMOSSO in Rev W. Con clamp
+    ///   posizionale la "sospensione" thrusters non serve più — la fisica
+    ///   gestisce naturalmente il contatto.
     ///
     /// OUT-OF-RANGE (uscita forzata):
     ///   Se axial > maxDockingAxialRange, axial < -maxDockingAxialRange, o
@@ -115,13 +159,63 @@ namespace SpaceSurvivor.Ship
 
         // ── Tuning (SerializeField — modificabili da inspector; in futuro
         //    passibili di bonus/malus di ruolo del pilota) ──────────────────
-        [Header("Strafe RCS")]
-        [Tooltip("Velocità dei thrusters RCS durante Docking (u/s). Applicata a " +
-                 "tutti gli assi (X/Y/Z). Default 10 u/s — sensazione di manovra " +
-                 "fine. Coerente con maxSpeedToStartDocking (30) del AnchorSystem: " +
-                 "abbastanza lenta da essere controllabile ma non frustrante.")]
+        [Header("Strafe RCS — Modello inerziale (Rev W)")]
+        [Tooltip("Accelerazione applicata dai thrusters RCS a input pieno, in u/s². " +
+                 "Il vettore accelerazione è composto sui tre assi del frame del " +
+                 "POI (perpBasisX, perpBasisY, -approachAxisWorld) scalati dai " +
+                 "componenti input × questo valore.\n\n" +
+                 "Default 30 u/s²: con maxRcsVelocity=8 u/s la nave raggiunge il " +
+                 "cap in ~0.27s — responsività fine ma senza brusche.\n\n" +
+                 "Rinominato in Rev W da strafeSpeedRcs (semantica cambiata: " +
+                 "prima u/s velocità diretta, ora u/s² accelerazione). Il valore " +
+                 "vecchio è preservato via FormerlySerializedAs, ma DEVE essere " +
+                 "re-tunato — 10 u/s² sarebbe troppo debole.")]
         [Min(0.1f)]
-        [SerializeField] private float strafeSpeedRcs = 10f;
+        [FormerlySerializedAs("strafeSpeedRcs")]
+        [SerializeField] private float rcsThrustPower = 30f;
+
+        [Tooltip("Cap hard alla magnitudine della velocità RCS, in u/s. Sopra " +
+                 "questo valore la velocità viene clampata (i thrusters non " +
+                 "possono spingere oltre). Default 8 u/s: valore basso " +
+                 "coerente con Newton puro (asse 2B — nessun damping) — velocità " +
+                 "più alte renderebbero la manovra fine impraticabile.")]
+        [Min(0.1f)]
+        [SerializeField] private float maxRcsVelocity = 8f;
+
+        [Tooltip("[Rev W hotfix — modello 2C per-axis] Accelerazione dei thrusters " +
+                 "di stabilizzazione RCS quando il pilota NON sta comandando un " +
+                 "asse (input < inputDeadZone). Modello decelerazione lineare: " +
+                 "ogni componente della velocità sulla quale l'input è a zero " +
+                 "viene ridotta di stabilizingThrustPower × dt fino a raggiungere " +
+                 "esattamente zero (senza overshoot).\n\n" +
+                 "Con maxRcsVelocity=8 u/s e stabilizingThrustPower=20 u/s²: " +
+                 "il tempo di stop da velocità piena è 8/20 = 0.4s.\n\n" +
+                 "Comportamento per-asse (Decisione β): la stabilizzazione lavora " +
+                 "indipendentemente sui tre assi del frame POI (perpBasisX, " +
+                 "perpBasisY, -approachAxisWorld). Se il pilota preme W (input.z=1) " +
+                 "ma non A/D (input.x=0), l'asse X viene stabilizzato mentre Z " +
+                 "continua sotto guida. Coerente col comportamento SAS reale.\n\n" +
+                 "Impostare a 0 per disabilitare la stabilizzazione e tornare a " +
+                 "Newton puro (2B).")]
+        [Min(0f)]
+        [SerializeField] private float stabilizingThrustPower = 20f;
+
+        [Tooltip("[Rev W hotfix] Soglia sotto la quale l'input di uno stick/axis " +
+                 "è considerato \"zero\" ai fini della stabilizzazione RCS. " +
+                 "Applicata su |input.x|, |input.y|, |input.z| separatamente. " +
+                 "Default 0.05: robusto al drift del gamepad analogico, invisibile " +
+                 "alla percezione del pilota. Non applicabile alle azioni digitali " +
+                 "(WASD/QE) che sono binarie 0/1 e non hanno drift.")]
+        [Range(0f, 0.5f)]
+        [SerializeField] private float inputDeadZone = 0.05f;
+
+        [Tooltip("Se true, applica clamp posizionale hard: la nave NON può " +
+                 "attraversare la mesh del POI (distance(ship, poi) >= " +
+                 "HardCollisionRadius sempre). Se false, la collisione emette " +
+                 "solo OnHardCollision senza vincolare posizione — utile per " +
+                 "debug o test di comportamenti edge. In gameplay normale DEVE " +
+                 "restare true.")]
+        [SerializeField] private bool useHardPositionClamp = true;
 
         [Header("Attracco — tolleranze e target")]
         [Tooltip("Distanza assiale ideale dalla superficie del POI al momento " +
@@ -145,6 +239,17 @@ namespace SpaceSurvivor.Ship
         [Min(0.1f)]
         [SerializeField] private float lateralTolerance = 15f;
 
+        [Tooltip("[Rev W — 6C] Velocità RCS massima consentita per la conferma " +
+                 "di ancoraggio. IsInAnchorTolerance richiede |_strafeVelocity| " +
+                 "<= questo valore, in aggiunta ai check posizionali " +
+                 "(lateral+axial). Con Newton puro (2B) senza questo check il " +
+                 "pilota potrebbe confermare l'attracco mentre sta scivolando " +
+                 "tangenzialmente sulla superficie del POI — non desiderato.\n\n" +
+                 "Default 1.0 u/s: praticamente ferma. Alzare per un attracco " +
+                 "più indulgente, abbassare per un attracco chirurgico.")]
+        [Min(0.01f)]
+        [SerializeField] private float confirmMaxVelocity = 1.0f;
+
         [Header("Uscita forzata (out-of-range)")]
         [Tooltip("Scostamento laterale massimo prima di transizione automatica " +
                  "a Coasting (uscita dal minigioco). Deve essere > lateralTolerance " +
@@ -161,12 +266,6 @@ namespace SpaceSurvivor.Ship
         [SerializeField] private float maxDockingAxialRange = 400f;
 
         [Header("Collisione")]
-        [Tooltip("Durata del freeze thrusters dopo un HardCollision (secondi). " +
-                 "Durante il freeze, gli input strafe sono ignorati. Feedback " +
-                 "teatrale 'assorbi urto'. Default 1.0s.")]
-        [Min(0f)]
-        [SerializeField] private float postCollisionThrusterFreezeSeconds = 1.0f;
-
         [Tooltip("Fattore di isteresi sul rilascio del LATCH di collisione. Il " +
                  "flag _hasFiredCollisionThisSession si sblocca quando la " +
                  "distanza al POI supera HardCollisionRadius × questo fattore. " +
@@ -231,9 +330,15 @@ namespace SpaceSurvivor.Ship
         private Quaternion _targetShipRotation;
         private float _initialAxialDistanceCached;
 
-        // Collision LATCH + freeze timer:
+        // Collision LATCH (freeze timer rimosso in Rev W — vedi header):
         private bool _hasFiredCollisionThisSession;
-        private float _thrusterFreezeRemaining;
+
+        // Rev W (D7) — velocità RCS integrata server-side. Newton puro:
+        // nessun damping. Modificata da RunDockingTick, azzerata a
+        // enter/exit Docking. NON replicata via NetworkVariable (4B) —
+        // il movimento è visto dagli altri client attraverso la replica di
+        // ship.LogicalPosition tramite ExternalWorldFollower.
+        private Vector3 _strafeVelocity;
 
         // Monitoring transizioni di stato (nessun evento OnNavStateChanged su
         // PropulsionSystem — lo osserviamo internamente).
@@ -371,10 +476,10 @@ namespace SpaceSurvivor.Ship
             _netInitialAxialDistance.Value = _initialAxialDistanceCached;
             _netDockingRadiusReference.Value = _currentPoi.Data.DockingRadius;
 
-            // Reset flags collisione + strafe input
+            // Reset flags collisione + strafe input + velocity (Rev W)
             _hasFiredCollisionThisSession = false;
-            _thrusterFreezeRemaining = 0f;
             _strafeInput = Vector3.zero;
+            _strafeVelocity = Vector3.zero;
 
             Debug.Log($"[DockingController] EnterDocking → POI {_currentPoi.Data.DisplayName}, " +
                       $"axial iniziale {_initialAxialDistanceCached:F1}u, " +
@@ -386,7 +491,7 @@ namespace SpaceSurvivor.Ship
             Debug.Log("[DockingController] ExitDocking — cleanup");
             _currentPoi = null;
             _strafeInput = Vector3.zero;
-            _thrusterFreezeRemaining = 0f;
+            _strafeVelocity = Vector3.zero;
             _hasFiredCollisionThisSession = false;
             _netLateralError.Value = 0f;
             _netLateralOffset.Value = Vector2.zero;
@@ -406,31 +511,127 @@ namespace SpaceSurvivor.Ship
 
             float dt = Time.deltaTime;
 
-            // 1. Timer freeze thrusters (post-collisione)
-            if (_thrusterFreezeRemaining > 0f)
+            // 1. INTEGRAZIONE INERZIALE (Rev W — D7)
+            //    input → accelerazione → velocità → posizione candidata.
+            //    Con stabilizzazione RCS per-asse (2C β): gli assi non-comandati
+            //    vengono decelerati linearmente. Cap magnitude a maxRcsVelocity.
+            //    Convenzione input.z > 0 = avvicinati al POI = accelerazione lungo
+            //    (-_approachAxisWorld) perché l'asse "esce" dal POI verso il
+            //    lato di attracco.
+            Vector3 acceleration =
+                  _perpBasisX * (_strafeInput.x * rcsThrustPower)
+                + _perpBasisY * (_strafeInput.y * rcsThrustPower)
+                + (-_approachAxisWorld) * (_strafeInput.z * rcsThrustPower);
+
+            _strafeVelocity += acceleration * dt;
+
+            // Stabilizzazione RCS per-asse (2C β, Rev W hotfix)
+            // Per ciascuno dei tre assi del frame POI, se |input| < deadzone
+            // la componente della velocità su quell'asse viene ridotta di
+            // stabilizingThrustPower * dt (senza overshoot: si ferma esattamente
+            // a zero). La base (perpBasisX, perpBasisY, -approachAxisWorld) è
+            // ortonormale, quindi la proiezione/ricomposizione preserva
+            // esattamente _strafeVelocity.
+            if (stabilizingThrustPower > 0f)
             {
-                _thrusterFreezeRemaining -= dt;
-                if (_thrusterFreezeRemaining < 0f) _thrusterFreezeRemaining = 0f;
+                // "Asse Z positivo" del frame POI = direzione di avvicinamento
+                // al POI, coerente con la convenzione input.z > 0 = avanti.
+                Vector3 axisZ = -_approachAxisWorld;
+
+                float vX = Vector3.Dot(_strafeVelocity, _perpBasisX);
+                float vY = Vector3.Dot(_strafeVelocity, _perpBasisY);
+                float vZ = Vector3.Dot(_strafeVelocity, axisZ);
+
+                float decelStep = stabilizingThrustPower * dt;
+
+                if (Mathf.Abs(_strafeInput.x) < inputDeadZone)
+                    vX = DecelToZero(vX, decelStep);
+                if (Mathf.Abs(_strafeInput.y) < inputDeadZone)
+                    vY = DecelToZero(vY, decelStep);
+                if (Mathf.Abs(_strafeInput.z) < inputDeadZone)
+                    vZ = DecelToZero(vZ, decelStep);
+
+                _strafeVelocity = _perpBasisX * vX + _perpBasisY * vY + axisZ * vZ;
             }
 
-            // 2. Integra strafe RCS su ship.LogicalPosition (solo se non freezato)
-            //    Convenzione: input.z > 0 = avvicinati al POI = riduci axial =
-            //    muovi la nave nella direzione OPPOSTA all'approachAxis (perché
-            //    approachAxis punta "da dove si arriva", quindi avvicinandosi al
-            //    POI si va contro-asse).
-            if (_thrusterFreezeRemaining <= 0f
-                && _strafeInput.sqrMagnitude > 1e-6f)
+            // Cap velocità (3A)
+            float vMag = _strafeVelocity.magnitude;
+            if (vMag > maxRcsVelocity)
             {
-                Vector3 delta =
-                      _perpBasisX * (_strafeInput.x * strafeSpeedRcs * dt)
-                    + _perpBasisY * (_strafeInput.y * strafeSpeedRcs * dt)
-                    + (-_approachAxisWorld) * (_strafeInput.z * strafeSpeedRcs * dt);
-
-                movement.SetLogicalPosition(movement.LogicalPosition + delta);
+                _strafeVelocity = _strafeVelocity * (maxRcsVelocity / vMag);
             }
 
-            // 3. Ricalcola geometria dopo lo strafe
-            Vector3 fromPoiToShip = movement.LogicalPosition - _currentPoi.LogicalPosition;
+            // 2. POSIZIONE CANDIDATA + CLAMP POSIZIONALE HARD (Rev W — D8, 5D+5B)
+            //    Tentativo di posizione. Se sfora HardCollisionRadius, la
+            //    posizione è clampata al bordo del raggio e la componente
+            //    radiale della velocità (verso il POI) è azzerata. La
+            //    componente tangenziale è preservata (slide).
+            Vector3 currentPos = movement.LogicalPosition;
+            Vector3 candidatePos = currentPos + _strafeVelocity * dt;
+
+            float hardR = _currentPoi.Data.HardCollisionRadius;
+            Vector3 candidateFromPoi = candidatePos - _currentPoi.LogicalPosition;
+            float candidateDist = candidateFromPoi.magnitude;
+
+            if (useHardPositionClamp && candidateDist < hardR)
+            {
+                // Direzione radiale outward. Se la candidate è ~sulla POI (edge
+                // case numerico: velocità enorme che porta esattamente al centro
+                // in un tick — improbabile ma safety-critical), usa la
+                // posizione corrente come riferimento. Se ANCHE quella è
+                // degenere, fallback su _approachAxisWorld — meglio ancorare
+                // sul lato di ingresso che avere direzione zero.
+                Vector3 radialDir;
+                if (candidateDist > 1e-4f)
+                {
+                    radialDir = candidateFromPoi / candidateDist;
+                }
+                else
+                {
+                    Vector3 currentFromPoi = currentPos - _currentPoi.LogicalPosition;
+                    float currentDist = currentFromPoi.magnitude;
+                    radialDir = currentDist > 1e-4f
+                        ? currentFromPoi / currentDist
+                        : _approachAxisWorld;
+                }
+
+                // Clampa posizione al bordo esterno del raggio hard
+                candidatePos = _currentPoi.LogicalPosition + radialDir * hardR;
+
+                // Decompone velocity: radiale (positivo = outward) + tangenziale.
+                // Se radiale è negativa (verso il POI) la nave stava puntando
+                // dentro la mesh → azzera componente radiale, preserva
+                // tangenziale. Se è positiva (già in uscita) non toccare —
+                // significa che il clamp precedente ha già lavorato e la
+                // fisica sta correttamente scivolando.
+                float radialSpeed = Vector3.Dot(_strafeVelocity, radialDir);
+                if (radialSpeed < 0f)
+                {
+                    // impactVelocity fisica: componente radiale al contatto.
+                    float impactVelocity = -radialSpeed; // magnitude verso POI
+
+                    // Fire OnHardCollision solo una volta per contatto (latch)
+                    if (!_hasFiredCollisionThisSession)
+                    {
+                        _hasFiredCollisionThisSession = true;
+                        OnHardCollision?.Invoke(impactVelocity);
+
+                        Debug.LogWarning($"[DockingController] HARD COLLISION! " +
+                                         $"radial impact={impactVelocity:F2}u/s. " +
+                                         $"Componente radiale velocity azzerata; " +
+                                         $"tangenziale preservata (slide).");
+                    }
+
+                    // 5B: azzera radiale, preserva tangenziale
+                    _strafeVelocity -= radialDir * radialSpeed;
+                }
+            }
+
+            // Applica posizione (clampata o meno)
+            movement.SetLogicalPosition(candidatePos);
+
+            // 3. Ricalcola geometria dopo lo strafe (usa la posizione applicata)
+            Vector3 fromPoiToShip = candidatePos - _currentPoi.LogicalPosition;
             float axial = Vector3.Dot(fromPoiToShip, _approachAxisWorld);
             Vector3 axialComp = _approachAxisWorld * axial;
             Vector3 lateralVec = fromPoiToShip - axialComp;
@@ -457,27 +658,13 @@ namespace SpaceSurvivor.Ship
             //    POI (Q_frame_XY), quindi il minigioco funziona correttamente
             //    indipendentemente dall'orientamento della nave.
 
-            // 5. Detection hard collision + LATCH con isteresi
-            float hardR = _currentPoi.Data.HardCollisionRadius;
-            if (!_hasFiredCollisionThisSession && distanceToPoi < hardR)
-            {
-                _hasFiredCollisionThisSession = true;
-                _thrusterFreezeRemaining = postCollisionThrusterFreezeSeconds;
-
-                // Velocità stimata all'impatto: intensità dello strafe corrente
-                // (approssimazione ragionevole — in 3.2 potrà essere raffinata
-                // se serve). Con strafeSpeedRcs=10 u/s e input.magnitude=1,
-                // velocity ≈ 10 u/s.
-                float impactVelocity = _strafeInput.magnitude * strafeSpeedRcs;
-                OnHardCollision?.Invoke(impactVelocity);
-
-                Debug.LogWarning($"[DockingController] HARD COLLISION! " +
-                                 $"dist={distanceToPoi:F1}u (radius={hardR:F1}u), " +
-                                 $"impactVelocity≈{impactVelocity:F1}u/s. " +
-                                 $"Thrusters freezati per {postCollisionThrusterFreezeSeconds:F1}s.");
-            }
-            else if (_hasFiredCollisionThisSession
-                     && distanceToPoi > hardR * collisionReleaseHysteresis)
+            // 5. RILASCIO LATCH con isteresi (Rev W — freeze thrusters rimosso,
+            //    ma il latch resta per prevenire spam di OnHardCollision).
+            //    La detection della collisione è ora fusa nel blocco 2 (clamp
+            //    posizionale): al primo tick di contatto viene emesso
+            //    OnHardCollision. Qui armiamo il rilascio.
+            if (_hasFiredCollisionThisSession
+                && distanceToPoi > hardR * collisionReleaseHysteresis)
             {
                 _hasFiredCollisionThisSession = false;
             }
@@ -501,8 +688,15 @@ namespace SpaceSurvivor.Ship
             }
 
             // 7. Update NetVar per la UI
-            bool inTol = lateralErr <= lateralTolerance
-                      && Mathf.Abs(axial - finalDockingDistance) <= axialDockingTolerance;
+            //    Tolerance ora include check velocità (Rev W — 6C):
+            //    la nave è "in tolleranza" per confermare l'attracco solo se
+            //    posizionalmente ok E velocità RCS sotto soglia. Con Newton
+            //    puro (2B) senza questo check si potrebbe confermare Docked
+            //    mentre si sta scivolando tangenzialmente sulla superficie.
+            bool posInTol = lateralErr <= lateralTolerance
+                         && Mathf.Abs(axial - finalDockingDistance) <= axialDockingTolerance;
+            bool velInTol = _strafeVelocity.magnitude <= confirmMaxVelocity;
+            bool inTol = posInTol && velInTol;
 
             // Proietto il vettore laterale sulla base perpendicolare per esporre
             // il Vector2 alla UI (3.1.5). LateralOffset.magnitude == LateralError
@@ -594,6 +788,20 @@ namespace SpaceSurvivor.Ship
         // HELPER
         // =========================================================================
 
+        /// <summary>
+        /// Decelera un valore scalare verso zero di step unità, senza
+        /// overshoot. Se |v| &lt;= step ritorna 0. Usato dalla stabilizzazione
+        /// RCS per-asse (2C β) per portare esattamente a zero la componente
+        /// di velocità su un asse non-comandato, evitando oscillazioni
+        /// numeriche attorno allo zero.
+        /// </summary>
+        private static float DecelToZero(float v, float step)
+        {
+            if (v > step) return v - step;
+            if (v < -step) return v + step;
+            return 0f;
+        }
+
         private static PoiInstance ResolvePoi(ulong networkObjectId)
         {
             if (networkObjectId == 0ul) return null;
@@ -624,8 +832,9 @@ namespace SpaceSurvivor.Ship
             GUILayout.Label($"Target:   {finalDockingDistance:F1} ±{axialDockingTolerance:F1}");
             GUILayout.Label($"Lateral:  {_netLateralError.Value:F1}u " +
                             $"(tol {lateralTolerance:F1})");
+            GUILayout.Label($"Velocity: {_strafeVelocity.magnitude:F2}u/s " +
+                            $"(max {maxRcsVelocity:F1}, confirm ≤{confirmMaxVelocity:F1})");
             GUILayout.Label($"InTol:    {_netIsInAnchorTolerance.Value}");
-            GUILayout.Label($"Freeze:   {_thrusterFreezeRemaining:F2}s");
             GUILayout.Label($"Latch:    {_hasFiredCollisionThisSession}");
             GUILayout.Label($"Strafe:   {_strafeInput}");
             GUILayout.EndVertical();

@@ -153,6 +153,26 @@ public class PilotStation : MonoBehaviour, IInteractable
              "lasciato vuoto, il pilotaggio MANUAL resta in prima persona.")]
     [SerializeField] private Transform shipChaseCamPoint;
 
+    // ── Docking Cone Visibility (Rev W — D9) ─────────────────────────────────
+    [Header("— Docking Cone Visibility (Rev W — D9) —")]
+    [Tooltip("Nome del Layer Unity assegnato al GameObject del cono di attracco " +
+             "nel prefab PoiInstance (attualmente il figlio 'Cylinder'). " +
+             "Modificabile in inspector per allineamento con eventuali rinomine " +
+             "in Project Settings > Tags and Layers.\n\n" +
+             "⚠️ EDITOR REQUIRED:\n" +
+             " 1. Project Settings > Tags and Layers: creare User Layer con questo " +
+             "nome esatto (default 'DockingConeVisual').\n" +
+             " 2. Assegnare tale layer al GameObject 'Cylinder' del prefab POI.\n" +
+             " 3. Il layer va ESCLUSO dalla Culling Mask della Camera del prefab " +
+             "'Player' (di default nessuno lo vede).\n" +
+             " 4. All'ingresso in PilotStation questo script aggiunge il bit al " +
+             "cullingMask della camera del Player LOCALE che si è seduto, e lo " +
+             "rimuove all'uscita — così SOLO il pilota locale seduto vede il cono.\n\n" +
+             "Se il layer non esiste (LayerMask.NameToLayer restituisce -1) il " +
+             "componente logga un warning una volta e diventa no-op senza rompere " +
+             "il resto della sessione.")]
+    [SerializeField] private string dockingConeVisualLayerName = "DockingConeVisual";
+
     // ── Input ─────────────────────────────────────────────────────────────
     [Header("Input — Cancel (PlayerInput reference)")]
     [SerializeField] private PlayerInput playerInputReference;
@@ -235,6 +255,14 @@ public class PilotStation : MonoBehaviour, IInteractable
     private bool isChaseCamActive;
     private NavigationState lastPolledNavState;
 
+    // Rev W (D9) — stato per ripristino della cullingMask della camera del
+    // Player locale seduto. Salvato in EnterStation, ripristinato in
+    // TryExitStation. Il flag distingue "modificato con successo" da "non
+    // toccato" (es. layer inesistente): evita di sovrascrivere la mask con
+    // uno zero se il resolve del layer è fallito.
+    private int savedPlayerCameraCullingMask;
+    private bool cullingMaskWasModified;
+
     // Fase 3.1.4 — cache dei tre action map per abilitazione/disabilitazione
     // dinamica. Risolti in EnterStation dalle action reference assegnate in
     // Inspector: una qualsiasi action di un dato map basta per risalire al map
@@ -312,6 +340,11 @@ public class PilotStation : MonoBehaviour, IInteractable
         // FIX (Rev Q) — assegna la camera del giocatore che entra ora.
         if (hudCanvas != null)
             hudCanvas.worldCamera = playerCamera;
+
+        // Rev W (D9) — abilita la visibilità del cono di attracco SOLO su
+        // questa camera (Player locale seduto). Idempotente rispetto al
+        // ripristino in TryExitStation.
+        ApplyDockingConeCullingBit(true);
 
         // Recupera Cancel/Look action da PlayerInput
         PlayerInput pi = playerInputReference != null
@@ -491,6 +524,12 @@ public class PilotStation : MonoBehaviour, IInteractable
         // Cancel-durante-Docking senza alzare il pilota, ma comunque idempotente.
         if (dockingMinigameCanvas != null && dockingMinigameCanvas.activeSelf)
             dockingMinigameCanvas.SetActive(false);
+
+        // Rev W (D9) — ripristina la cullingMask della camera del Player.
+        // Fatto prima della coroutine di transizione: durante il ritorno alla
+        // posizione originale il player non vede più il cono (comportamento
+        // atteso, non è più pilota).
+        ApplyDockingConeCullingBit(false);
 
         StartCoroutine(TransitionFromStation());
     }
@@ -673,6 +712,61 @@ public class PilotStation : MonoBehaviour, IInteractable
 
         if (restoreLookAtCockpit && cameraLookAtPoint != null)
             StartCoroutine(LookAtCockpitRoutine());
+    }
+
+    // =========================================================================
+    // DOCKING CONE VISIBILITY (Rev W — D9)
+    // =========================================================================
+
+    /// <summary>
+    /// Aggiunge o rimuove il bit del layer <c>dockingConeVisualLayerName</c>
+    /// dalla cullingMask della camera del Player LOCALE seduto alla PilotStation.
+    /// Risultato: solo la camera del pilota locale renderizza il cono
+    /// (GameObject 'Cylinder' del prefab PoiInstance). Tutti gli altri player,
+    /// e lo stesso player quando non è seduto, escludono il layer dal culling e
+    /// non vedono il cono, indipendentemente dalla condizione D5 (visibilità
+    /// per distanza, gestita separatamente sul GameObject del cono).
+    ///
+    /// Idempotenza:
+    ///   - <c>enable = true</c> chiamato più volte: salva la mask solo alla
+    ///     prima chiamata (cullingMaskWasModified == false). Chiamate successive
+    ///     sono no-op.
+    ///   - <c>enable = false</c> senza previa enable: no-op.
+    ///
+    /// Robustezza al layer inesistente: se il layer non è stato creato in
+    /// Project Settings > Tags and Layers, LayerMask.NameToLayer restituisce
+    /// -1: logga warning una volta e diventa no-op, senza rompere la seduta
+    /// alla postazione.
+    /// </summary>
+    private void ApplyDockingConeCullingBit(bool enable)
+    {
+        if (playerCamera == null) return;
+
+        if (enable)
+        {
+            if (cullingMaskWasModified) return; // già applicato in questa seduta
+
+            int layerIndex = LayerMask.NameToLayer(dockingConeVisualLayerName);
+            if (layerIndex < 0)
+            {
+                Debug.LogWarning(
+                    $"[PilotStation] Layer '{dockingConeVisualLayerName}' non esiste. " +
+                    "Creare User Layer in Project Settings > Tags and Layers. " +
+                    "Il cono di attracco non sarà visibile al pilota fino a fix.");
+                return;
+            }
+
+            savedPlayerCameraCullingMask = playerCamera.cullingMask;
+            playerCamera.cullingMask |= (1 << layerIndex);
+            cullingMaskWasModified = true;
+        }
+        else
+        {
+            if (!cullingMaskWasModified) return; // niente da ripristinare
+
+            playerCamera.cullingMask = savedPlayerCameraCullingMask;
+            cullingMaskWasModified = false;
+        }
     }
 
     // =========================================================================
