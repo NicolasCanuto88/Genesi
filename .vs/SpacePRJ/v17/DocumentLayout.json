@@ -3,12 +3,12 @@
   "WorkspaceRootPath": "C:\\Users\\nicol\\UnityProjects\\SpacePRJ\\",
   "Documents": [
     {
-      "AbsoluteMoniker": "D:0:0:{D02C7C30-1E04-944D-CA4B-BF4BFB5FB4B6}|Assembly-CSharp.csproj|C:\\Users\\nicol\\UnityProjects\\SpacePRJ\\assets\\project\\scripts\\ship\\dockingcontroller.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
-      "RelativeMoniker": "D:0:0:{D02C7C30-1E04-944D-CA4B-BF4BFB5FB4B6}|Assembly-CSharp.csproj|solutionrelative:assets\\project\\scripts\\ship\\dockingcontroller.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+      "AbsoluteMoniker": "D:0:0:{D02C7C30-1E04-944D-CA4B-BF4BFB5FB4B6}|Assembly-CSharp.csproj|C:\\Users\\nicol\\UnityProjects\\SpacePRJ\\assets\\project\\scripts\\poi\\poidata.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{D02C7C30-1E04-944D-CA4B-BF4BFB5FB4B6}|Assembly-CSharp.csproj|solutionrelative:assets\\project\\scripts\\poi\\poidata.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
     },
     {
-      "AbsoluteMoniker": "D:0:0:{D02C7C30-1E04-944D-CA4B-BF4BFB5FB4B6}|Assembly-CSharp.csproj|c:\\users\\nicol\\unityprojects\\spaceprj\\assets\\project\\scripts\\poi\\poidata.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
-      "RelativeMoniker": "D:0:0:{D02C7C30-1E04-944D-CA4B-BF4BFB5FB4B6}|Assembly-CSharp.csproj|solutionrelative:assets\\project\\scripts\\poi\\poidata.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+      "AbsoluteMoniker": "D:0:0:{D02C7C30-1E04-944D-CA4B-BF4BFB5FB4B6}|Assembly-CSharp.csproj|c:\\users\\nicol\\unityprojects\\spaceprj\\assets\\project\\scripts\\ship\\dockingcontroller.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{D02C7C30-1E04-944D-CA4B-BF4BFB5FB4B6}|Assembly-CSharp.csproj|solutionrelative:assets\\project\\scripts\\ship\\dockingcontroller.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
     },
     {
       "AbsoluteMoniker": "D:0:0:{D02C7C30-1E04-944D-CA4B-BF4BFB5FB4B6}|Assembly-CSharp.csproj|C:\\Users\\nicol\\UnityProjects\\SpacePRJ\\assets\\project\\scripts\\ship\\components\\pilotstation.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
@@ -226,7 +226,7 @@
       "DocumentGroups": [
         {
           "DockedWidth": 200,
-          "SelectedChildIndex": 19,
+          "SelectedChildIndex": 1,
           "Children": [
             {
               "$type": "Document",
@@ -242,13 +242,13 @@
             },
             {
               "$type": "Document",
-              "DocumentIndex": 1,
+              "DocumentIndex": 0,
               "Title": "PoiData.cs",
               "DocumentMoniker": "C:\\Users\\nicol\\UnityProjects\\SpacePRJ\\Assets\\Project\\Scripts\\POI\\PoiData.cs",
               "RelativeDocumentMoniker": "Assets\\Project\\Scripts\\POI\\PoiData.cs",
               "ToolTip": "C:\\Users\\nicol\\UnityProjects\\SpacePRJ\\Assets\\Project\\Scripts\\POI\\PoiData.cs",
               "RelativeToolTip": "Assets\\Project\\Scripts\\POI\\PoiData.cs",
-              "ViewState": "AgIAAAAAAAAAAAAAAAAAABoAAABLAAAAAAAAAA==",
+              "ViewState": "AgIAAL4AAAAAAAAAAAA1wPUAAAABAAAAAAAAAA==",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
               "WhenOpened": "2026-07-28T10:19:28.81Z",
               "EditorCaption": ""
@@ -458,13 +458,13 @@
             },
             {
               "$type": "Document",
-              "DocumentIndex": 0,
+              "DocumentIndex": 1,
               "Title": "DockingController.cs",
               "DocumentMoniker": "C:\\Users\\nicol\\UnityProjects\\SpacePRJ\\Assets\\Project\\Scripts\\Ship\\DockingController.cs",
               "RelativeDocumentMoniker": "Assets\\Project\\Scripts\\Ship\\DockingController.cs",
               "ToolTip": "C:\\Users\\nicol\\UnityProjects\\SpacePRJ\\Assets\\Project\\Scripts\\Ship\\DockingController.cs",
               "RelativeToolTip": "Assets\\Project\\Scripts\\Ship\\DockingController.cs",
-              "ViewState": "AgIAABUDAAAAAAAAAAAgwEwDAAABAAAAAAAAAA==",
+              "ViewState": "AgIAACYDAAAAAAAAAAAgwF0DAAABAAAAAAAAAA==",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
               "WhenOpened": "2026-07-30T12:38:30.224Z",
               "EditorCaption": ""

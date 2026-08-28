@@ -348,11 +348,19 @@ namespace SpaceSurvivor.Ship
 
         /// <summary>
         /// Fire server-side quando si verifica un HardCollision durante Docking.
-        /// Parametro: velocità stimata all'impatto (u/s). In 3.1 non ha
-        /// consumer effettivi; in 3.2 il sistema danno + risposta fisica POI
-        /// si abbonerà a questo evento.
+        /// Parametri: (impactVelocity in u/s, PoiInstance colpito).
+        ///
+        /// impactVelocity è la componente RADIALE reale della velocità
+        /// server-side al momento del contatto (non stima dall'input) —
+        /// invariante Rev X.
+        ///
+        /// La PoiInstance passata consente al consumer (ShipImpactHandler
+        /// in Blocco 3.2.a) di accedere al PoiData del POI colpito senza
+        /// duplicare la risoluzione da AnchoredPoiId. Semanticamente
+        /// l'evento è self-contained: "chi ha colpito chi, con quale
+        /// forza".
         /// </summary>
-        public event Action<float> OnHardCollision;
+        public event Action<float, PoiInstance> OnHardCollision;
 
         // ── Accessors pubblici ────────────────────────────────────────────────
         public float LateralError => _netLateralError.Value;
@@ -368,6 +376,15 @@ namespace SpaceSurvivor.Ship
         public float LateralTolerance => lateralTolerance;
         public float MaxDockingLateralRange => maxDockingLateralRange;
         public float DockingRadiusReference => _netDockingRadiusReference.Value;
+
+        /// <summary>
+        /// Soglia di velocità RCS (u/s) sotto la quale l'ancoraggio è
+        /// confermabile. Esposta pubblicamente perché è ANCHE la soglia
+        /// sotto la quale gli impatti non generano danno (Blocco 3.2.a) —
+        /// invariante Rev X: un solo tuning globale gestisce sia "posso
+        /// attraccare" che "quanto è troppo forte". Consumer: ShipImpactHandler.
+        /// </summary>
+        public float ConfirmMaxVelocity => confirmMaxVelocity;
 
         // ── Lifecycle NGO ─────────────────────────────────────────────────────
         public override void OnNetworkSpawn()
@@ -614,7 +631,7 @@ namespace SpaceSurvivor.Ship
                     if (!_hasFiredCollisionThisSession)
                     {
                         _hasFiredCollisionThisSession = true;
-                        OnHardCollision?.Invoke(impactVelocity);
+                        OnHardCollision?.Invoke(impactVelocity, _currentPoi);
 
                         Debug.LogWarning($"[DockingController] HARD COLLISION! " +
                                          $"radial impact={impactVelocity:F2}u/s. " +

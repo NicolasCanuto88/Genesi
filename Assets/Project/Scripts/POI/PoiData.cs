@@ -162,6 +162,18 @@ namespace SpaceSurvivor.Poi
         [Min(0.1f)]
         [SerializeField] private float mass = 100f;
 
+        [Tooltip("[Fase 3.2.a — Blocco 3.2] Moltiplicatore per-POI applicato al " +
+                 "danno da impatto sulla nave. Formula (ShipImpactHandler):\n" +
+                 "  damage = v² × hullDamagePerImpactSquared × impactDamageMultiplier\n" +
+                 "Default 1.0 = comportamento neutro. Usare < 1 per POI " +
+                 "\"morbidi\" (asteroide vetroso, detrito sospeso: 0.3–0.6). " +
+                 "Usare > 1 per POI \"blindati\" (relitto militare, roccia dura: " +
+                 "1.5–2.5). NON influisce sul trasferimento di momento al POI " +
+                 "(quello dipende da Mass): un frammento morbido può fare poco " +
+                 "danno alla nave ed essere comunque sbalzato via.")]
+        [Min(0f)]
+        [SerializeField] private float impactDamageMultiplier = 1f;
+
         // ── Accessors pubblici ───────────────────────────────────────────────
         public PoiType Type => type;
         public string DisplayName => displayName;
@@ -205,6 +217,7 @@ namespace SpaceSurvivor.Poi
             Mathf.Cos(dockingConeAngleDeg * 0.5f * Mathf.Deg2Rad);
 
         public float Mass => mass;
+        public float ImpactDamageMultiplier => impactDamageMultiplier;
 
         // ── Validation ───────────────────────────────────────────────────────
         private void OnValidate()
