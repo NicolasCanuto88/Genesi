@@ -316,6 +316,23 @@ namespace SpaceSurvivor.Ship
         private readonly NetworkVariable<float> _netDockingRadiusReference =
             new(200f, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Server);
 
+        /// <summary>
+        /// Blocco 3.2.b.3 — Magnitude corrente della velocità RCS della nave
+        /// durante il Docking (|_strafeVelocity|), in u/s. Server-write ogni
+        /// tick, replicata a tutti per il monitor pilota (DockingMinigameUI).
+        ///
+        /// Motivazione: durante il Docking PropulsionSystem.CurrentSpeed è
+        /// sempre 0 by design (la traslazione è delegata al DockingController
+        /// via strafe RCS). Il monitor UI non può leggere lì. Questa NetVar
+        /// espone la velocità di volo effettiva durante il minigioco senza
+        /// dover replicare l'intero vettore _strafeVelocity (server-only,
+        /// invariante Rev W): la sola magnitude è sufficiente per il display
+        /// numerico e per i futuri consumer teatrali (feedback audio scalato
+        /// con la velocità, ecc.).
+        /// </summary>
+        private readonly NetworkVariable<float> _netCurrentRcsSpeed =
+            new(0f, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Server);
+
         // ── Runtime (server-only) ─────────────────────────────────────────────
         private Vector3 _strafeInput; // ricevuto via RPC, in convenzione (X=right, Y=up, Z=forward)
         private PoiInstance _currentPoi;
@@ -376,6 +393,13 @@ namespace SpaceSurvivor.Ship
         public float LateralTolerance => lateralTolerance;
         public float MaxDockingLateralRange => maxDockingLateralRange;
         public float DockingRadiusReference => _netDockingRadiusReference.Value;
+
+        /// <summary>
+        /// Blocco 3.2.b.3 — Velocità RCS corrente della nave in Docking (u/s).
+        /// Consumer: DockingMinigameUI (display sul monitor pilota) e potenziali
+        /// futuri consumer teatrali. Vedi commento su _netCurrentRcsSpeed.
+        /// </summary>
+        public float CurrentRcsSpeed => _netCurrentRcsSpeed.Value;
 
         /// <summary>
         /// Soglia di velocità RCS (u/s) sotto la quale l'ancoraggio è
@@ -515,6 +539,7 @@ namespace SpaceSurvivor.Ship
             _netAxialDistance.Value = 0f;
             _netInitialAxialDistance.Value = 0f;
             _netIsInAnchorTolerance.Value = false;
+            _netCurrentRcsSpeed.Value = 0f;
         }
 
         // =========================================================================
@@ -646,6 +671,14 @@ namespace SpaceSurvivor.Ship
 
             // Applica posizione (clampata o meno)
             movement.SetLogicalPosition(candidatePos);
+
+            // Blocco 3.2.b.3 — Replica magnitude _strafeVelocity per il monitor
+            // pilota (DockingMinigameUI). Scrittura in questo punto è
+            // intenzionale: dopo il clamp posizionale, che può aver azzerato
+            // la componente radiale della velocità su collisione. Il valore
+            // riflette quindi la velocità EFFETTIVA usata per aggiornare la
+            // posizione (post-clamp), non quella pre-clamp.
+            _netCurrentRcsSpeed.Value = _strafeVelocity.magnitude;
 
             // 3. Ricalcola geometria dopo lo strafe (usa la posizione applicata)
             Vector3 fromPoiToShip = candidatePos - _currentPoi.LogicalPosition;

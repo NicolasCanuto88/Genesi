@@ -18,8 +18,12 @@ MonoBehaviour:
   spawnDistanceMin: 2000
   spawnDistanceMax: 6000
   spawnPitchRangeDeg: 30
+  dockingApproachDirection: {x: 0, y: 1, z: 0}
   hardCollisionRadius: 30
   softCollisionRadius: 50
   warningRadius: 100
   dockingRadius: 200
-  mass: 100
+  dockingConeAngleDeg: 60
+  coneVisibilityRadius: 200
+  mass: 10
+  impactDamageMultiplier: 1

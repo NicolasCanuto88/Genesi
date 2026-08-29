@@ -199,8 +199,14 @@ namespace SpaceSurvivor.UI
 
         private void UpdateTextOverlays(DockingController dc, PropulsionSystem ps)
         {
+            // Blocco 3.2.b.3 — Velocità RCS letta dal DockingController
+            // (magnitude di _strafeVelocity, replicata via _netCurrentRcsSpeed).
+            // PRIMA (Rev Y): leggeva ps.CurrentSpeed, che durante il Docking
+            // è sempre 0 by design (PropulsionSystem.cs commento riga 41-56).
+            // Il parametro ps resta in firma per possibili consumer futuri
+            // (es. mostrare velocità cruise durante approccio pre-Docking).
             if (speedText != null)
-                speedText.text = $"VELOCITÀ: {ps.CurrentSpeed:F1} u/s";
+                speedText.text = $"VELOCITÀ: {dc.CurrentRcsSpeed:F1} u/s";
 
             if (distanceText != null)
                 distanceText.text = $"DISTANZA: {dc.AxialDistance:F0} u";

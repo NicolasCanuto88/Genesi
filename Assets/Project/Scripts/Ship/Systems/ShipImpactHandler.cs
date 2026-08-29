@@ -6,19 +6,28 @@ using SpaceSurvivor.Poi;
 namespace SpaceSurvivor.Ship
 {
     /// <summary>
-    /// ShipImpactHandler — Milestone 3 Fase 3 Blocco 3.2 (Sotto-step 3.2.a).
+    /// ShipImpactHandler — Milestone 3 Fase 3 Blocco 3.2 (Sotto-step 3.2.a + 3.2.b).
     /// NetworkBehaviour singleton — GameObject dedicato figlio di Nave
     /// (tipicamente lo stesso di HullSystem, o comunque dentro la stessa
     /// scope network).
     ///
     /// RESPONSABILITÀ:
     ///   Orchestratore server-side degli eventi di IMPATTO sulla nave.
+    ///
     ///   In 3.2.a: consuma DockingController.OnHardCollision, calcola il
     ///   danno secondo la formula soglia+quadratica concordata, chiama
     ///   HullSystem.TakeDamage().
     ///
-    ///   In 3.2.b si estenderà per gestire la reazione fisica del POI
-    ///   colpito (trasferimento di momento a PoiInstance.LogicalVelocity).
+    ///   In 3.2.b: dopo l'applicazione del danno, calcola il trasferimento
+    ///   di momento cinetico dalla nave al POI colpito e chiama
+    ///   PoiInstance.AddImpulse(). Il POI viene sbalzato lungo la direzione
+    ///   radiale nave→POI, con deltaV inversamente proporzionale alla propria
+    ///   Mass (PoiData.Mass agisce come "rapporto di massa" verso la
+    ///   costante EffectiveShipMass — vedi Q3, Rev Z). La rotazione del POI
+    ///   NON viene modificata: invariante Rev Z, l'asse di attracco deve
+    ///   restare stabile perché il pilota possa riprovare l'ancoraggio dopo
+    ///   un urto.
+    ///
     ///   In 3.2.d si estenderà per fire di eventi verso feedback teatrale
     ///   (screen shake, luci sfarfallanti, audio d'impatto).
     ///
@@ -43,6 +52,27 @@ namespace SpaceSurvivor.Ship
     ///   per-POI dal moltiplicatore ImpactDamageMultiplier (asteroide
     ///   vetroso &lt; 1, relitto blindato &gt; 1).
     ///
+    /// FORMULA TRASFERIMENTO MOMENTO (Blocco 3.2.b — Q3 = massa nave costante):
+    ///     radialDir = (poi.LogicalPosition - ship.LogicalPosition).normalized
+    ///     deltaV    = impactVelocity × EffectiveShipMass / poiData.Mass
+    ///     poi.AddImpulse(radialDir × deltaV)
+    ///
+    ///   EffectiveShipMass è una costante interna = 1.0 (Q3): PoiData.Mass
+    ///   è di fatto il "rapporto di massa nave/POI". Un relitto con Mass=100
+    ///   (default) riceve deltaV = 1% della velocità di impatto: un urto a
+    ///   3 u/s sbalza un relitto tipico di 0.03 u/s → con sleep threshold
+    ///   0.05 u/s si ferma subito (impatto lieve → nessuno spostamento
+    ///   percepibile). Un urto a 10 u/s sbalza 0.1 u/s → il POI si allontana
+    ///   ~4 m in ~35s prima di fermarsi (feel corretto per collisione dura).
+    ///   Per tunare visibilità dell'effetto: abbassare Mass del POI, NON
+    ///   toccare EffectiveShipMass.
+    ///
+    ///   Nota: il trasferimento di momento e il danno sono DISACCOPPIATI.
+    ///   Un frammento con ImpactDamageMultiplier=0.3 (asteroide vetroso)
+    ///   ma Mass=10 fa poco danno alla nave ed è comunque scacciato via
+    ///   con vigore. Un relitto con ImpactDamageMultiplier=2.0 (blindato)
+    ///   ma Mass=500 (grosso) fa molto danno ed è quasi immobile.
+    ///
     /// EVENTO PUBBLICO:
     ///   OnDamageInflicted(damage, impactVelocity, poi) — fire server-side
     ///   solo quando è stato effettivamente applicato danno (&gt; 0).
@@ -54,7 +84,12 @@ namespace SpaceSurvivor.Ship
     ///   - DockingController (Instance, OnHardCollision, ConfirmMaxVelocity)
     ///   - HullSystem (Instance, TakeDamage) — se assente al momento
     ///     dell'evento, il danno viene loggato ma non applicato (fail-safe).
+    ///   - ShipMovement (Instance, LogicalPosition) — se assente al momento
+    ///     dell'evento, il danno viene comunque applicato ma il trasferimento
+    ///     di momento viene skippato con warning (fail-safe).
+    ///   - PoiInstance.AddImpulse (aggiunto in 3.2.b.1)
     ///   - PoiData.ImpactDamageMultiplier (aggiunto in 3.2.a)
+    ///   - PoiData.Mass (esistente, ora effettivamente usato)
     ///
     /// EDITOR SETUP:
     ///   Componente su un GameObject figlio di Nave (o sullo stesso GO di
@@ -66,6 +101,32 @@ namespace SpaceSurvivor.Ship
     {
         // ── Singleton (server-only usage) ─────────────────────────────────────
         public static ShipImpactHandler Instance { get; private set; }
+
+        // ── Costanti fisiche (Blocco 3.2.b) ───────────────────────────────────
+
+        /// <summary>
+        /// Massa effettiva della nave usata nella formula di trasferimento
+        /// momento. Costante 1.0 (Q3 confermato in workshop 3.2.b, Rev Z):
+        /// PoiData.Mass diventa il "rapporto di massa nave/POI".
+        ///
+        /// Motivazione dell'unità arbitraria: un solo dial di tuning
+        /// (PoiData.Mass per-asset), zero accoppiamento con sistemi upgrade
+        /// non ancora implementati. Se in Milestone 4+ vorremo che Hull
+        /// upgrade influenzi lo "sfondamento" della nave sui relitti, si
+        /// promuoverà questa costante a property (o ShipMovement property)
+        /// derivata dall'upgrade, senza refactor di nessun consumer.
+        /// </summary>
+        private const float EffectiveShipMass = 1.0f;
+
+        /// <summary>
+        /// Distanza minima nave↔POI (u logiche) sotto cui il trasferimento
+        /// di momento viene skippato: la direzione radiale è degenere.
+        /// Edge case teorico (overlap perfetto), il clamp posizionale del
+        /// DockingController lo rende praticamente irraggiungibile — ma
+        /// vale la spesa dell'if per prevenire NaN/Infinity in caso di
+        /// bug o refactor futuri.
+        /// </summary>
+        private const float DegenerateRadialDistanceEpsilon = 1e-4f;
 
         // ── Inspector ─────────────────────────────────────────────────────────
         [Header("Formula danno da impatto (Blocco 3.2.a)")]
@@ -81,9 +142,16 @@ namespace SpaceSurvivor.Ship
         [SerializeField] private float hullDamagePerImpactSquared = 1.0f;
 
         [Header("Debug")]
-        [Tooltip("Log dettagliato di ogni impatto (calcolo formula + risultato). " +
-                 "Utile in playtest per tuning; disattivare in build finale.")]
+        [Tooltip("Log dettagliato di ogni impatto (calcolo formula danno + " +
+                 "risultato). Utile in playtest per tuning; disattivare in " +
+                 "build finale.")]
         [SerializeField] private bool logImpacts = true;
+
+        [Tooltip("Log dettagliato del trasferimento di momento al POI colpito " +
+                 "(direzione radiale + deltaV applicato). Utile in playtest " +
+                 "3.2.b per verificare feel dell'urto e bilanciamento di " +
+                 "PoiData.Mass; disattivare in build finale.")]
+        [SerializeField] private bool logImpulses = true;
 
         // ── Stato server ──────────────────────────────────────────────────────
         private bool _subscribedToDocking = false;
@@ -166,7 +234,7 @@ namespace SpaceSurvivor.Ship
         {
             if (!IsServer) return;
 
-            // Validazione input
+            // ── Validazione input ─────────────────────────────────────────────
             if (poi == null)
             {
                 Debug.LogWarning("[ShipImpactHandler] HardCollision con PoiInstance null — ignoro.");
@@ -178,7 +246,10 @@ namespace SpaceSurvivor.Ship
                 return;
             }
 
-            // Soglia: sotto ConfirmMaxVelocity nessun danno (invariante Rev X).
+            // ── Soglia ────────────────────────────────────────────────────────
+            // Sotto ConfirmMaxVelocity nessun danno E nessun impulso
+            // (invariante Rev X + Rev Z: un solo tuning globale, sotto soglia
+            // il contatto è "allineamento fine", non "urto").
             // Se DockingController.Instance sparisse tra fire e handle (edge
             // case durante despawn) usiamo un fallback conservativo di 1.0.
             float threshold = DockingController.Instance != null
@@ -189,14 +260,14 @@ namespace SpaceSurvivor.Ship
             {
                 if (logImpacts)
                 {
-                    Debug.Log($"[ShipImpactHandler] Impatto sotto soglia — no damage. " +
+                    Debug.Log($"[ShipImpactHandler] Impatto sotto soglia — no damage/impulse. " +
                               $"v={impactVelocity:F2} u/s, soglia={threshold:F2} u/s, " +
                               $"POI={poi.Data.DisplayName}");
                 }
                 return;
             }
 
-            // Formula danno: v² × k × moltiplicatore per-POI.
+            // ── Calcolo e applicazione danno ──────────────────────────────────
             float multiplier = poi.Data.ImpactDamageMultiplier;
             float damage = impactVelocity * impactVelocity
                          * hullDamagePerImpactSquared
@@ -209,29 +280,97 @@ namespace SpaceSurvivor.Ship
                     Debug.Log($"[ShipImpactHandler] Damage calcolato = 0 " +
                               $"(k={hullDamagePerImpactSquared:F3}, mult={multiplier:F2}) — skip.");
                 }
+                // NB: se il danno è 0 per mult=0 (asteroide "carta velina"),
+                // saltiamo anche il trasferimento di momento. La semantica
+                // "urto irrilevante" vale su entrambi i canali.
                 return;
             }
 
-            // Applicazione danno via HullSystem (server-authoritative).
             var hull = HullSystem.Instance;
             if (hull == null)
             {
                 Debug.LogWarning($"[ShipImpactHandler] HullSystem.Instance null — impatto perso! " +
                                  $"damage={damage:F1} HP, v={impactVelocity:F2} u/s, POI={poi.Data.DisplayName}");
+                // Il danno è perso, ma tentiamo comunque il trasferimento di
+                // momento: la reazione fisica del POI non dipende dallo stato
+                // dello scafo (potresti sbattere una nave morta contro un
+                // relitto — dovrebbe comunque spostarsi).
+            }
+            else
+            {
+                hull.TakeDamage(damage);
+
+                if (logImpacts)
+                {
+                    Debug.LogWarning($"[ShipImpactHandler] IMPATTO → -{damage:F1} HP " +
+                                     $"(v={impactVelocity:F2} u/s, k={hullDamagePerImpactSquared:F3}, " +
+                                     $"mult={multiplier:F2}, POI={poi.Data.DisplayName})");
+                }
+            }
+
+            // ── Trasferimento momento al POI colpito (Blocco 3.2.b) ───────────
+            ApplyMomentumTransferToPoi(impactVelocity, poi);
+
+            // ── Notifica consumer di feedback teatrale (Blocco 3.2.d) ─────────
+            OnDamageInflicted?.Invoke(damage, impactVelocity, poi);
+        }
+
+        /// <summary>
+        /// Calcola direzione radiale nave→POI e applica un impulso a
+        /// PoiInstance secondo la formula di trasferimento momento
+        /// (Q3 confermata Rev Z: EffectiveShipMass = 1.0).
+        ///
+        /// Fail-safe: se ShipMovement.Instance è assente o la distanza
+        /// radiale è degenere (overlap perfetto), skippa l'impulso e
+        /// logga warning. Il danno alla nave è già stato applicato
+        /// separatamente — questa funzione può fallire senza compromettere
+        /// il resto della catena.
+        /// </summary>
+        private void ApplyMomentumTransferToPoi(float impactVelocity, PoiInstance poi)
+        {
+            var shipMovement = ShipMovement.Instance;
+            if (shipMovement == null)
+            {
+                Debug.LogWarning($"[ShipImpactHandler] ShipMovement.Instance null — " +
+                                 $"trasferimento momento skippato (POI={poi.Data.DisplayName}).");
                 return;
             }
 
-            hull.TakeDamage(damage);
+            Vector3 shipToPoi = poi.LogicalPosition - shipMovement.LogicalPosition;
+            float dist = shipToPoi.magnitude;
 
-            if (logImpacts)
+            if (dist < DegenerateRadialDistanceEpsilon)
             {
-                Debug.LogWarning($"[ShipImpactHandler] IMPATTO → -{damage:F1} HP " +
-                                 $"(v={impactVelocity:F2} u/s, k={hullDamagePerImpactSquared:F3}, " +
-                                 $"mult={multiplier:F2}, POI={poi.Data.DisplayName})");
+                Debug.LogWarning($"[ShipImpactHandler] Direzione radiale degenere " +
+                                 $"(dist={dist:E2} u) — trasferimento momento skippato " +
+                                 $"(POI={poi.Data.DisplayName}).");
+                return;
             }
 
-            // Notifica consumer di feedback teatrale (Blocco 3.2.d, futuro).
-            OnDamageInflicted?.Invoke(damage, impactVelocity, poi);
+            Vector3 radialDir = shipToPoi / dist;
+
+            float poiMass = poi.Data.Mass;
+            // PoiData.Mass ha [Min(0.1f)] a livello di Inspector — divisione
+            // sempre safe, ma teniamo un guard difensivo per non fidarci del
+            // pattern nel caso PoiData venga modificato in futuro.
+            if (poiMass <= 0f)
+            {
+                Debug.LogWarning($"[ShipImpactHandler] PoiData.Mass non positiva ({poiMass}) su " +
+                                 $"{poi.Data.DisplayName} — trasferimento momento skippato.");
+                return;
+            }
+
+            float deltaVMagnitude = impactVelocity * EffectiveShipMass / poiMass;
+            Vector3 impulse = radialDir * deltaVMagnitude;
+
+            poi.AddImpulse(impulse);
+
+            if (logImpulses)
+            {
+                Debug.Log($"[ShipImpactHandler] IMPULSO → POI={poi.Data.DisplayName}, " +
+                          $"deltaV={deltaVMagnitude:F3} u/s, dir=({radialDir.x:F2},{radialDir.y:F2},{radialDir.z:F2}), " +
+                          $"poiMass={poiMass:F1}, shipMass={EffectiveShipMass:F1}, v={impactVelocity:F2} u/s");
+            }
         }
     }
 }
