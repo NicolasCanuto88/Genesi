@@ -28,6 +28,11 @@ namespace SpaceSurvivor.Ship
     ///   restare stabile perché il pilota possa riprovare l'ancoraggio dopo
     ///   un urto.
     ///
+    ///   In 3.2.c aggiunge una seconda sottoscrizione a
+    ///   PoiCollisionResolver.OnHardCollision (impatti in Manual/Coasting/
+    ///   Autopilot). HandleHardCollision è agnostico rispetto alla sorgente:
+    ///   zero modifiche al body, solo doppio publisher → singolo consumer.
+    ///
     ///   In 3.2.d si estenderà per fire di eventi verso feedback teatrale
     ///   (screen shake, luci sfarfallanti, audio d'impatto).
     ///
@@ -155,6 +160,7 @@ namespace SpaceSurvivor.Ship
 
         // ── Stato server ──────────────────────────────────────────────────────
         private bool _subscribedToDocking = false;
+        private bool _subscribedToResolver = false;
 
         // ── Eventi pubblici ───────────────────────────────────────────────────
         /// <summary>
@@ -182,12 +188,16 @@ namespace SpaceSurvivor.Ship
             if (!IsServer) return;
 
             TrySubscribeToDocking();
+            TrySubscribeToResolver();
         }
 
         public override void OnNetworkDespawn()
         {
             if (IsServer)
+            {
                 UnsubscribeFromDocking();
+                UnsubscribeFromResolver();
+            }
 
             if (Instance == this) Instance = null;
         }
@@ -227,6 +237,45 @@ namespace SpaceSurvivor.Ship
                 DockingController.Instance.OnHardCollision -= HandleHardCollision;
             }
             _subscribedToDocking = false;
+        }
+
+        // ── Subscription resiliente al PoiCollisionResolver (Blocco 3.2.c) ────
+        // Simmetrica a TrySubscribeToDocking. Il resolver emette OnHardCollision
+        // con la stessa signature (Action<float, PoiInstance>) e HandleHardCollision
+        // è agnostico rispetto alla sorgente — un solo consumer, due publisher.
+        private void TrySubscribeToResolver()
+        {
+            if (_subscribedToResolver) return;
+
+            if (PoiCollisionResolver.Instance != null)
+            {
+                PoiCollisionResolver.Instance.OnHardCollision += HandleHardCollision;
+                _subscribedToResolver = true;
+                if (logImpacts)
+                    Debug.Log("[ShipImpactHandler] Subscribed to PoiCollisionResolver.OnHardCollision.");
+            }
+            else
+            {
+                PoiCollisionResolver.OnInstanceReady += HandleResolverInstanceReady;
+                if (logImpacts)
+                    Debug.Log("[ShipImpactHandler] PoiCollisionResolver non pronto, in attesa di OnInstanceReady.");
+            }
+        }
+
+        private void HandleResolverInstanceReady()
+        {
+            PoiCollisionResolver.OnInstanceReady -= HandleResolverInstanceReady;
+            TrySubscribeToResolver();
+        }
+
+        private void UnsubscribeFromResolver()
+        {
+            PoiCollisionResolver.OnInstanceReady -= HandleResolverInstanceReady;
+            if (_subscribedToResolver && PoiCollisionResolver.Instance != null)
+            {
+                PoiCollisionResolver.Instance.OnHardCollision -= HandleHardCollision;
+            }
+            _subscribedToResolver = false;
         }
 
         // ── Consumer di OnHardCollision (server-only) ─────────────────────────

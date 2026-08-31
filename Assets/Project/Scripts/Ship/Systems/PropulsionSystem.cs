@@ -549,6 +549,42 @@ namespace SpaceSurvivor.Ship
         [Rpc(SendTo.Server)]
         private void SetManualThrottleInputRpc(float throttle) => _manualThrottleInput = throttle;
 
+        /// <summary>
+        /// Blocco 3.2.c — server-only setter di CurrentSpeed dedicato al
+        /// PoiCollisionResolver. Chiamato quando il clamp posizionale contro
+        /// un POI ha ridotto la velocità della nave: il resolver calcola il
+        /// nuovo scalare CurrentSpeed proiettando la velocità tangenziale
+        /// post-clamp su LogicalForward e passa il risultato qui.
+        ///
+        /// SEMANTICA: forza CurrentSpeed a newSpeed, clampato in
+        /// [-MaxSpeedAtDegradation, +MaxSpeedAtDegradation] per coerenza col
+        /// range fisico del sistema. TargetSpeed NON viene toccato — se il
+        /// pilota tiene W premuto, il tick successivo lo smoothing
+        /// UpdateThrottleAndSpeed rialzerà CurrentSpeed verso TargetSpeed e
+        /// il resolver reintarba (PA1.a confermato Rev AA — "martellamento"
+        /// contro la mesh come feedback fisico voluto).
+        ///
+        /// Guard su !IsServer coerente con SetLogicalPosition di ShipMovement
+        /// e SetAnchoredPoiId (Fase 3 Blocco 3.1). Nessun RPC: il chiamante
+        /// (PoiCollisionResolver) gira server-side per costruzione.
+        /// </summary>
+        public void SetCurrentSpeedFromCollision(float newSpeed)
+        {
+            if (!IsServer)
+            {
+                Debug.LogError("[PropulsionSystem] SetCurrentSpeedFromCollision called on client — ignored.");
+                return;
+            }
+
+            float cap = MaxSpeedAtDegradation;
+            // Se il data non è ancora inizializzato (edge case boot), non
+            // possiamo clampare — meglio saltare la scrittura che scrivere
+            // un valore fuori range.
+            if (cap <= 0f) return;
+
+            _netCurrentSpeed.Value = Mathf.Clamp(newSpeed, -cap, cap);
+        }
+
         // ── Fuel Consumption ──────────────────────────────────────────────────
         private void ConsumeFuelTick()
         {

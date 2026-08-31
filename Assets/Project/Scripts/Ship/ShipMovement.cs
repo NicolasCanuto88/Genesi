@@ -33,6 +33,31 @@ namespace SpaceSurvivor.Ship
     ///     lineare la nave non ha come ruotare (niente RCS thrusters per ora).
     ///     Meccanicamente: forza il Pilota ad "avviare" prima di sterzare.
     ///
+    /// ESTENSIONE Blocco 3.2.c — hook di collisione POI in UpdatePosition:
+    ///   In Manual/Coasting/Autopilot la nave attraversava i POI come fantasmi
+    ///   (invariante rev X: clamp posizionale hard esisteva solo dentro il
+    ///   Docking). Ora UpdatePosition calcola una candidatePos, invoca
+    ///   PoiCollisionResolver.Instance.ResolveCollision(...) che (se in stato
+    ///   Manual/Coasting/Autopilot) applica clamp+slide contro il POI più
+    ///   vicino tra quelli che sforano HardCollisionRadius, e ritorna
+    ///   posizione+scalare velocità post-clamp. Se il resolver ha ridotto la
+    ///   velocità, invoco PropulsionSystem.SetCurrentSpeedFromCollision per
+    ///   propagare la nuova CurrentSpeed. Coerenza: il resolver in Docking/
+    ///   Docked/Anchored dorme (early-return) — il DockingController ha il
+    ///   proprio clamp, mutuamente esclusivo. Se il resolver non è ancora
+    ///   spawnato (edge case boot), UpdatePosition scrive candidatePos diretta.
+    ///
+    /// ESTENSIONE Rev AA hotfix — ShipCollisionRadius:
+    ///   La nave ha un ingombro fisico non-zero (mesh visiva della cabina +
+    ///   motori + ali). La collisione contro POI usa la formula fisica
+    ///   "distanza min tra centri = somma dei raggi": raggio effettivo di
+    ///   clamp = poi.HardCollisionRadius + ship.ShipCollisionRadius. Senza
+    ///   questo contributo il clamp scattava solo quando il PUNTO
+    ///   LogicalPosition entrava nella mesh POI — cioè quando l'intera metà
+    ///   avanti della nave era già visibilmente compenetrata. ShipCollisionRadius
+    ///   è letto sia dal PoiCollisionResolver (Manual/Coasting/Autopilot) sia
+    ///   dal DockingController (Docking minigame) per coerenza.
+    ///
     /// ESTENSIONE Fase 3 3.1.3 — API per DockingController:
     ///   - SetLogicalPosition(Vector3): server-only setter, usato dal
     ///     DockingController per applicare lo strafe RCS durante Docking.
@@ -86,6 +111,24 @@ namespace SpaceSurvivor.Ship
                  "sempre concessa (comportamento pre-Rev T post-playtest).")]
         [SerializeField] private float minSpeedToSteer = 3f;
 
+        // ── Collisione fisica (Blocco 3.2.c hotfix Rev AA) ───────────────────
+        [Header("Collisione fisica (Rev AA)")]
+        [Tooltip("Raggio di collisione della nave (u logiche). Contributo della " +
+                 "geometria della nave alla formula di collisione contro POI: " +
+                 "raggio effettivo di clamp = poi.HardCollisionRadius + " +
+                 "ship.ShipCollisionRadius (distanza min tra centri = somma dei " +
+                 "raggi). Senza questo contributo il clamp scattava solo quando " +
+                 "il PUNTO LogicalPosition entrava nella mesh POI — cioè quando " +
+                 "l'intera metà avanti della nave era già visibilmente " +
+                 "compenetrata (bug rilevato in playtest 3.2.c.4 pre-hotfix).\n\n" +
+                 "Default 15 u: punto di partenza plausibile per la mesh " +
+                 "CreepyCat Scifi Kit Vol.4. Tuning empirico: aumentare finché " +
+                 "cabina e ali non entrano più nella mesh POI durante impatto " +
+                 "Manual. Applicato sia in Docking (DockingController) sia in " +
+                 "Manual/Coasting/Autopilot (PoiCollisionResolver) per coerenza.")]
+        [Min(0f)]
+        [SerializeField] private float shipCollisionRadius = 15f;
+
         // ── Stato di rete ─────────────────────────────────────────────────────
         private readonly NetworkVariable<Quaternion> _logicalRotation = new NetworkVariable<Quaternion>(
             Quaternion.identity,
@@ -113,6 +156,15 @@ namespace SpaceSurvivor.Ship
 
         public NavigationState CurrentNavState =>
             PropulsionSystem.Instance != null ? PropulsionSystem.Instance.CurrentNavState : NavigationState.Anchored;
+
+        /// <summary>
+        /// Blocco 3.2.c hotfix Rev AA — raggio di collisione della nave (u logiche).
+        /// Contributo geometrico della nave alla formula di clamp contro POI.
+        /// Letto da DockingController (via PoiCollisionMath.ClampAgainstPoi) e da
+        /// PoiCollisionResolver (idem). Vedi tooltip inspector per motivazione
+        /// completa.
+        /// </summary>
+        public float ShipCollisionRadius => shipCollisionRadius;
 
         // =========================================================================
         // LIFECYCLE NGO
@@ -215,13 +267,44 @@ namespace SpaceSurvivor.Ship
         /// In Docking/Docked (Fase 3): PropulsionSystem forza CurrentSpeed=0 →
         /// early return. Il DockingController scrive _logicalPosition
         /// direttamente via SetLogicalPosition (strafe RCS), senza conflitto.
+        ///
+        /// Blocco 3.2.c — Hook di collisione POI:
+        /// prima di scrivere _logicalPosition, la candidatePos passa attraverso
+        /// PoiCollisionResolver.Instance.ResolveCollision (se presente e in
+        /// stato Manual/Coasting/Autopilot). Se sfora HardCollisionRadius del
+        /// POI più vicino, il resolver clampa+slida e ritorna la nuova velocità
+        /// scalare, che propago a PropulsionSystem via SetCurrentSpeedFromCollision.
+        /// In Docking/Docked il resolver dorme (mutex col DockingController) →
+        /// passa la candidatePos inalterata.
         /// </summary>
         private void UpdatePosition()
         {
             float speed = CurrentSpeed;
-            if (speed <= 0.01f) return;
+            if (Mathf.Abs(speed) <= 0.01f) return;
 
-            _logicalPosition.Value += LogicalForward * speed * Time.fixedDeltaTime;
+            Vector3 currentPos = _logicalPosition.Value;
+            Vector3 forward = LogicalForward;
+            Vector3 candidatePos = currentPos + forward * speed * Time.fixedDeltaTime;
+
+            // Se il resolver è pronto, delego a lui la decisione finale su
+            // posizione + velocità. Altrimenti (edge case boot: resolver non
+            // ancora spawnato) scrivo la candidate diretta — comportamento
+            // pre-3.2.c preservato.
+            var resolver = PoiCollisionResolver.Instance;
+            if (resolver != null)
+            {
+                var res = resolver.ResolveCollision(currentPos, candidatePos, forward, speed);
+                _logicalPosition.Value = res.ClampedPosition;
+
+                if (res.VelocityWasClamped && PropulsionSystem.Instance != null)
+                {
+                    PropulsionSystem.Instance.SetCurrentSpeedFromCollision(res.ClampedSpeedScalar);
+                }
+            }
+            else
+            {
+                _logicalPosition.Value = candidatePos;
+            }
         }
 
         // =========================================================================

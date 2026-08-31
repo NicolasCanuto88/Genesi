@@ -608,65 +608,61 @@ namespace SpaceSurvivor.Ship
             //    posizione è clampata al bordo del raggio e la componente
             //    radiale della velocità (verso il POI) è azzerata. La
             //    componente tangenziale è preservata (slide).
+            //
+            //    Rev AA (Blocco 3.2.c Q1=B): la logica di clamp+slide è
+            //    estratta in PoiCollisionMath.ClampAgainstPoi (helper puro
+            //    stateless), condivisa con PoiCollisionResolver che la usa
+            //    fuori dal Docking. Zero comportamento cambia rispetto Rev W —
+            //    solo rimozione della duplicazione. Il fallback radial in
+            //    doppia degenerazione è _approachAxisWorld (coerente col
+            //    contesto Docking: se non riesco a trovare una direzione
+            //    ship→outward valida, uso l'asse di attracco che è la migliore
+            //    guess disponibile in questo minigame).
             Vector3 currentPos = movement.LogicalPosition;
             Vector3 candidatePos = currentPos + _strafeVelocity * dt;
 
+            // Cache locale: riusata al blocco 5 (rilascio latch con isteresi).
+            //
+            // Rev AA — Opzione A (contesto Docking = shipRadius 0):
+            // Il Docking è "attracco guidato" — la nave arriva controllata a
+            // bassa velocità RCS, allineata all'asse di approccio del POI
+            // (vedi _approachAxisWorld, basi perpendicolari X/Y). Il target
+            // di attracco è tipicamente sul bordo del POI, non nel centro.
+            // Passare shipCollisionRadius > 0 farebbe fermare la nave 15-18u
+            // prima del bordo — impedendo il completamento dell'ancoraggio
+            // (bug rilevato in playtest 3.2.c.4 post-hotfix con shipR=18).
+            // ShipCollisionRadius del ShipMovement resta valido ed è
+            // applicato dal PoiCollisionResolver in Manual/Coasting/Autopilot,
+            // dove la nave può impattare da qualunque direzione, non
+            // allineata.
+            // Se in futuro emerge un edge case di compenetrazione visibile
+            // durante Docking (nave storta al momento dell'entrata), si
+            // valuterà un dial dedicato (dockingShipCollisionRadius) —
+            // YAGNI per Rev AA.
             float hardR = _currentPoi.Data.HardCollisionRadius;
-            Vector3 candidateFromPoi = candidatePos - _currentPoi.LogicalPosition;
-            float candidateDist = candidateFromPoi.magnitude;
 
-            if (useHardPositionClamp && candidateDist < hardR)
+            var clamp = PoiCollisionMath.ClampAgainstPoi(
+                currentPos,
+                candidatePos,
+                _strafeVelocity,
+                _currentPoi.LogicalPosition,
+                hardR,
+                shipRadius: 0f, // vedi commento sopra — invariante semantico Docking
+                useHardPositionClamp,
+                fallbackRadial: _approachAxisWorld);
+
+            candidatePos = clamp.ClampedPosition;
+            _strafeVelocity = clamp.ClampedVelocity;
+
+            if (clamp.HadCollision && !_hasFiredCollisionThisSession)
             {
-                // Direzione radiale outward. Se la candidate è ~sulla POI (edge
-                // case numerico: velocità enorme che porta esattamente al centro
-                // in un tick — improbabile ma safety-critical), usa la
-                // posizione corrente come riferimento. Se ANCHE quella è
-                // degenere, fallback su _approachAxisWorld — meglio ancorare
-                // sul lato di ingresso che avere direzione zero.
-                Vector3 radialDir;
-                if (candidateDist > 1e-4f)
-                {
-                    radialDir = candidateFromPoi / candidateDist;
-                }
-                else
-                {
-                    Vector3 currentFromPoi = currentPos - _currentPoi.LogicalPosition;
-                    float currentDist = currentFromPoi.magnitude;
-                    radialDir = currentDist > 1e-4f
-                        ? currentFromPoi / currentDist
-                        : _approachAxisWorld;
-                }
+                _hasFiredCollisionThisSession = true;
+                OnHardCollision?.Invoke(clamp.RadialImpactSpeed, _currentPoi);
 
-                // Clampa posizione al bordo esterno del raggio hard
-                candidatePos = _currentPoi.LogicalPosition + radialDir * hardR;
-
-                // Decompone velocity: radiale (positivo = outward) + tangenziale.
-                // Se radiale è negativa (verso il POI) la nave stava puntando
-                // dentro la mesh → azzera componente radiale, preserva
-                // tangenziale. Se è positiva (già in uscita) non toccare —
-                // significa che il clamp precedente ha già lavorato e la
-                // fisica sta correttamente scivolando.
-                float radialSpeed = Vector3.Dot(_strafeVelocity, radialDir);
-                if (radialSpeed < 0f)
-                {
-                    // impactVelocity fisica: componente radiale al contatto.
-                    float impactVelocity = -radialSpeed; // magnitude verso POI
-
-                    // Fire OnHardCollision solo una volta per contatto (latch)
-                    if (!_hasFiredCollisionThisSession)
-                    {
-                        _hasFiredCollisionThisSession = true;
-                        OnHardCollision?.Invoke(impactVelocity, _currentPoi);
-
-                        Debug.LogWarning($"[DockingController] HARD COLLISION! " +
-                                         $"radial impact={impactVelocity:F2}u/s. " +
-                                         $"Componente radiale velocity azzerata; " +
-                                         $"tangenziale preservata (slide).");
-                    }
-
-                    // 5B: azzera radiale, preserva tangenziale
-                    _strafeVelocity -= radialDir * radialSpeed;
-                }
+                Debug.LogWarning($"[DockingController] HARD COLLISION! " +
+                                 $"radial impact={clamp.RadialImpactSpeed:F2}u/s. " +
+                                 $"Componente radiale velocity azzerata; " +
+                                 $"tangenziale preservata (slide).");
             }
 
             // Applica posizione (clampata o meno)
@@ -713,6 +709,9 @@ namespace SpaceSurvivor.Ship
             //    La detection della collisione è ora fusa nel blocco 2 (clamp
             //    posizionale): al primo tick di contatto viene emesso
             //    OnHardCollision. Qui armiamo il rilascio.
+            //    Rev AA — Opzione A: isteresi su hardR puro (non effectiveR),
+            //    coerente con shipRadius=0 passato al clamp per il contesto
+            //    Docking. Identico a Rev Z.
             if (_hasFiredCollisionThisSession
                 && distanceToPoi > hardR * collisionReleaseHysteresis)
             {
