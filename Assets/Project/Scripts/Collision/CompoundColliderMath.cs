@@ -4,7 +4,8 @@ using UnityEngine;
 namespace SpaceSurvivor.Collision
 {
     /// <summary>
-    /// CompoundColliderMath — Rev AB (Blocco 3.2.d — D5).
+    /// CompoundColliderMath — Rev AB (Blocco 3.2.d — D5), aggiornato Rev AD
+    /// (D12, F-C — nave = compound anche in Docking).
     /// Classe statica pura, stateless. Zero dipendenze da NGO, singleton,
     /// Time.deltaTime. Testabile mentalmente in isolamento.
     ///
@@ -38,18 +39,29 @@ namespace SpaceSurvivor.Collision
     ///   applicato: A si sposta di normal * depth. Coerente col pattern Rev AA
     ///   (radialDir outward = ship→esterno POI).
     ///
-    /// LISTA VUOTA volumesA (invariante Docking):
+    /// LISTA VUOTA volumesA (guard, dead code post-Rev AD):
     ///   Se volumesA è null o vuota, il dispatcher tratta A come un PUNTO
-    ///   (posizione = candidatePosA). Le coppie testate diventano Point×OBB e
-    ///   Point×Sphere. Semantica identica al pre-Rev AB "shipRadius=0f":
-    ///   il DockingController passa lista vuota per preservare l'invariante di
-    ///   attracco guidato (punto nave contro volumi POI, la nave può raggiungere
-    ///   il bordo mesh per completare l'ancoraggio).
+    ///   (posizione = candidatePosA). Fino a Rev AC questa era l'invariante
+    ///   Docking ("nave = punto contro volumi POI"). Rev AD (F-C) rimuove
+    ///   quell'invariante: ora TUTTI i consumer passano ShipVolumes non-null.
+    ///   Il branch aIsPoint resta come GUARD PROTETTIVO — se un futuro
+    ///   consumer passa lista vuota per errore o intenzione, il math helper
+    ///   degrada elegantemente a Point×* invece di NullReferenceException.
+    ///   NB: point-vs-OBB ha singolarità nota (nessun primo contatto — un
+    ///   punto ha misura zero), quindi la geometria del math non è
+    ///   affidabile in quel regime. È un guard, non un caso d'uso.
     ///
     /// NB — semantica di RadialImpactSpeed:
     ///   È la MAGNITUDINE della componente della velocità di A verso B al
     ///   momento del contatto (sempre &gt;= 0). Consumer previsto:
     ///   OnHardCollision(radialImpactSpeed, poi) → ShipImpactHandler.
+    ///
+    /// FUNZIONE AUSILIARIA (Rev AD, F-C, QB=B2):
+    ///   ComputeCompoundExtentAlongAxis(volumes, rotation, worldAxis) ritorna
+    ///   la max projection del compound lungo un asse world. Usata dal
+    ///   DockingController per calcolare quanto la nave sporge verso il POI
+    ///   lungo l'asse di approccio, così da aggiustare automaticamente il
+    ///   target di conferma anchor senza ricalibrare i prefab POI.
     /// </summary>
     public static class CompoundColliderMath
     {
@@ -107,8 +119,10 @@ namespace SpaceSurvivor.Collision
         ///   rotationA         — rotation logica di A (usata per trasformare
         ///                       volumesA local→world).
         ///   volumesA          — lista volumi di A in LOCAL space. Se null o
-        ///                       vuota, A è trattato come PUNTO (invariante
-        ///                       Docking: shipRadius=0f).
+        ///                       vuota, A è trattato come PUNTO (GUARD
+        ///                       post-Rev AD: nessun consumer usa più questa
+        ///                       modalità intenzionalmente; degrada elegantemente
+        ///                       per evitare NullRef in caso di uso improprio).
         ///   worldPosB         — posizione logica di B (u logiche).
         ///   worldRotB         — rotation logica di B.
         ///   volumesB          — lista volumi di B in LOCAL space. Se null o
@@ -245,7 +259,14 @@ namespace SpaceSurvivor.Collision
 
             // Se volumesA è vuota → A è un PUNTO (candidatePosA). Uso una
             // "lista virtuale" di 1 elemento: Sphere di raggio 0 al centro.
-            // In pratica: bypasso il ciclo esterno.
+            // GUARD post-Rev AD (F-C): nessun consumer usa più questa modalità
+            // intenzionalmente (DockingController ora passa ShipVolumes come
+            // Manual/Autopilot). Il branch resta per degradazione elegante:
+            // se un futuro chiamante passa lista vuota per errore, si
+            // ottiene Point×* invece di NullReferenceException. Ma NB:
+            // Point×OBB ha singolarità geometrica nota (un punto non ha
+            // primo contatto con la superficie di un OBB) → il risultato
+            // può essere inaffidabile in movimento veloce.
             bool aIsPoint = (volumesA == null || volumesA.Count == 0);
 
             int countA = aIsPoint ? 1 : volumesA.Count;
@@ -298,6 +319,96 @@ namespace SpaceSurvivor.Collision
             }
 
             return best;
+        }
+
+        // =====================================================================
+        // API — COMPOUND EXTENT ALONG AXIS (Rev AD, F-C, QB=B2)
+        // =====================================================================
+
+        /// <summary>
+        /// Calcola la MASSIMA proiezione dei volumi del compound lungo un
+        /// asse world (unitario). Usata per determinare quanto un compound
+        /// sporge in una data direzione, senza dover computare la bounding
+        /// box completa.
+        ///
+        /// CASO D'USO PRINCIPALE (Rev AD, F-C):
+        ///   Il DockingController deve sapere quanto la nave sporge lungo
+        ///   l'asse di approccio (-approachAxisWorld) per aggiustare il
+        ///   target di conferma anchor. Con nave = compound multi-volume,
+        ///   il "bordo nave verso il POI" non è più il centro logico ma
+        ///   il centro + extent lungo l'asse.
+        ///
+        /// PARAMETRI:
+        ///   volumes           — lista volumi in LOCAL space (rispetto a
+        ///                       LogicalPosition + rotation del compound).
+        ///                       Se null o vuota → ritorna 0 (compound = punto).
+        ///   rotation          — rotation logica del compound (per trasformare
+        ///                       volumi local → world).
+        ///   worldAxis         — asse world (unitario) su cui proiettare.
+        ///                       Se magnitude &lt; DegenerateEpsilon, ritorna 0.
+        ///
+        /// RITORNO:
+        ///   Max, su tutti i volumi, di:
+        ///     dot(volumeCenterOffsetWorld, worldAxis) + volumeExtentAlongAxis
+        ///   dove volumeExtentAlongAxis è:
+        ///     - per Sphere: radius
+        ///     - per OBB:    somma_k |halfExt[k] * dot(axisLocal[k]_world, worldAxis)|
+        ///
+        /// NB: Il valore ritornato è SEMPRE &gt;= 0 (max projection). Per
+        /// ottenere l'extent nella direzione OPPOSTA, passare -worldAxis.
+        /// Per ottenere l'extent bidirezionale (bounding), sommare i due.
+        /// </summary>
+        public static float ComputeCompoundExtentAlongAxis(
+            IReadOnlyList<CompoundVolume> volumes,
+            Quaternion rotation,
+            Vector3 worldAxis)
+        {
+            if (volumes == null || volumes.Count == 0) return 0f;
+
+            // Normalizza worldAxis se necessario. Guard contro asse degenere.
+            float axisMagSq = worldAxis.sqrMagnitude;
+            if (axisMagSq < DegenerateEpsilon * DegenerateEpsilon) return 0f;
+            Vector3 axisN = axisMagSq > 1f + DegenerateEpsilon || axisMagSq < 1f - DegenerateEpsilon
+                ? worldAxis / Mathf.Sqrt(axisMagSq)
+                : worldAxis;
+
+            float maxProjection = 0f;
+
+            for (int i = 0; i < volumes.Count; i++)
+            {
+                CompoundVolume v = volumes[i];
+
+                // Centro volume in world (rispetto al centro logico del compound,
+                // che è l'origine del sistema local).
+                Vector3 centerOffsetWorld = rotation * v.localPosition;
+                float centerProj = Vector3.Dot(centerOffsetWorld, axisN);
+
+                float extent;
+                if (v.type == CompoundVolumeType.Sphere)
+                {
+                    extent = v.Radius;
+                }
+                else
+                {
+                    // OBB: proiezione della half-diagonal lungo axisN.
+                    // Gli assi locali dell'OBB sono le colonne di
+                    // (rotation * Quaternion.Euler(v.localEulerAngles)).
+                    Quaternion volRotWorld = rotation * Quaternion.Euler(v.localEulerAngles);
+                    Vector3 axLocX = volRotWorld * Vector3.right;
+                    Vector3 axLocY = volRotWorld * Vector3.up;
+                    Vector3 axLocZ = volRotWorld * Vector3.forward;
+                    Vector3 h = v.HalfExtents;
+
+                    extent = Mathf.Abs(h.x * Vector3.Dot(axLocX, axisN))
+                           + Mathf.Abs(h.y * Vector3.Dot(axLocY, axisN))
+                           + Mathf.Abs(h.z * Vector3.Dot(axLocZ, axisN));
+                }
+
+                float projection = centerProj + extent;
+                if (projection > maxProjection) maxProjection = projection;
+            }
+
+            return maxProjection;
         }
 
         // =====================================================================

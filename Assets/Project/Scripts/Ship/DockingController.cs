@@ -110,8 +110,16 @@ namespace SpaceSurvivor.Ship
     /// COLLISION — CLAMP POSIZIONALE HARD + SLIDE TANGENZIALE (Rev W — D8;
     /// Rev AB — Blocco 3.2.d D5, migrato a compound collider OBB+Sphere):
     ///   Prima di applicare newPos, invoco CompoundColliderMath.ClampAgainstCompound
-    ///   passando shipVolumes=NULL (invariante attracco guidato — nave = punto
-    ///   contro volumi POI, equivalente semantico al pre-Rev AB "shipRadius=0f").
+    ///   passando shipVolumes = movement.Compound?.Volumes (Rev AD, F-C —
+    ///   D12 chiuso: la vecchia invariante "nave = punto" causava una
+    ///   singolarità matematica in ContactObbSphere con sphRadius=0, per cui
+    ///   punti fuori dall'OBB non venivano mai rilevati e il branch "inside"
+    ///   scattava solo a compenetrazione avvenuta. Ora il path Docking usa
+    ///   la stessa geometria di Manual/Autopilot; per compensare il fatto
+    ///   che il compound nave sporge lungo l'asse di approccio, il target
+    ///   di conferma anchor è "gonfiato" da _effectiveFinalDockingDistance
+    ///   = finalDockingDistance + shipExtentTowardPoi, calcolato in
+    ///   InitializeDockingSession).
     ///   Il math helper trova la coppia (punto nave, volume POI) con depth di
     ///   compenetrazione massima; se depth > 0:
     ///     newPos = candidatePos + normalOutward * depth   (clamp lungo asse push-out)
@@ -222,12 +230,18 @@ namespace SpaceSurvivor.Ship
         [SerializeField] private bool useHardPositionClamp = true;
 
         [Header("Attracco — tolleranze e target")]
-        [Tooltip("Distanza assiale ideale dalla superficie del POI al momento " +
-                 "dello snap a Docked. Default 40u con ApproximateRadius=30 " +
-                 "→ buffer di 10m rispetto al centro. La distanza è misurata " +
-                 "lungo _approachAxisWorld dal centro logico POI. La UI " +
-                 "(Convenzione B) usa questo valore per sapere quando il cerchio " +
-                 "combacia con la cornice.")]
+        [Tooltip("Distanza assiale ideale come se la nave fosse un punto: " +
+                 "target del BORDO nave dal centro logico POI, misurato lungo " +
+                 "_approachAxisWorld. Rev AD (F-C, QB=B2): il runtime aggiunge " +
+                 "automaticamente shipExtentTowardPoi (max projection del " +
+                 "compound nave lungo -_approachAxisWorld) per ottenere " +
+                 "_effectiveFinalDockingDistance, che è il target reale del " +
+                 "CENTRO logico nave. Semantica: il designer non deve conoscere " +
+                 "la dimensione della nave; imposta la distanza-limite del " +
+                 "bordo, il resto è automatico. Default 40u con OBB relitto " +
+                 "halfExt=20 → buffer di 20m rispetto al bordo POI. La UI " +
+                 "(Convenzione B) usa _effectiveFinalDockingDistance per il " +
+                 "match cerchio/cornice, esposto via EffectiveFinalDockingDistance.")]
         [Min(1f)]
         [SerializeField] private float finalDockingDistance = 40f;
 
@@ -354,6 +368,18 @@ namespace SpaceSurvivor.Ship
         private Quaternion _targetShipRotation;
         private float _initialAxialDistanceCached;
 
+        // Rev AD (F-C, QB=B2): target di conferma anchor "gonfiato" dal
+        // compound nave. Calcolato in InitializeDockingSession come
+        //   _effectiveFinalDockingDistance = finalDockingDistance
+        //                                  + shipExtentTowardPoi
+        // dove shipExtentTowardPoi = max projection del compound nave lungo
+        // -_approachAxisWorld (quanto la nave sporge VERSO il POI). Il centro
+        // logico nave deve arrivare a axial == _effectiveFinalDockingDistance
+        // per confermare l'attracco, così che il BORDO nave sia a
+        // finalDockingDistance dal centro POI (la distanza pensata dal
+        // designer, indipendente dalla dimensione della nave).
+        private float _effectiveFinalDockingDistance;
+
         // Collision LATCH (freeze timer rimosso in Rev W — vedi header):
         private bool _hasFiredCollisionThisSession;
 
@@ -396,6 +422,22 @@ namespace SpaceSurvivor.Ship
         // Tuning esposti per la UI del minigioco (3.1.5): la UI legge da qui
         // invece di duplicare i SerializeField in Inspector, evitando drift.
         public float FinalDockingDistance => finalDockingDistance;
+
+        /// <summary>
+        /// Rev AD (F-C, QB=B2): distanza assiale effettiva di conferma
+        /// anchor, che tiene conto dell'estensione compound della nave lungo
+        /// l'asse di approccio. È il target reale del CENTRO logico nave;
+        /// finalDockingDistance è il target del BORDO nave. La UI del
+        /// minigioco (Convenzione B) deve usare questo valore per il match
+        /// cerchio/cornice, così che il feedback visivo sia coerente con
+        /// la posizione reale al momento della conferma. Valida solo
+        /// durante Docking (fuori Docking ritorna finalDockingDistance).
+        /// </summary>
+        public float EffectiveFinalDockingDistance =>
+            _effectiveFinalDockingDistance > 0f
+                ? _effectiveFinalDockingDistance
+                : finalDockingDistance;
+
         public float AxialDockingTolerance => axialDockingTolerance;
         public float LateralTolerance => lateralTolerance;
         public float MaxDockingLateralRange => maxDockingLateralRange;
@@ -519,16 +561,39 @@ namespace SpaceSurvivor.Ship
             _initialShipRotation = movement.LogicalRotation;
             _targetShipRotation = _initialShipRotation;
 
+            // Rev AD (F-C, QB=B2): calcola shipExtentTowardPoi = max projection
+            // del compound nave lungo -_approachAxisWorld (l'asse "verso il POI").
+            // Poi _effectiveFinalDockingDistance = finalDockingDistance + extent.
+            // Semantica: il designer imposta finalDockingDistance come distanza
+            // del BORDO nave dal centro POI; il runtime aggiunge automaticamente
+            // l'extent per ottenere il target del CENTRO logico nave. Retro-
+            // compatibile con nave-punto (extent = 0 → effective = final).
+            //
+            // Fallback: se movement.Compound è null (setup incompleto), extent = 0
+            // e degradiamo alla vecchia semantica "nave = punto" per la conferma
+            // (ma il math helper ora è comunque chiamato con volumesA non-null se
+            // Compound esiste — vedi RunDockingTick).
+            float shipExtentTowardPoi = 0f;
+            var shipCompound = movement.Compound;
+            if (shipCompound != null && shipCompound.Volumes != null && shipCompound.Volumes.Count > 0)
+            {
+                shipExtentTowardPoi = CompoundColliderMath.ComputeCompoundExtentAlongAxis(
+                    shipCompound.Volumes,
+                    movement.LogicalRotation,
+                    -_approachAxisWorld);
+            }
+            _effectiveFinalDockingDistance = finalDockingDistance + shipExtentTowardPoi;
+
             // Calcola geometria iniziale
             Vector3 fromPoiToShip = movement.LogicalPosition - _currentPoi.LogicalPosition;
             _initialAxialDistanceCached = Vector3.Dot(fromPoiToShip, _approachAxisWorld);
 
-            // Guardia numerica: se initialAxial ≈ finalDockingDistance (pilota
-            // entra già praticamente in posizione), evitiamo divisione per zero
-            // nel calcolo di t. Un buffer minimo di 1u basta.
-            if (Mathf.Abs(_initialAxialDistanceCached - finalDockingDistance) < 1f)
+            // Guardia numerica: se initialAxial ≈ _effectiveFinalDockingDistance
+            // (pilota entra già praticamente in posizione), evitiamo divisione
+            // per zero nel calcolo di t. Un buffer minimo di 1u basta.
+            if (Mathf.Abs(_initialAxialDistanceCached - _effectiveFinalDockingDistance) < 1f)
             {
-                _initialAxialDistanceCached = finalDockingDistance + 1f;
+                _initialAxialDistanceCached = _effectiveFinalDockingDistance + 1f;
             }
 
             _netInitialAxialDistance.Value = _initialAxialDistanceCached;
@@ -541,13 +606,17 @@ namespace SpaceSurvivor.Ship
 
             Debug.Log($"[DockingController] EnterDocking → POI {_currentPoi.Data.DisplayName}, " +
                       $"axial iniziale {_initialAxialDistanceCached:F1}u, " +
-                      $"approachAxis {_approachAxisWorld}");
+                      $"approachAxis {_approachAxisWorld}, " +
+                      $"shipExtentTowardPoi={shipExtentTowardPoi:F2}u, " +
+                      $"effectiveFinalDist={_effectiveFinalDockingDistance:F2}u " +
+                      $"(base={finalDockingDistance:F1}u)");
         }
 
         private void HandleExitDocking()
         {
             Debug.Log("[DockingController] ExitDocking — cleanup");
             _currentPoi = null;
+            _effectiveFinalDockingDistance = 0f; // Rev AD: reset cache
             _strafeInput = Vector3.zero;
             _strafeVelocity = Vector3.zero;
             _hasFiredCollisionThisSession = false;
@@ -631,20 +700,23 @@ namespace SpaceSurvivor.Ship
             //    Rev AA) è stato sostituito da CompoundColliderMath.ClampAgainstCompound.
             //    Il math helper opera sulle liste di volumi del compound.
             //
-            //    INVARIANTE SEMANTICO "attracco guidato" (Rev AA Opzione A):
-            //    passiamo shipVolumes = NULL. Semanticamente: la nave è trattata
-            //    come PUNTO (LogicalPosition) contro i volumi del POI. Equivalente
-            //    esatto al Rev AA "shipRadius=0f" — con compound multi-volume,
-            //    passare i volumi della nave farebbe fermare l'attracco lontano
-            //    dal bordo POI (ali/motori nave impatterebbero prima del punto
-            //    di attracco sull'anchor). Il Docking è guidato lungo un asse
-            //    dedicato (approachAxis = DockingAnchor forward); la nave deve
-            //    poter raggiungere il DockingAnchor per completare l'ancoraggio.
+            //    Rev AD (F-C, D12 chiuso): la vecchia invariante "nave = punto"
+            //    (volumesA: null) è stata rimossa. Motivo: causava una
+            //    singolarità matematica in ContactObbSphere con sphRadius=0
+            //    (branch "esterno" mai attivo perché dist >= 0 == sphRadius
+            //    sempre vero; branch "inside" solo a compenetrazione avvenuta),
+            //    per cui la nave attraversava il bordo di OBB relitti senza
+            //    rilevare la collisione e restava intrappolata al centro con
+            //    tremore. Ora il path Docking usa ShipVolumes come Manual/
+            //    Autopilot (path testato in Rev AB), e il target di conferma
+            //    anchor è aggiustato via _effectiveFinalDockingDistance
+            //    (vedi InitializeDockingSession).
             //
-            //    ShipVolumes VIENE INVECE usato dal PoiCollisionResolver in
-            //    Manual/Coasting/Autopilot, dove la nave può impattare da
-            //    qualunque direzione non allineata e la geometria della nave
-            //    deve essere rispettata.
+            //    Comportamento QC=C2 (recovery silente): hard collision durante
+            //    Docking emette OnHardCollision + clamp+slide, ma la sessione
+            //    CONTINUA. Il pilota può correggere l'assetto e proseguire.
+            //    L'avaria motori (Rev AC) collegata a OnHardCollision funge da
+            //    penalità implicita.
             //
             //    fallbackNormal = _approachAxisWorld (coerente col contesto
             //    Docking: se il math helper non riesce a determinare una normal
@@ -656,7 +728,7 @@ namespace SpaceSurvivor.Ship
                 currentPosA: currentPos,
                 candidatePosA: candidatePos,
                 rotationA: movement.LogicalRotation,
-                volumesA: null, // invariante Docking: nave = punto
+                volumesA: movement.Compound?.Volumes, // Rev AD (F-C): compound nave attivo
                 worldPosB: _currentPoi.LogicalPosition,
                 worldRotB: _currentPoi.LogicalRotation,
                 volumesB: _currentPoi.CollisionVolumes,
@@ -762,8 +834,11 @@ namespace SpaceSurvivor.Ship
             //    posizionalmente ok E velocità RCS sotto soglia. Con Newton
             //    puro (2B) senza questo check si potrebbe confermare Docked
             //    mentre si sta scivolando tangenzialmente sulla superficie.
+            // Rev AD (F-C, QB=B2): il target di conferma è
+            // _effectiveFinalDockingDistance (finalDockingDistance + extent
+            // compound nave lungo l'asse), non finalDockingDistance nudo.
             bool posInTol = lateralErr <= lateralTolerance
-                         && Mathf.Abs(axial - finalDockingDistance) <= axialDockingTolerance;
+                         && Mathf.Abs(axial - _effectiveFinalDockingDistance) <= axialDockingTolerance;
             bool velInTol = _strafeVelocity.magnitude <= confirmMaxVelocity;
             bool inTol = posInTol && velInTol;
 
@@ -898,7 +973,8 @@ namespace SpaceSurvivor.Ship
             GUILayout.Label($"POI:      {poiLabel}");
             GUILayout.Label($"Axial:    {_netAxialDistance.Value:F1}u " +
                             $"(init {_netInitialAxialDistance.Value:F1})");
-            GUILayout.Label($"Target:   {finalDockingDistance:F1} ±{axialDockingTolerance:F1}");
+            GUILayout.Label($"Target:   {_effectiveFinalDockingDistance:F1} ±{axialDockingTolerance:F1} " +
+                            $"(base {finalDockingDistance:F1})");
             GUILayout.Label($"Lateral:  {_netLateralError.Value:F1}u " +
                             $"(tol {lateralTolerance:F1})");
             GUILayout.Label($"Velocity: {_strafeVelocity.magnitude:F2}u/s " +

@@ -49,11 +49,14 @@ namespace SpaceSurvivor.Ship
     ///   Compound. Il componente CompoundColliderAuthoring va aggiunto al
     ///   GameObject della Nave (fratello di questo script) e configurato in
     ///   Inspector con i volumi che rappresentano fusoliera + ali + eventuali
-    ///   motori. Se assente, il compound è vuoto (equivalente al pre-Rev AA
-    ///   "shipRadius=0" — punto nave contro volumi POI).
+    ///   motori. Se assente, il compound è vuoto e degrada al fallback
+    ///   "nave = punto" (Rev AD, F-C: il fallback è ora un GUARD per setup
+    ///   incompleti, non una modalità di gameplay — vedi
+    ///   CompoundColliderMath aIsPoint per la singolarità geometrica associata).
     ///
     ///   Consumer di Compound: PoiCollisionResolver.ResolveCollision e
-    ///   DockingController.RunDockingTick (indirettamente, via CompoundColliderMath).
+    ///   DockingController.RunDockingTick (Rev AD: entrambi ora passano
+    ///   ShipVolumes non-null a CompoundColliderMath).
     ///
     /// DESIGN — controllo pilotaggio:
     ///   - Assi rotazione: yaw + pitch, no roll
@@ -149,10 +152,12 @@ namespace SpaceSurvivor.Ship
         /// <summary>
         /// Rev AB — Compound collider della nave. Cachato in Awake. Può essere
         /// null se il GameObject non ha CompoundColliderAuthoring: in quel caso
-        /// il warning è emesso una sola volta e i consumer trattano la nave
-        /// come punto (semantica pre-Rev AA "shipRadius=0"). Configurare
-        /// aggiungendo il componente CompoundColliderAuthoring al GameObject
-        /// Nave e popolando la lista di volumi in Inspector.
+        /// il warning è emesso una sola volta e i consumer degradano al
+        /// fallback "nave = punto". Post-Rev AD (F-C, D12 chiuso) questa
+        /// modalità NON è più un caso di gameplay ma solo un guard per setup
+        /// incompleti: la geometria point-vs-OBB ha una singolarità nota
+        /// (vedi CompoundColliderMath aIsPoint). Configurare sempre il compound
+        /// aggiungendo CompoundColliderAuthoring al GameObject Nave.
         /// </summary>
         public CompoundColliderAuthoring Compound => _compound;
 

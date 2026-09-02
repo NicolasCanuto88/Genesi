@@ -23,10 +23,6 @@ MonoBehaviour:
     localPosition: {x: 0, y: 0, z: 0}
     localEulerAngles: {x: 0, y: 0, z: 0}
     scale: {x: 40, y: 40, z: 40}
-  - type: 1
-    localPosition: {x: 0, y: 0, z: 0}
-    localEulerAngles: {x: 0, y: 0, z: 0}
-    scale: {x: 50, y: 50, z: 50}
   approximateRadius: 30
   dockingRadius: 200
   dockingConeAngleDeg: 60
