@@ -1,12 +1,15 @@
 using System;
+using System.Collections.Generic;
 using Unity.Netcode;
 using UnityEngine;
+using SpaceSurvivor.Collision;
 using SpaceSurvivor.Ship;
 
 namespace SpaceSurvivor.Poi
 {
     /// <summary>
-    /// PoiInstance — Milestone 3, Blocco 3, Sottofase 2b (moto proprio 3.2.b).
+    /// PoiInstance — Milestone 3, Blocco 3, Sottofase 2b (moto proprio 3.2.b)
+    /// esteso Rev AB (Blocco 3.2.d D5 — Compound Collider).
     ///
     /// NetworkBehaviour server-authoritative che rappresenta un'istanza
     /// concreta di POI (Point of Interest) nello spazio logico della sessione.
@@ -20,21 +23,49 @@ namespace SpaceSurvivor.Poi
     ///   5. Esporre eventi:
     ///        - OnScanStateChanged (per-instance, feedback visuale/UI)
     ///        - OnAnyPoiSpawned / OnAnyPoiDespawned (statici, per
-    ///          subscriber client-side come ScannerUI che devono mantenere
-    ///          liste dinamiche indipendentemente da PoiRegistry
-    ///          server-only)
-    ///   6. [Blocco 3.2.b] Integrazione server-side del proprio moto:
-    ///      LogicalPosition += LogicalVelocity * dt, con damping esponenziale
-    ///      opzionale (τ = dampingTau, default 30 s → deriva percepibile solo
-    ///      su tempi lunghi, feel "spazio" sui primi secondi dopo l'urto).
-    ///      La rotazione NON viene modificata (invariante Rev Z): l'asse di
-    ///      approccio del POI deve restare stabile per permettere al pilota
-    ///      di riprovare l'attracco dopo un urto.
+    ///          subscriber client-side)
+    ///   6. [Blocco 3.2.b] Integrazione server-side del moto proprio.
+    ///   7. [Rev AB — Blocco 3.2.d D5] Esporre in world logico:
+    ///        - CollisionVolumes (proxy a Data.CollisionVolumes)
+    ///        - DockingAnchorPositionWorld
+    ///        - DockingAnchorForwardWorld
     ///
-    /// STRUTTURA PREFAB ATTESA:
+    /// ── DOCKING ANCHOR (Rev AB, Q6 = B) ──────────────────────────────────────
+    ///
+    ///   Fino a Rev AA la direzione di approccio era derivata da
+    ///   Data.DockingApproachDirectionLocal (Vector3 su ScriptableObject),
+    ///   ruotata dalla rotation del POI. Rev AB introduce il componente
+    ///   DockingAnchor come marker su un GameObject figlio del PoiInstance:
+    ///   la sua position + forward definiscono ancoraggio e direzione di
+    ///   approccio.
+    ///
+    ///   IMPORTANTE — dove piazzare il DockingAnchor:
+    ///     Il DockingAnchor va messo come FIGLIO DIRETTO DEL ROOT PoiInstance,
+    ///     non sotto il Visual. Il Visual è mosso a runtime da
+    ///     ExternalWorldFollower per rappresentare LogicalPosition; l'anchor
+    ///     sotto Visual verrebbe trascinato via. Il root, invece, è statico
+    ///     in worldspace: l'anchor come figlio del root ha localPosition
+    ///     stabile e semanticamente identifica "punto di attracco in local
+    ///     space del centro logico del POI".
+    ///
+    ///     Il modeler apre il prefab, vede la mesh (sotto Visual, tipicamente
+    ///     centrata all'origine locale), e crea il DockingAnchor come figlio
+    ///     del root posizionato relativamente al mesh. Nessuna deriva runtime.
+    ///
+    ///   Cache: risolto UNA VOLTA in OnNetworkSpawn via GetComponentInChildren
+    ///   con includeInactive=false. Le property DockingAnchorPositionWorld /
+    ///   DockingAnchorForwardWorld trasformano al volo:
+    ///     posWorld = LogicalPosition + LogicalRotation * anchorLocalPos
+    ///     fwdWorld = LogicalRotation * (anchorLocalRot * Vector3.forward)
+    ///
+    ///   Fallback (anchor null): warning UNA VOLTA + fallback su convention
+    ///   pre-Rev AB (Vector3.up = default vecchio dockingApproachDirection).
+    ///
+    /// STRUTTURA PREFAB ATTESA (Rev AB):
     ///   PoiInstance_Wreck (root)
     ///   ├─ NetworkObject
     ///   ├─ PoiInstance (questo script)
+    ///   ├─ DockingAnchor (GameObject figlio con componente DockingAnchor)
     ///   └─ Visual (child)
     ///      ├─ ExternalWorldFollower
     ///      ├─ Mesh + Renderer
@@ -44,6 +75,8 @@ namespace SpaceSurvivor.Poi
     ///   - ExternalWorldFollower (Rev T.2, con SetLogicalOverride)
     ///   - ShipMovement (Instance, letto dal Follower)
     ///   - PoiRegistry (auto-registrazione server-side)
+    ///   - DockingAnchor (marker Rev AB, opzionale con fallback)
+    ///   - CompoundVolume (proxy a Data.CollisionVolumes)
     /// </summary>
     [RequireComponent(typeof(NetworkObject))]
     public class PoiInstance : NetworkBehaviour
@@ -65,31 +98,17 @@ namespace SpaceSurvivor.Poi
                  "Default 30 s: sui primi secondi dopo l'urto il decadimento è " +
                  "impercettibile (feel newtoniano \"spazio\"), su tempi lunghi " +
                  "il POI decelera evitando che si allontani infinitamente dalla " +
-                 "playzone. Valore giustificato narrativamente da microforze " +
-                 "cosmiche residue (drag da polvere interstellare, gravitazione " +
-                 "diffusa) — coerente con la direzione di design per il debito " +
-                 "D2 (viaggio gratuito della nave in COASTING).\n\n" +
+                 "playzone.\n\n" +
                  "Impostare a 0 per Newton puro (nessun damping). Impostare a " +
-                 "valori bassi (es. 3-5 s) per feel \"attrito nel vuoto\" — " +
-                 "sconsigliato ma disponibile per test.")]
+                 "valori bassi (es. 3-5 s) per feel \"attrito nel vuoto\".")]
         [Min(0f)]
         [SerializeField] private float dampingTau = 30f;
 
         [Tooltip("Soglia di velocità sotto cui il POI viene considerato fermo: " +
                  "la velocità viene azzerata e l'integrazione viene saltata " +
                  "finché non arriva un nuovo AddImpulse.\n\n" +
-                 "Il damping esponenziale (dampingTau) matematicamente non " +
-                 "raggiunge mai lo zero: senza una soglia di sleep, un POI " +
-                 "colpito continuerebbe a strisciare per ore a velocità " +
-                 "impercettibili ma non-zero, e il pilota si troverebbe a " +
-                 "inseguire un bersaglio che sembra fermo ma \"scivola via\" " +
-                 "appena si avvicina — feel pessimo.\n\n" +
                  "Default 0.05 u/s (5 cm/s): al di sotto il moto del POI è " +
-                 "sotto la soglia percettiva. Con τ = 30 s e un deltaV " +
-                 "iniziale di 0.3 u/s, il POI raggiunge il sleep in ~54 s dopo " +
-                 "aver percorso ~9 m: sbalzato via visibilmente, poi fermo. " +
-                 "Con deltaV piccolo (urto leggero) il POI è già sotto soglia " +
-                 "e si ferma al primo tick.")]
+                 "sotto la soglia percettiva.")]
         [Min(0f)]
         [SerializeField] private float sleepSpeedThreshold = 0.05f;
 
@@ -107,11 +126,8 @@ namespace SpaceSurvivor.Poi
                 NetworkVariableWritePermission.Server);
 
         /// <summary>
-        /// Velocità logica del POI, in unità/secondo nello spazio logico
-        /// (worldspace di riferimento). Scritta esclusivamente dal server
-        /// (integrazione + AddImpulse). Replicata a tutti i client per
-        /// consumer futuri (radar, UI cinetica) e per garantire snapshot
-        /// consistente in caso di riconnessione.
+        /// Velocità logica del POI, in unità/secondo nello spazio logico.
+        /// Scritta esclusivamente dal server. Replicata a tutti i client.
         /// </summary>
         private readonly NetworkVariable<Vector3> _logicalVelocity =
             new NetworkVariable<Vector3>(
@@ -125,6 +141,35 @@ namespace SpaceSurvivor.Poi
                 NetworkVariableReadPermission.Everyone,
                 NetworkVariableWritePermission.Server);
 
+        // ── Cache DockingAnchor (Rev AB) ─────────────────────────────────────
+
+        /// <summary>
+        /// Anchor Transform risolto UNA VOLTA in OnNetworkSpawn. Null se il
+        /// prefab non ha un GameObject figlio con componente DockingAnchor:
+        /// in quel caso il warning è emesso una sola volta e le property di
+        /// world position/forward usano il fallback pre-Rev AB.
+        /// </summary>
+        private Transform _dockingAnchorTransform;
+
+        /// <summary>
+        /// LocalPosition dell'anchor rispetto al root PoiInstance, cachata
+        /// a OnNetworkSpawn per evitare accessi ripetuti a transform (che
+        /// implica calcolo di matrici world). Stabile per tutta la vita del
+        /// PoiInstance (l'anchor è statico rispetto al root, non è mosso da
+        /// nessun componente runtime).
+        /// </summary>
+        private Vector3 _dockingAnchorLocalPos;
+
+        /// <summary>
+        /// LocalRotation dell'anchor rispetto al root PoiInstance.
+        /// </summary>
+        private Quaternion _dockingAnchorLocalRot;
+
+        /// <summary>
+        /// Warning emesso una sola volta (evita spam). Rivalutato ogni OnNetworkSpawn.
+        /// </summary>
+        private bool _hasWarnedMissingAnchor;
+
         // ── Accessors pubblici ───────────────────────────────────────────────
         public PoiData Data => data;
         public Vector3 LogicalPosition => _logicalPosition.Value;
@@ -132,46 +177,67 @@ namespace SpaceSurvivor.Poi
         public Vector3 LogicalVelocity => _logicalVelocity.Value;
         public PoiScanState ScanState => _scanState.Value;
 
-        // ── Eventi pubblici (per-instance) ───────────────────────────────────
+        /// <summary>
+        /// Rev AB (Blocco 3.2.d D5) — Proxy alla lista di volumi compound
+        /// definita in PoiData. Restituisce sempre non-null (lista vuota se
+        /// data == null o data.CollisionVolumes == null).
+        /// Consumer: PoiCollisionResolver, DockingController via
+        /// CompoundColliderMath.
+        /// </summary>
+        public IReadOnlyList<CompoundVolume> CollisionVolumes
+        {
+            get
+            {
+                if (data == null || data.CollisionVolumes == null) return EmptyVolumes;
+                return data.CollisionVolumes;
+            }
+        }
+
+        private static readonly IReadOnlyList<CompoundVolume> EmptyVolumes = new List<CompoundVolume>();
 
         /// <summary>
-        /// Evento (client-side + server host) che notifica cambio di ScanState.
-        /// Firma: (previousState, newState).
-        ///
-        /// PATTERN DI ISCRIZIONE:
-        ///   poi.OnScanStateChanged += HandleChange;
-        ///   HandleChange(default, poi.ScanState); // sync stato iniziale
+        /// Rev AB (Q6 = B) — Posizione WORLD LOGICO del punto di attracco.
+        /// Calcolata da LogicalPosition + LogicalRotation * anchorLocalPos.
+        /// Se il DockingAnchor non è configurato sul prefab (fallback), ritorna
+        /// LogicalPosition (l'attracco converge al centro del POI, comportamento
+        /// pre-Rev AB).
         /// </summary>
+        public Vector3 DockingAnchorPositionWorld
+        {
+            get
+            {
+                if (_dockingAnchorTransform == null) return _logicalPosition.Value;
+                return _logicalPosition.Value + _logicalRotation.Value * _dockingAnchorLocalPos;
+            }
+        }
+
+        /// <summary>
+        /// Rev AB (Q6 = B) — Direzione WORLD LOGICO di approccio (forward
+        /// dell'anchor, ruotato dalla LogicalRotation). Il pilota arriva
+        /// AL POI lungo -DockingAnchorForwardWorld (opposto del forward
+        /// dell'anchor, coerente col fatto che il forward "esce" dal POI).
+        /// Se il DockingAnchor non è configurato, fallback su
+        /// LogicalRotation * Vector3.up (default pre-Rev AB del vecchio
+        /// dockingApproachDirection).
+        /// </summary>
+        public Vector3 DockingAnchorForwardWorld
+        {
+            get
+            {
+                if (_dockingAnchorTransform == null)
+                {
+                    return _logicalRotation.Value * Vector3.up;
+                }
+                Quaternion worldRot = _logicalRotation.Value * _dockingAnchorLocalRot;
+                return worldRot * Vector3.forward;
+            }
+        }
+
+        // ── Eventi pubblici (per-instance) ───────────────────────────────────
         public event Action<PoiScanState, PoiScanState> OnScanStateChanged;
 
         // ── Eventi statici (lifecycle globale) ───────────────────────────────
-
-        /// <summary>
-        /// Fira su OGNI client (server host incluso) quando un PoiInstance
-        /// completa OnNetworkSpawn. Sostituisce PoiRegistry sul client (che
-        /// è server-only per design).
-        ///
-        /// PATTERN DI ISCRIZIONE (client-side subscriber):
-        ///   OnEnable:
-        ///     PoiInstance.OnAnyPoiSpawned += HandleSpawn;
-        ///     PoiInstance.OnAnyPoiDespawned += HandleDespawn;
-        ///     foreach (var existing in FindObjectsByType&lt;PoiInstance&gt;(...))
-        ///        HandleSpawn(existing);  // POI già in scena
-        ///   OnDisable:
-        ///     PoiInstance.OnAnyPoiSpawned -= HandleSpawn;
-        ///     PoiInstance.OnAnyPoiDespawned -= HandleDespawn;
-        ///
-        /// Motivazione del "foreach existing": il subscriber potrebbe
-        /// caricarsi in scena DOPO che alcuni POI sono già spawnati (es.
-        /// UI aperta dal player dopo qualche minuto di gioco). L'evento
-        /// statico gestisce solo il futuro; per il presente serve una
-        /// scansione iniziale.
-        /// </summary>
         public static event Action<PoiInstance> OnAnyPoiSpawned;
-
-        /// <summary>
-        /// Fira su OGNI client quando un PoiInstance esegue OnNetworkDespawn.
-        /// </summary>
         public static event Action<PoiInstance> OnAnyPoiDespawned;
 
         // ── Lifecycle NGO ────────────────────────────────────────────────────
@@ -187,6 +253,12 @@ namespace SpaceSurvivor.Poi
             _logicalRotation.OnValueChanged += HandleLogicalRotationChanged;
             _scanState.OnValueChanged += HandleScanStateChanged;
 
+            // Cache DockingAnchor (Rev AB). GetComponentInChildren scandisce
+            // tutto il sottoalbero del root — trova l'anchor sia se figlio
+            // diretto sia se annidato (pattern raccomandato: figlio diretto
+            // del root, vedi doc di classe).
+            ResolveDockingAnchor();
+
             ApplyLogicalToVisual();
 
             // Notifica subscriber globali (client-side liste, ScannerUI, ecc.)
@@ -195,8 +267,6 @@ namespace SpaceSurvivor.Poi
 
         public override void OnNetworkDespawn()
         {
-            // Notifica prima della pulizia, così i subscriber possono
-            // ancora leggere lo stato del POI in fase di rimozione.
             OnAnyPoiDespawned?.Invoke(this);
 
             _logicalPosition.OnValueChanged -= HandleLogicalPositionChanged;
@@ -207,6 +277,42 @@ namespace SpaceSurvivor.Poi
             {
                 PoiRegistry.Unregister(this);
             }
+        }
+
+        /// <summary>
+        /// Rev AB — Cache DockingAnchor + local pose. Chiamato in OnNetworkSpawn.
+        /// Se non trovato, emette warning una volta (poi silenzioso) e le
+        /// property di world position/forward useranno il fallback pre-Rev AB.
+        /// </summary>
+        private void ResolveDockingAnchor()
+        {
+            var anchor = GetComponentInChildren<DockingAnchor>(includeInactive: false);
+            if (anchor == null)
+            {
+                _dockingAnchorTransform = null;
+                if (!_hasWarnedMissingAnchor)
+                {
+                    _hasWarnedMissingAnchor = true;
+                    Debug.LogWarning($"[PoiInstance] {name}: nessun DockingAnchor " +
+                                     "trovato nel sottoalbero. Uso fallback pre-Rev AB " +
+                                     "(anchor = LogicalPosition, forward = LogicalRotation × " +
+                                     "Vector3.up). Aggiungere un GameObject figlio del " +
+                                     "root con componente DockingAnchor per definire il " +
+                                     "punto di attracco.");
+                }
+                return;
+            }
+
+            _dockingAnchorTransform = anchor.transform;
+
+            // Local pose rispetto al root (this.transform). Cache costante:
+            // l'anchor è statico rispetto al root, non verrà mai mosso a runtime.
+            //
+            // Uso InverseTransformPoint / InverseTransformDirection per essere
+            // robusti anche se l'anchor è annidato più profondamente (non solo
+            // figlio diretto). Per figlio diretto = anchor.localPosition/localRotation.
+            _dockingAnchorLocalPos = transform.InverseTransformPoint(anchor.transform.position);
+            _dockingAnchorLocalRot = Quaternion.Inverse(transform.rotation) * anchor.transform.rotation;
         }
 
         // ── Integrazione moto proprio (Blocco 3.2.b, server-only) ────────────
@@ -230,12 +336,10 @@ namespace SpaceSurvivor.Poi
 
             float dt = Time.fixedDeltaTime;
 
-            // Integrazione posizione (Euler esplicito, sufficiente per un
-            // moto damped a bassa velocità: no problemi di stabilità).
+            // Integrazione posizione (Euler esplicito).
             _logicalPosition.Value += v * dt;
 
             // Damping esponenziale: v(t) = v(0) * exp(-t / tau).
-            // Se dampingTau <= 0 → Newton puro (nessun decadimento).
             if (dampingTau > 0f)
             {
                 float decay = Mathf.Exp(-dt / dampingTau);
@@ -273,14 +377,7 @@ namespace SpaceSurvivor.Poi
 
         /// <summary>
         /// Aggiunge un impulso alla velocità logica del POI. Server-only.
-        /// Consumer previsto (Blocco 3.2.b.2): ShipImpactHandler, che in
-        /// seguito a OnHardCollision calcola il deltaV secondo il modello
-        /// di trasferimento di momento e chiama questo metodo.
-        ///
-        /// Semantica: deltaV è un incremento di velocità in unità/secondo
-        /// nello spazio logico (worldspace di riferimento). Non è un impulso
-        /// fisico in senso stretto (kg·m/s) — la massa è già stata
-        /// contabilizzata a monte nel calcolo di chi chiama.
+        /// Consumer: ShipImpactHandler (Blocco 3.2.b.2).
         /// </summary>
         public void AddImpulse(Vector3 deltaV)
         {
@@ -322,5 +419,77 @@ namespace SpaceSurvivor.Poi
 
             visualFollower.SetLogicalOverride(_logicalPosition.Value, _logicalRotation.Value);
         }
+
+        // =========================================================================
+        // GIZMOS RUNTIME (Rev AB — debug compound POI)
+        // =========================================================================
+        //
+        // Il PoiInstance NON ha un CompoundColliderAuthoring: la lista di
+        // volumi vive su PoiData (SO, per-categoria). Senza un gizmo dedicato
+        // il POI sarebbe invisibile all'ispezione geometrica in scena — è
+        // impossibile capire se il volume è configurato dove ci si aspetta.
+        //
+        // Questi gizmi disegnano i volumi in wireframe sulla POSIZIONE VISUALE
+        // del POI (visualFollower.transform), che rappresenta LogicalPosition
+        // ruotata dalla nave. La geometria mostrata è quella USATA per la
+        // collisione, calcolata identicamente a CompoundColliderMath (trasfor-
+        // mazione local→world usando LogicalRotation).
+        //
+        // Il calcolo di collisione avviene in space LOGICO — il gizmo mostra
+        // la rappresentazione VISUALE di quello space, quindi coerente con
+        // ciò che il pilota vede.
+        //
+        // Visibili sempre (non solo selezionato) per navigazione scena.
+        // OBB azzurro, Sphere verde (coerente con CompoundColliderAuthoring).
+#if UNITY_EDITOR
+        [Header("Debug gizmos (Editor only)")]
+        [Tooltip("Se true, disegna i volumi del compound POI in wireframe " +
+                 "attorno al visual del POI. Cruciale in debug — senza gizmo " +
+                 "non c'è modo di verificare visivamente la geometria di " +
+                 "collisione. Default true.")]
+        [SerializeField] private bool drawCompoundGizmos = true;
+
+        private void OnDrawGizmos()
+        {
+            if (!drawCompoundGizmos) return;
+            if (data == null || data.CollisionVolumes == null) return;
+            if (data.CollisionVolumes.Count == 0) return;
+
+            // Uso la posizione VISUALE del POI (visualFollower.transform), non
+            // LogicalPosition: durante il play il visual rappresenta la posizione
+            // logica ruotata dal Follower. Fuori dal play, visualFollower.transform
+            // è la posizione statica del prefab in scena.
+            Transform pivot = visualFollower != null
+                ? visualFollower.transform
+                : transform;
+
+            Vector3 basePos = pivot.position;
+            Quaternion baseRot = pivot.rotation;
+
+            Color obbColor = new Color(0.4f, 0.7f, 1f, 1f);   // azzurro
+            Color sphColor = new Color(0.4f, 1f, 0.5f, 1f);   // verde
+
+            for (int i = 0; i < data.CollisionVolumes.Count; i++)
+            {
+                var v = data.CollisionVolumes[i];
+                Vector3 worldCenter = basePos + baseRot * v.localPosition;
+                Quaternion worldRot = baseRot * Quaternion.Euler(v.localEulerAngles);
+
+                if (v.type == SpaceSurvivor.Collision.CompoundVolumeType.OBB)
+                {
+                    var prev = Gizmos.matrix;
+                    Gizmos.matrix = Matrix4x4.TRS(worldCenter, worldRot, Vector3.one);
+                    Gizmos.color = obbColor;
+                    Gizmos.DrawWireCube(Vector3.zero, v.scale);
+                    Gizmos.matrix = prev;
+                }
+                else // Sphere
+                {
+                    Gizmos.color = sphColor;
+                    Gizmos.DrawWireSphere(worldCenter, v.Radius);
+                }
+            }
+        }
+#endif
     }
 }

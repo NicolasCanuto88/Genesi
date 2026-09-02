@@ -2,6 +2,7 @@ using System;
 using Unity.Netcode;
 using UnityEngine;
 using UnityEngine.Serialization;
+using SpaceSurvivor.Collision;
 using SpaceSurvivor.Poi;
 
 namespace SpaceSurvivor.Ship
@@ -39,7 +40,9 @@ namespace SpaceSurvivor.Ship
     ///
     /// GEOMETRIA DEL MINIGIOCO:
     ///   L'asse di approccio è congelato all'ingresso Docking:
-    ///     approachAxisWorld = poi.LogicalRotation * poi.DockingApproachDirectionLocal
+    ///     approachAxisWorld = _currentPoi.DockingAnchorForwardWorld
+    ///   (Rev AB, Q6=B: derivato dal DockingAnchor Transform sul prefab POI —
+    ///   ex poi.LogicalRotation × poi.DockingApproachDirectionLocal, rimosso).
     ///   Rappresenta la direzione da cui la nave deve venire (es. "sopra"
     ///   il POI). Vettore utile per il calcolo:
     ///     fromPoiToShip = ship.LogicalPosition - poi.LogicalPosition
@@ -104,30 +107,31 @@ namespace SpaceSurvivor.Ship
     ///   rapidamente (rcsThrustPower > stabilizingThrustPower). Impostare
     ///   stabilizingThrustPower=0 per tornare a Newton puro (2B).
     ///
-    /// COLLISION — CLAMP POSIZIONALE HARD + SLIDE TANGENZIALE (Rev W — D8):
-    ///   Prima di applicare newPos, controllo se sfora HardCollisionRadius:
-    ///     candidateFromPoi = newPos - poi.LogicalPosition
-    ///     if (|candidateFromPoi| < HardCollisionRadius && useHardPositionClamp):
-    ///       radialDir = candidateFromPoi.normalized (verso outward)
-    ///       newPos    = poi.LogicalPosition + radialDir * HardCollisionRadius
-    ///       radialSpeed = Dot(_strafeVelocity, radialDir)
-    ///       if (radialSpeed < 0):   // sta ancora andando verso il POI
-    ///         if (!latch): fire OnHardCollision(|radialSpeed|), setta latch
-    ///         _strafeVelocity -= radialDir * radialSpeed
-    ///         // → radiale azzerata, tangenziale preservata (slide)
+    /// COLLISION — CLAMP POSIZIONALE HARD + SLIDE TANGENZIALE (Rev W — D8;
+    /// Rev AB — Blocco 3.2.d D5, migrato a compound collider OBB+Sphere):
+    ///   Prima di applicare newPos, invoco CompoundColliderMath.ClampAgainstCompound
+    ///   passando shipVolumes=NULL (invariante attracco guidato — nave = punto
+    ///   contro volumi POI, equivalente semantico al pre-Rev AB "shipRadius=0f").
+    ///   Il math helper trova la coppia (punto nave, volume POI) con depth di
+    ///   compenetrazione massima; se depth > 0:
+    ///     newPos = candidatePos + normalOutward * depth   (clamp lungo asse push-out)
+    ///     if (Dot(velocity, normalOutward) < 0):
+    ///       fire OnHardCollision(|radialInward|), setta latch
+    ///       _strafeVelocity += normalOutward * radialInward
+    ///       // → componente verso POI azzerata, tangenziale preservata (slide)
     ///
-    ///   INVARIANTE: distance(ship, poi) >= HardCollisionRadius sempre. La
-    ///   mesh del POI è fisicamente inattraversabile, indipendentemente da
-    ///   quanto veloce si arrivi.
+    ///   INVARIANTE: la posizione della nave non compenetra alcun volume del
+    ///   compound POI. Il compound (OBB / Sphere multi-volume) è fisicamente
+    ///   inattraversabile, indipendentemente da quanto veloce si arrivi.
     ///
-    ///   OnHardCollision(impactVelocity) ora emette la componente RADIALE
-    ///   della velocità server-side al contatto (Rev W). Semantica
-    ///   fisicamente motivata per il consumer di Blocco 3.2 (danno hull
-    ///   proporzionale all'impatto perpendicolare, non alla velocità totale).
+    ///   OnHardCollision(impactVelocity) emette la componente della velocità
+    ///   nave lungo l'asse di push-out della coppia vincitore (Rev W).
+    ///   Semantica per Blocco 3.2 (danno hull proporzionale all'impatto).
     ///
     ///   Il latch (_hasFiredCollisionThisSession) previene spam di eventi
-    ///   se il pilota resta al bordo. Rilasciato quando distance >
-    ///   HardCollisionRadius * collisionReleaseHysteresis (default 1.2×).
+    ///   se il pilota resta al bordo. Rilasciato quando distance dal centro
+    ///   logico POI > Data.ApproximateRadius * collisionReleaseHysteresis
+    ///   (default 1.2×; Rev AB Q5=B: ex-HardCollisionRadius).
     ///
     ///   NB: postCollisionThrusterFreezeSeconds RIMOSSO in Rev W. Con clamp
     ///   posizionale la "sospensione" thrusters non serve più — la fisica
@@ -210,19 +214,20 @@ namespace SpaceSurvivor.Ship
         [SerializeField] private float inputDeadZone = 0.05f;
 
         [Tooltip("Se true, applica clamp posizionale hard: la nave NON può " +
-                 "attraversare la mesh del POI (distance(ship, poi) >= " +
-                 "HardCollisionRadius sempre). Se false, la collisione emette " +
-                 "solo OnHardCollision senza vincolare posizione — utile per " +
-                 "debug o test di comportamenti edge. In gameplay normale DEVE " +
+                 "attraversare alcun volume del compound POI (Rev AB — OBB+Sphere " +
+                 "multi-volume). Se false, la collisione emette solo " +
+                 "OnHardCollision senza vincolare posizione — utile per debug " +
+                 "o test di comportamenti edge. In gameplay normale DEVE " +
                  "restare true.")]
         [SerializeField] private bool useHardPositionClamp = true;
 
         [Header("Attracco — tolleranze e target")]
         [Tooltip("Distanza assiale ideale dalla superficie del POI al momento " +
-                 "dello snap a Docked. Default 40 u/s con HardCollisionRadius=30 " +
-                 "→ buffer di 10m rispetto alla collisione. La UI (Convenzione B) " +
-                 "usa questo valore per sapere quando il cerchio combacia con " +
-                 "la cornice.")]
+                 "dello snap a Docked. Default 40u con ApproximateRadius=30 " +
+                 "→ buffer di 10m rispetto al centro. La distanza è misurata " +
+                 "lungo _approachAxisWorld dal centro logico POI. La UI " +
+                 "(Convenzione B) usa questo valore per sapere quando il cerchio " +
+                 "combacia con la cornice.")]
         [Min(1f)]
         [SerializeField] private float finalDockingDistance = 40f;
 
@@ -268,9 +273,11 @@ namespace SpaceSurvivor.Ship
         [Header("Collisione")]
         [Tooltip("Fattore di isteresi sul rilascio del LATCH di collisione. Il " +
                  "flag _hasFiredCollisionThisSession si sblocca quando la " +
-                 "distanza al POI supera HardCollisionRadius × questo fattore. " +
-                 "Default 1.2 (20% oltre il raggio di collisione). Previene " +
-                 "spam di eventi se il pilota 'oscilla' al bordo.")]
+                 "distanza al POI supera Data.ApproximateRadius × questo fattore " +
+                 "(Rev AB — ex-HardCollisionRadius, rinominato per allineare " +
+                 "nome a semantica). Default 1.2 (20% oltre il raggio " +
+                 "approssimato). Previene spam di eventi se il pilota " +
+                 "'oscilla' al bordo.")]
         [Min(1.01f)]
         [SerializeField] private float collisionReleaseHysteresis = 1.2f;
 
@@ -482,8 +489,18 @@ namespace SpaceSurvivor.Ship
             // Calcola approachAxis in world space (congelato per tutta la sessione
             // Docking — non riflette rotazioni successive del POI, che comunque
             // non dovrebbero accadere per POI passivi).
-            _approachAxisWorld = (_currentPoi.LogicalRotation
-                                * _currentPoi.Data.DockingApproachDirectionLocal).normalized;
+            //
+            // Rev AB (Q6 = B): l'asse di approccio è ora derivato dal DockingAnchor
+            // Transform sul prefab POI (via PoiInstance.DockingAnchorForwardWorld),
+            // non più dal vecchio PoiData.DockingApproachDirectionLocal (rimosso in
+            // Rev AB). Se il prefab non ha DockingAnchor configurato, PoiInstance
+            // emette warning una volta e ritorna il fallback pre-Rev AB
+            // (LogicalRotation × Vector3.up). Normalizzazione difensiva.
+            Vector3 anchorFwd = _currentPoi.DockingAnchorForwardWorld;
+            float anchorFwdMag = anchorFwd.magnitude;
+            _approachAxisWorld = anchorFwdMag > 1e-4f
+                ? anchorFwd / anchorFwdMag
+                : (_currentPoi.LogicalRotation * Vector3.up).normalized;
 
             // Base perpendicolare all'asse di approccio, derivata dal frame POI.
             // Convenzione canonica: usa world-up come helper; se troppo parallelo,
@@ -603,53 +620,49 @@ namespace SpaceSurvivor.Ship
                 _strafeVelocity = _strafeVelocity * (maxRcsVelocity / vMag);
             }
 
-            // 2. POSIZIONE CANDIDATA + CLAMP POSIZIONALE HARD (Rev W — D8, 5D+5B)
-            //    Tentativo di posizione. Se sfora HardCollisionRadius, la
-            //    posizione è clampata al bordo del raggio e la componente
-            //    radiale della velocità (verso il POI) è azzerata. La
-            //    componente tangenziale è preservata (slide).
+            // 2. POSIZIONE CANDIDATA + CLAMP POSIZIONALE HARD (Rev W — D8, 5D+5B;
+            //    Rev AB — Blocco 3.2.d D5, migrato a compound collider)
+            //    Tentativo di posizione. Se qualche coppia (volumeNave, volumePOI)
+            //    compenetra, la posizione è clampata sull'asse di push-out della
+            //    coppia con depth massima; la componente radiale della velocità
+            //    (verso il POI) è azzerata; la tangenziale è preservata (slide).
             //
-            //    Rev AA (Blocco 3.2.c Q1=B): la logica di clamp+slide è
-            //    estratta in PoiCollisionMath.ClampAgainstPoi (helper puro
-            //    stateless), condivisa con PoiCollisionResolver che la usa
-            //    fuori dal Docking. Zero comportamento cambia rispetto Rev W —
-            //    solo rimozione della duplicazione. Il fallback radial in
-            //    doppia degenerazione è _approachAxisWorld (coerente col
-            //    contesto Docking: se non riesco a trovare una direzione
-            //    ship→outward valida, uso l'asse di attracco che è la migliore
-            //    guess disponibile in questo minigame).
+            //    Rev AB (Q4=C): PoiCollisionMath.ClampAgainstPoi (sfera-sfera,
+            //    Rev AA) è stato sostituito da CompoundColliderMath.ClampAgainstCompound.
+            //    Il math helper opera sulle liste di volumi del compound.
+            //
+            //    INVARIANTE SEMANTICO "attracco guidato" (Rev AA Opzione A):
+            //    passiamo shipVolumes = NULL. Semanticamente: la nave è trattata
+            //    come PUNTO (LogicalPosition) contro i volumi del POI. Equivalente
+            //    esatto al Rev AA "shipRadius=0f" — con compound multi-volume,
+            //    passare i volumi della nave farebbe fermare l'attracco lontano
+            //    dal bordo POI (ali/motori nave impatterebbero prima del punto
+            //    di attracco sull'anchor). Il Docking è guidato lungo un asse
+            //    dedicato (approachAxis = DockingAnchor forward); la nave deve
+            //    poter raggiungere il DockingAnchor per completare l'ancoraggio.
+            //
+            //    ShipVolumes VIENE INVECE usato dal PoiCollisionResolver in
+            //    Manual/Coasting/Autopilot, dove la nave può impattare da
+            //    qualunque direzione non allineata e la geometria della nave
+            //    deve essere rispettata.
+            //
+            //    fallbackNormal = _approachAxisWorld (coerente col contesto
+            //    Docking: se il math helper non riesce a determinare una normal
+            //    valida, uso l'asse di attracco come guess sensata).
             Vector3 currentPos = movement.LogicalPosition;
             Vector3 candidatePos = currentPos + _strafeVelocity * dt;
 
-            // Cache locale: riusata al blocco 5 (rilascio latch con isteresi).
-            //
-            // Rev AA — Opzione A (contesto Docking = shipRadius 0):
-            // Il Docking è "attracco guidato" — la nave arriva controllata a
-            // bassa velocità RCS, allineata all'asse di approccio del POI
-            // (vedi _approachAxisWorld, basi perpendicolari X/Y). Il target
-            // di attracco è tipicamente sul bordo del POI, non nel centro.
-            // Passare shipCollisionRadius > 0 farebbe fermare la nave 15-18u
-            // prima del bordo — impedendo il completamento dell'ancoraggio
-            // (bug rilevato in playtest 3.2.c.4 post-hotfix con shipR=18).
-            // ShipCollisionRadius del ShipMovement resta valido ed è
-            // applicato dal PoiCollisionResolver in Manual/Coasting/Autopilot,
-            // dove la nave può impattare da qualunque direzione, non
-            // allineata.
-            // Se in futuro emerge un edge case di compenetrazione visibile
-            // durante Docking (nave storta al momento dell'entrata), si
-            // valuterà un dial dedicato (dockingShipCollisionRadius) —
-            // YAGNI per Rev AA.
-            float hardR = _currentPoi.Data.HardCollisionRadius;
-
-            var clamp = PoiCollisionMath.ClampAgainstPoi(
-                currentPos,
-                candidatePos,
-                _strafeVelocity,
-                _currentPoi.LogicalPosition,
-                hardR,
-                shipRadius: 0f, // vedi commento sopra — invariante semantico Docking
-                useHardPositionClamp,
-                fallbackRadial: _approachAxisWorld);
+            var clamp = CompoundColliderMath.ClampAgainstCompound(
+                currentPosA: currentPos,
+                candidatePosA: candidatePos,
+                rotationA: movement.LogicalRotation,
+                volumesA: null, // invariante Docking: nave = punto
+                worldPosB: _currentPoi.LogicalPosition,
+                worldRotB: _currentPoi.LogicalRotation,
+                volumesB: _currentPoi.CollisionVolumes,
+                velocity: _strafeVelocity,
+                useHardClamp: useHardPositionClamp,
+                fallbackNormal: _approachAxisWorld);
 
             candidatePos = clamp.ClampedPosition;
             _strafeVelocity = clamp.ClampedVelocity;
@@ -709,11 +722,18 @@ namespace SpaceSurvivor.Ship
             //    La detection della collisione è ora fusa nel blocco 2 (clamp
             //    posizionale): al primo tick di contatto viene emesso
             //    OnHardCollision. Qui armiamo il rilascio.
-            //    Rev AA — Opzione A: isteresi su hardR puro (non effectiveR),
-            //    coerente con shipRadius=0 passato al clamp per il contesto
-            //    Docking. Identico a Rev Z.
+            //
+            //    Rev AB (Q5=B): la soglia di isteresi usa ora
+            //    Data.ApproximateRadius (raggio approssimato per usi
+            //    non-collisionali strict, ex-HardCollisionRadius). Il compound
+            //    multi-volume non ha un raggio unico; ApproximateRadius è la
+            //    sfera che meglio approssima l'ingombro. Non è geometricamente
+            //    esatto (volumi periferici possono sporgere oltre), ma per
+            //    anti-spam è sufficiente e stabile. Coerente con la scelta
+            //    identica nel PoiCollisionResolver Rev AB.
+            float releaseRadius = _currentPoi.Data.ApproximateRadius;
             if (_hasFiredCollisionThisSession
-                && distanceToPoi > hardR * collisionReleaseHysteresis)
+                && distanceToPoi > releaseRadius * collisionReleaseHysteresis)
             {
                 _hasFiredCollisionThisSession = false;
             }

@@ -1,13 +1,15 @@
 using System;
 using Unity.Netcode;
 using UnityEngine;
+using SpaceSurvivor.Collision;
 
 namespace SpaceSurvivor.Ship
 {
     /// <summary>
     /// ShipMovement — Milestone 3, Blocco 2 + Blocco 3 fase 2 (Rev T),
     /// esteso Fase 3 Blocco 3.1 (Sotto-step 3.1.3) con setter server-only
-    /// per DockingController (strafe RCS + auto-align rotazionale).
+    /// per DockingController (strafe RCS + auto-align rotazionale),
+    /// esteso Rev AB (Blocco 3.2.d D5 — Compound Collider).
     ///
     /// DECISIONE ARCHITETTURALE (invariata da Rev Q): "Nave" NON si muove mai
     /// fisicamente nel mondo. Resta esattamente dov'è piazzata in Editor, per
@@ -16,72 +18,51 @@ namespace SpaceSurvivor.Ship
     ///
     /// ESTENSIONE Rev T (verso Blocco 3 fase 2):
     ///   - Orientamento logico esteso da SCALARE (yaw) a QUATERNION completo
-    ///     (yaw + pitch, no roll). Serve per pilotaggio 3D e per ruotare
-    ///     correttamente il mondo esterno inverso su più assi.
+    ///     (yaw + pitch, no roll).
     ///   - Aggiunta LogicalPosition (Vector3 NetworkVariable) accumulata
-    ///     server-side per il futuro sistema POI (Fase 2).
+    ///     server-side.
     ///
-    /// AGGIORNAMENTO Rev T post-playtest — sensazione "nave pesante":
-    ///   - INERZIA ROTAZIONALE: yaw e pitch hanno ora un rate corrente
-    ///     (deg/sec) che insegue il target (input × maxRate) con
-    ///     accelerazione angolare finita (data.yawAcceleration /
-    ///     data.pitchAcceleration). La nave "prende" e "perde" la rotazione
-    ///     invece di rispondere istantaneamente al mouse. Rende visibile la
-    ///     pesantezza della nave e permette manovre più teatrali.
+    /// ESTENSIONE Rev T post-playtest — sensazione "nave pesante":
+    ///   - INERZIA ROTAZIONALE: yaw e pitch hanno un rate corrente che insegue
+    ///     il target con accelerazione angolare finita.
     ///   - NO STEERING A VELOCITÀ ZERO: sotto minSpeedToSteer (default 3 m/s)
-    ///     l'orientamento è bloccato. Semanticamente: senza velocità
-    ///     lineare la nave non ha come ruotare (niente RCS thrusters per ora).
-    ///     Meccanicamente: forza il Pilota ad "avviare" prima di sterzare.
+    ///     l'orientamento è bloccato.
     ///
     /// ESTENSIONE Blocco 3.2.c — hook di collisione POI in UpdatePosition:
     ///   In Manual/Coasting/Autopilot la nave attraversava i POI come fantasmi
-    ///   (invariante rev X: clamp posizionale hard esisteva solo dentro il
-    ///   Docking). Ora UpdatePosition calcola una candidatePos, invoca
+    ///   (invariante Rev X: clamp posizionale hard solo dentro il Docking).
+    ///   Ora UpdatePosition calcola una candidatePos, invoca
     ///   PoiCollisionResolver.Instance.ResolveCollision(...) che (se in stato
     ///   Manual/Coasting/Autopilot) applica clamp+slide contro il POI più
-    ///   vicino tra quelli che sforano HardCollisionRadius, e ritorna
-    ///   posizione+scalare velocità post-clamp. Se il resolver ha ridotto la
-    ///   velocità, invoco PropulsionSystem.SetCurrentSpeedFromCollision per
-    ///   propagare la nuova CurrentSpeed. Coerenza: il resolver in Docking/
-    ///   Docked/Anchored dorme (early-return) — il DockingController ha il
-    ///   proprio clamp, mutuamente esclusivo. Se il resolver non è ancora
-    ///   spawnato (edge case boot), UpdatePosition scrive candidatePos diretta.
+    ///   critico, e ritorna posizione+scalare velocità post-clamp.
     ///
-    /// ESTENSIONE Rev AA hotfix — ShipCollisionRadius:
-    ///   La nave ha un ingombro fisico non-zero (mesh visiva della cabina +
-    ///   motori + ali). La collisione contro POI usa la formula fisica
-    ///   "distanza min tra centri = somma dei raggi": raggio effettivo di
-    ///   clamp = poi.HardCollisionRadius + ship.ShipCollisionRadius. Senza
-    ///   questo contributo il clamp scattava solo quando il PUNTO
-    ///   LogicalPosition entrava nella mesh POI — cioè quando l'intera metà
-    ///   avanti della nave era già visibilmente compenetrata. ShipCollisionRadius
-    ///   è letto sia dal PoiCollisionResolver (Manual/Coasting/Autopilot) sia
-    ///   dal DockingController (Docking minigame) per coerenza.
+    /// ── MODIFICHE REV AB (Blocco 3.2.d D5) ──────────────────────────────────
     ///
-    /// ESTENSIONE Fase 3 3.1.3 — API per DockingController:
-    ///   - SetLogicalPosition(Vector3): server-only setter, usato dal
-    ///     DockingController per applicare lo strafe RCS durante Docking.
-    ///     In Docking CurrentSpeed=0 → UpdatePosition() qui è inerte (early
-    ///     return), quindi la scrittura del DockingController non entra in
-    ///     conflitto con l'integrazione throttle Rev T.
-    ///   - SetLogicalRotation(Quaternion): server-only setter, usato dal
-    ///     DockingController per l'auto-align rotazionale (interpolazione
-    ///     shortest-arc verso l'allineamento pancia-approachAxis del POI).
-    ///     In Docking CurrentNavState != Manual → UpdateOrientation() qui
-    ///     lascia decadere i rate a zero e non scrive la NetVar (early
-    ///     return se rate insignificanti), quindi zero conflitto.
+    ///   RIMOSSO: shipCollisionRadius (SerializeField) + property
+    ///   ShipCollisionRadius. Rev AA lo aveva introdotto come contributo
+    ///   sferico della nave alla formula "distanza min tra centri = somma
+    ///   dei raggi". Rev AB sostituisce il modello sferico con un compound
+    ///   collider (OBB+Sphere multipli, decisioni Q1-Q3 Rev AA workshop):
+    ///   la geometria della nave è ora descritta da CompoundColliderAuthoring.
+    ///
+    ///   AGGIUNTO: cache _compound (CompoundColliderAuthoring) + property
+    ///   Compound. Il componente CompoundColliderAuthoring va aggiunto al
+    ///   GameObject della Nave (fratello di questo script) e configurato in
+    ///   Inspector con i volumi che rappresentano fusoliera + ali + eventuali
+    ///   motori. Se assente, il compound è vuoto (equivalente al pre-Rev AA
+    ///   "shipRadius=0" — punto nave contro volumi POI).
+    ///
+    ///   Consumer di Compound: PoiCollisionResolver.ResolveCollision e
+    ///   DockingController.RunDockingTick (indirettamente, via CompoundColliderMath).
     ///
     /// DESIGN — controllo pilotaggio:
     ///   - Assi rotazione: yaw + pitch, no roll
     ///   - Convenzione mouse: FPS standard (mouse su = muso su)
     ///   - Pitch clamp: ±80°
-    ///   - Roll sempre zero — garantito dalla ricomposizione via
-    ///     Quaternion.Euler(pitch, yaw, 0)
     ///
-    /// DIPENDE DA: PropulsionSystem (CurrentNavState, CurrentSpeed,
-    ///             MaxSpeedAtDegradation, data.yawAcceleration/pitchAcceleration)
-    /// USATO DA: ExternalWorldFollower, PilotStation, DockingController,
-    ///           futuro sistema POI
+    /// DIPENDE DA: PropulsionSystem, CompoundColliderAuthoring (Rev AB).
+    /// USATO DA:   ExternalWorldFollower, PilotStation, DockingController,
+    ///             PoiCollisionResolver.
     /// </summary>
     public class ShipMovement : NetworkBehaviour
     {
@@ -93,41 +74,19 @@ namespace SpaceSurvivor.Ship
         [Header("Steering Manuale (logico — non muove 'Nave')")]
         [Tooltip("Rate MASSIMO di yaw in gradi/secondo, a input X massimo (±1). " +
                  "Il rate corrente insegue questo target con inerzia " +
-                 "(data.yawAcceleration). Default 90 = giro completo in ~4s a " +
-                 "input pieno, dopo aver 'preso' la rotazione.")]
+                 "(data.yawAcceleration).")]
         [SerializeField] private float manualYawSpeedDegPerSec = 90f;
 
         [Tooltip("Rate MASSIMO di pitch in gradi/secondo, a input Y massimo (±1). " +
-                 "Convenzione FPS: mouse su = muso su (pitch euler negativo).")]
+                 "Convenzione FPS: mouse su = muso su.")]
         [SerializeField] private float manualPitchSpeedDegPerSec = 60f;
 
         [Tooltip("Clamp assoluto del pitch in gradi (±). Default 80°.")]
         [SerializeField] private float pitchClampDegrees = 80f;
 
         [Tooltip("Velocità lineare minima (m/s) sotto la quale la rotazione è " +
-                 "BLOCCATA. Semantica: senza velocità la nave non ha come " +
-                 "ruotare (niente RCS). Meccanicamente: il Pilota deve avviare " +
-                 "prima di sterzare. Default 3 m/s. Se metti 0, la rotazione è " +
-                 "sempre concessa (comportamento pre-Rev T post-playtest).")]
+                 "BLOCCATA. Default 3 m/s.")]
         [SerializeField] private float minSpeedToSteer = 3f;
-
-        // ── Collisione fisica (Blocco 3.2.c hotfix Rev AA) ───────────────────
-        [Header("Collisione fisica (Rev AA)")]
-        [Tooltip("Raggio di collisione della nave (u logiche). Contributo della " +
-                 "geometria della nave alla formula di collisione contro POI: " +
-                 "raggio effettivo di clamp = poi.HardCollisionRadius + " +
-                 "ship.ShipCollisionRadius (distanza min tra centri = somma dei " +
-                 "raggi). Senza questo contributo il clamp scattava solo quando " +
-                 "il PUNTO LogicalPosition entrava nella mesh POI — cioè quando " +
-                 "l'intera metà avanti della nave era già visibilmente " +
-                 "compenetrata (bug rilevato in playtest 3.2.c.4 pre-hotfix).\n\n" +
-                 "Default 15 u: punto di partenza plausibile per la mesh " +
-                 "CreepyCat Scifi Kit Vol.4. Tuning empirico: aumentare finché " +
-                 "cabina e ali non entrano più nella mesh POI durante impatto " +
-                 "Manual. Applicato sia in Docking (DockingController) sia in " +
-                 "Manual/Coasting/Autopilot (PoiCollisionResolver) per coerenza.")]
-        [Min(0f)]
-        [SerializeField] private float shipCollisionRadius = 15f;
 
         // ── Stato di rete ─────────────────────────────────────────────────────
         private readonly NetworkVariable<Quaternion> _logicalRotation = new NetworkVariable<Quaternion>(
@@ -140,11 +99,41 @@ namespace SpaceSurvivor.Ship
             NetworkVariableReadPermission.Everyone,
             NetworkVariableWritePermission.Server);
 
-        // Stato server-only (non replicato — sono cinematica interna, ricostruita
-        // da input + rotation replicati). Vector2 = (X: yaw input, Y: pitch input).
+        // Stato server-only (non replicato).
         private Vector2 _manualLookInput;
-        private float _currentYawRate;    // deg/sec — insegue input.x × maxYaw con inerzia
-        private float _currentPitchRate;  // deg/sec — insegue input.y × maxPitch con inerzia
+        private float _currentYawRate;
+        private float _currentPitchRate;
+
+        // ── Cache compound collider (Rev AB) ─────────────────────────────────
+        [Header("Collisione compound (Rev AB — Blocco 3.2.d D5)")]
+        [Tooltip("Riferimento al CompoundColliderAuthoring che descrive la " +
+                 "geometria di collisione della Nave. Trascinare qui il " +
+                 "GameObject Nave (quello con la mesh e il componente " +
+                 "CompoundColliderAuthoring). ShipMovement è tipicamente su " +
+                 "un GameObject sistemistico fratello di Nave, quindi " +
+                 "GetComponent non funziona — serve riferimento esplicito.\n\n" +
+                 "Se lasciato vuoto, Awake tenta un fallback via " +
+                 "FindAnyObjectByType&lt;CompoundColliderAuthoring&gt;() — " +
+                 "funziona se c'è una sola Nave in scena, ma genera LogError " +
+                 "se non trova niente. Il drag&amp;drop esplicito è " +
+                 "preferibile perché deterministico e più veloce.")]
+        [SerializeField] private CompoundColliderAuthoring shipCompound;
+
+        [Header("Debug")]
+        [Tooltip("Log diagnostico VERBOSO — heartbeat throttled (1/sec) di " +
+                 "UpdatePosition. Attivare solo per indagare mancate " +
+                 "invocazioni del resolver o valori inattesi di CurrentSpeed. " +
+                 "Off in gameplay normale — introduce rumore in console.")]
+        [SerializeField] private bool debugVerbose = false;
+
+        private CompoundColliderAuthoring _compound;
+        private bool _hasWarnedMissingCompound;
+
+        /// <summary>
+        /// Rev AB — frame counter per throttle del log diagnostico da
+        /// UpdatePosition. Emesso solo se debugVerbose == true.
+        /// </summary>
+        private int _debugUpdatePosCounter;
 
         // ── Proprietà pubbliche ───────────────────────────────────────────────
         public Quaternion LogicalRotation => _logicalRotation.Value;
@@ -158,22 +147,59 @@ namespace SpaceSurvivor.Ship
             PropulsionSystem.Instance != null ? PropulsionSystem.Instance.CurrentNavState : NavigationState.Anchored;
 
         /// <summary>
-        /// Blocco 3.2.c hotfix Rev AA — raggio di collisione della nave (u logiche).
-        /// Contributo geometrico della nave alla formula di clamp contro POI.
-        /// Letto da DockingController (via PoiCollisionMath.ClampAgainstPoi) e da
-        /// PoiCollisionResolver (idem). Vedi tooltip inspector per motivazione
-        /// completa.
+        /// Rev AB — Compound collider della nave. Cachato in Awake. Può essere
+        /// null se il GameObject non ha CompoundColliderAuthoring: in quel caso
+        /// il warning è emesso una sola volta e i consumer trattano la nave
+        /// come punto (semantica pre-Rev AA "shipRadius=0"). Configurare
+        /// aggiungendo il componente CompoundColliderAuthoring al GameObject
+        /// Nave e popolando la lista di volumi in Inspector.
         /// </summary>
-        public float ShipCollisionRadius => shipCollisionRadius;
+        public CompoundColliderAuthoring Compound => _compound;
 
         // =========================================================================
-        // LIFECYCLE NGO
+        // LIFECYCLE
         // =========================================================================
+
+        private void Awake()
+        {
+            // Rev AB — cache del compound. ShipMovement è su un GameObject
+            // sistemistico separato dal GameObject Nave (dove sta il
+            // CompoundColliderAuthoring), quindi GetComponent non funziona.
+            //
+            // Priorità:
+            //   1. Riferimento esplicito serializzato (drag&drop in Inspector).
+            //   2. Fallback via FindAnyObjectByType — funziona se c'è UN solo
+            //      compound in scena. Se ne trova più di uno, prende il primo
+            //      (imprevedibile — evitare configurando esplicitamente).
+            //
+            // Se anche il fallback ritorna null, OnNetworkSpawn stamperà
+            // LogError persistente (impossibile che scorra via nei log).
+            _compound = shipCompound;
+            if (_compound == null)
+            {
+                _compound = FindAnyObjectByType<CompoundColliderAuthoring>();
+            }
+        }
 
         public override void OnNetworkSpawn()
         {
             Instance = this;
             OnInstanceReady?.Invoke();
+
+            if (_compound == null && !_hasWarnedMissingCompound)
+            {
+                _hasWarnedMissingCompound = true;
+                Debug.LogError("[ShipMovement] CompoundColliderAuthoring NON TROVATO. " +
+                               "La nave sarà trattata come PUNTO nelle collisioni contro " +
+                               "i POI — nella pratica il resolver non fermerà mai la nave " +
+                               "(un punto contro OBB non scatta finché non è esattamente " +
+                               "dentro il volume). Fix: assegnare il campo 'Ship Compound' " +
+                               "nell'Inspector di ShipMovement, trascinandoci il GameObject " +
+                               "Nave che ha il componente CompoundColliderAuthoring, " +
+                               "OPPURE verificare che esista in scena UN solo " +
+                               "CompoundColliderAuthoring (il fallback " +
+                               "FindAnyObjectByType lo prenderà automaticamente).");
+            }
         }
 
         public override void OnNetworkDespawn()
@@ -195,20 +221,9 @@ namespace SpaceSurvivor.Ship
 
         /// <summary>
         /// Server-only. Se in MANUAL e velocità ≥ minSpeedToSteer, insegue i
-        /// rate target (input × maxRate) con accelerazione angolare data dal
-        /// PropulsionUpgradeData, poi applica i rate correnti al quaternion.
-        ///
-        /// Quando la nave rallenta sotto minSpeedToSteer, i rate correnti
-        /// vengono lasciati decadere a zero (con la stessa accelerazione) —
-        /// così quando la nave si ferma non c'è uno "stop rotazionale" duro
-        /// che sembra un bug.
-        ///
-        /// In Docking/Docked (Fase 3): CurrentNavState != Manual → canSteer=false
-        /// → rate decadono a zero → early return se insignificanti. Il
-        /// DockingController scrive direttamente _logicalRotation via
-        /// SetLogicalRotation, senza conflitto.
-        ///
-        /// Roll garantito a zero dalla composizione via Quaternion.Euler.
+        /// rate target con accelerazione angolare, poi applica i rate al
+        /// quaternion. Quando la nave rallenta sotto minSpeedToSteer, i rate
+        /// decadono a zero.
         /// </summary>
         private void UpdateOrientation()
         {
@@ -218,12 +233,9 @@ namespace SpaceSurvivor.Ship
 
             float dt = Time.fixedDeltaTime;
 
-            // Rate target: se posso sterzare, insegue l'input; altrimenti decadi a zero.
-            // Convenzione FPS per il pitch: mouse su → muso su → euler.x negativo → segno meno.
             float targetYawRate = canSteer ? _manualLookInput.x * manualYawSpeedDegPerSec : 0f;
             float targetPitchRate = canSteer ? -_manualLookInput.y * manualPitchSpeedDegPerSec : 0f;
 
-            // Accelerazione angolare dal data, scalata dal degrado (se disponibile).
             float yawAccel, pitchAccel;
             if (propulsion != null && propulsion.YawAcceleration > 0f)
             {
@@ -232,7 +244,6 @@ namespace SpaceSurvivor.Ship
             }
             else
             {
-                // Fallback (non dovrebbe mai succedere se PropulsionSystem è spawnato).
                 yawAccel = 60f;
                 pitchAccel = 45f;
             }
@@ -240,21 +251,16 @@ namespace SpaceSurvivor.Ship
             _currentYawRate = MoveToward(_currentYawRate, targetYawRate, yawAccel * dt);
             _currentPitchRate = MoveToward(_currentPitchRate, targetPitchRate, pitchAccel * dt);
 
-            // Se nessuno dei due rate è significativo, non toccare la NetworkVariable
-            // (evita scritture inutili e micro-jitter numerico su tempi lunghi).
             if (Mathf.Abs(_currentYawRate) < 0.01f && Mathf.Abs(_currentPitchRate) < 0.01f)
                 return;
 
-            // Estrai yaw/pitch dalla rotazione corrente, normalizzati in [-180, +180].
             Vector3 euler = _logicalRotation.Value.eulerAngles;
             float yaw = NormalizeAngle(euler.y);
             float pitch = NormalizeAngle(euler.x);
 
-            // Integra i rate correnti nel dt.
             yaw += _currentYawRate * dt;
             pitch += _currentPitchRate * dt;
 
-            // Clamp pitch. Roll forzato a 0 dalla ricomposizione euler.
             pitch = Mathf.Clamp(pitch, -pitchClampDegrees, +pitchClampDegrees);
 
             _logicalRotation.Value = Quaternion.Euler(pitch, yaw, 0f);
@@ -271,25 +277,31 @@ namespace SpaceSurvivor.Ship
         /// Blocco 3.2.c — Hook di collisione POI:
         /// prima di scrivere _logicalPosition, la candidatePos passa attraverso
         /// PoiCollisionResolver.Instance.ResolveCollision (se presente e in
-        /// stato Manual/Coasting/Autopilot). Se sfora HardCollisionRadius del
-        /// POI più vicino, il resolver clampa+slida e ritorna la nuova velocità
+        /// stato Manual/Coasting/Autopilot). Se una coppia (volumeNave, volumePOI)
+        /// compenetra, il resolver clampa+slida e ritorna la nuova velocità
         /// scalare, che propago a PropulsionSystem via SetCurrentSpeedFromCollision.
-        /// In Docking/Docked il resolver dorme (mutex col DockingController) →
-        /// passa la candidatePos inalterata.
         /// </summary>
         private void UpdatePosition()
         {
             float speed = CurrentSpeed;
+
+            // ── DEBUG HEARTBEAT (guardato da debugVerbose) ───────────────
+            _debugUpdatePosCounter++;
+            if (debugVerbose && (_debugUpdatePosCounter % 50 == 0))
+            {
+                var resDbg = PoiCollisionResolver.Instance;
+                Debug.Log($"[ShipMov.UpdatePos] speed={speed:F2}u/s  " +
+                          $"nav={CurrentNavState}  " +
+                          $"resolverExists={resDbg != null}  " +
+                          $"willInvoke={(Mathf.Abs(speed) > 0.01f && resDbg != null)}");
+            }
+
             if (Mathf.Abs(speed) <= 0.01f) return;
 
             Vector3 currentPos = _logicalPosition.Value;
             Vector3 forward = LogicalForward;
             Vector3 candidatePos = currentPos + forward * speed * Time.fixedDeltaTime;
 
-            // Se il resolver è pronto, delego a lui la decisione finale su
-            // posizione + velocità. Altrimenti (edge case boot: resolver non
-            // ancora spawnato) scrivo la candidate diretta — comportamento
-            // pre-3.2.c preservato.
             var resolver = PoiCollisionResolver.Instance;
             if (resolver != null)
             {
@@ -313,10 +325,7 @@ namespace SpaceSurvivor.Ship
 
         /// <summary>
         /// Chiamato da PilotStation, una volta per frame, mentre il Pilota è
-        /// seduto e NavigationState == Manual. lookDelta atteso in [-1, 1] su
-        /// entrambi gli assi (X = yaw, Y = pitch — dell'azione Look, mouse/stick).
-        /// La sensibilità mouse è applicata a monte in PilotStation, questo
-        /// input arriva già scalato correttamente per device.
+        /// seduto e NavigationState == Manual. lookDelta atteso in [-1, 1].
         /// </summary>
         public void SetManualLookInput(Vector2 lookDelta)
         {
@@ -334,11 +343,6 @@ namespace SpaceSurvivor.Ship
         /// <summary>
         /// Fase 3 3.1.3 — server-only setter di LogicalPosition, chiamato dal
         /// DockingController per applicare lo strafe RCS durante Docking.
-        /// Fuori da Docking (in Manual/Autopilot) il PropulsionSystem integra
-        /// LogicalForward × CurrentSpeed tramite UpdatePosition() sopra — non
-        /// dovrebbe essere chiamato in quegli stati (la validazione della
-        /// coerenza è responsabilità del chiamante, tipicamente
-        /// DockingController che gira solo se stato == Docking).
         /// </summary>
         public void SetLogicalPosition(Vector3 newPos)
         {
@@ -352,9 +356,7 @@ namespace SpaceSurvivor.Ship
 
         /// <summary>
         /// Fase 3 3.1.3 — server-only setter di LogicalRotation, chiamato dal
-        /// DockingController per l'auto-align rotazionale (shortest-arc slerp
-        /// verso l'allineamento pancia-approachAxis del POI, pesato sulla
-        /// progressione di avvicinamento).
+        /// DockingController per l'auto-align rotazionale.
         /// </summary>
         public void SetLogicalRotation(Quaternion newRot)
         {
@@ -370,10 +372,6 @@ namespace SpaceSurvivor.Ship
         // HELPER
         // =========================================================================
 
-        /// <summary>
-        /// Sposta 'current' verso 'target' di al massimo 'maxDelta' unità.
-        /// Come Mathf.MoveTowards, esplicitato qui per chiarezza.
-        /// </summary>
         private static float MoveToward(float current, float target, float maxDelta)
         {
             float diff = target - current;

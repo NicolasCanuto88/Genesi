@@ -333,13 +333,14 @@ namespace SpaceSurvivor.Poi
             // prefab). Fase 3.1.5 — motivazione:
             //   Con l'auto-align rotazionale della nave RIMOSSO (Opzione 3
             //   del Blocco 3.1), la rotazione del POI determina da quale
-            //   lato la nave deve avvicinarsi per attraccare (asse di
-            //   approccio calcolato come poi.LogicalRotation *
-            //   dockingApproachDirectionLocal). Se la rotazione fosse
-            //   casuale, il pilota non avrebbe alcun indizio visivo su da
-            //   dove attraccare — dovrebbe girare intorno a ogni POI a caso.
-            //   Con rotation fissa dal prefab, il modeler può orientare il
-            //   POI in modo che il lato di attracco sia visivamente
+            //   lato la nave deve avvicinarsi per attraccare. Rev AB (Q6=B):
+            //   l'asse di approccio è ora definito dal DockingAnchor Transform
+            //   sul prefab (PoiInstance.DockingAnchorForwardWorld) e viene
+            //   ruotato insieme al POI dalla LogicalRotation. Se la rotation
+            //   fosse casuale, il pilota non avrebbe alcun indizio visivo su
+            //   da dove attraccare — dovrebbe girare intorno a ogni POI a
+            //   caso. Con rotation fissa dal prefab, il modeler può orientare
+            //   il POI in modo che il lato di attracco sia visivamente
             //   evidente (portello, luce, freccia), coerente per tutti gli
             //   spawn.
             Quaternion logicalRot = entry.poiInstancePrefab.transform.rotation;

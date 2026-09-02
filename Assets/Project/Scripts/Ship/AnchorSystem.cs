@@ -152,13 +152,24 @@ namespace SpaceSurvivor.Ship
                 // Se >= cos(halfAngle) → dentro il cono.
                 // Con angolo 60°: cos(30°) ≈ 0.866.
                 //
+                // Rev AB (Q6=B): approachAxis è ora esposto da PoiInstance
+                // (DockingAnchorForwardWorld), derivato dal DockingAnchor
+                // Transform sul prefab POI. Sostituisce il vecchio
+                // poi.LogicalRotation × poi.Data.DockingApproachDirectionLocal
+                // (rimosso da PoiData in Rev AB). La property ritorna già
+                // normalizzata con fallback interno (LogicalRotation × Vector3.up
+                // se il DockingAnchor non è configurato sul prefab).
+                //
                 // Edge case: se ship == poi (distSqr ≈ 0), evitiamo divisione
                 // per zero — la nave è già "dentro" il POI, l'attracco non ha
                 // senso. Skip.
                 if (distSqr < 1e-4f) continue;
 
-                Vector3 approachAxisWorld =
-                    (poi.LogicalRotation * poi.Data.DockingApproachDirectionLocal).normalized;
+                Vector3 approachAxisWorld = poi.DockingAnchorForwardWorld;
+                float approachMag = approachAxisWorld.magnitude;
+                if (approachMag > 1e-4f) approachAxisWorld /= approachMag;
+                else continue; // degenere, POI mal configurato — skip conservativo
+
                 float axialNormalized =
                     Vector3.Dot(fromPoiToShip / Mathf.Sqrt(distSqr), approachAxisWorld);
                 if (axialNormalized < poi.Data.DockingConeMinDot) continue;
