@@ -362,6 +362,26 @@ namespace SpaceSurvivor.Ship
 
             // ── Notifica consumer di feedback teatrale (Blocco 3.2.d) ─────────
             OnDamageInflicted?.Invoke(damage, impactVelocity, poi);
+
+            // ── Avaria motori post-impatto (Blocco 3.2.d — Rev AC) ────────────
+            // Q1=B confermata Rev AC: l'orchestrazione dell'avaria motori è
+            // centralizzata in questo handler (canale unico delle conseguenze
+            // di impatto). Il filtro Q6=B (stati applicabili: Manual/Coasting/
+            // Autopilot) è interno a TriggerEngineFailure — chiamiamo sempre e
+            // il metodo scarta l'invocazione quando fuori scope (es. impatti
+            // in Docking dal DockingController). Ignoriamo il fire per
+            // impatti sotto soglia e con damage=0: la sequenza early-return
+            // sopra (righe 308-336) ha già interrotto il flusso in quei casi.
+            var propulsion = PropulsionSystem.Instance;
+            if (propulsion != null)
+            {
+                propulsion.TriggerEngineFailure();
+            }
+            else
+            {
+                Debug.LogWarning("[ShipImpactHandler] PropulsionSystem.Instance null — " +
+                                 "avaria motori skippata.");
+            }
         }
 
         /// <summary>

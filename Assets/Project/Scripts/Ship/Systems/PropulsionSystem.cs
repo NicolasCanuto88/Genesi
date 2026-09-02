@@ -77,6 +77,21 @@ namespace SpaceSurvivor.Ship
         public static PropulsionSystem Instance { get; private set; }
         public static event Action OnInstanceReady;
 
+        // ── Eventi pubblici (Blocco 3.2.d — Rev AC) ───────────────────────────
+        /// <summary>
+        /// Fire server-side ogni volta che TriggerEngineFailure() effettivamente
+        /// scatena un'avaria (dopo il filtro Q6=B: solo in Manual/Coasting/
+        /// Autopilot, e solo se non già in avaria). Payload = durata in secondi
+        /// del blackout imminente.
+        ///
+        /// Hook per consumer futuri di Blocco 3.2.d (Rev AD+): audio impatto
+        /// dedicato al blackout motori, luci sfarfallanti, screen shake extra,
+        /// banner UI "MOTORI OFFLINE" (debito D13). Consumer server-only per
+        /// coerenza col fire — client-side propagation via NetworkVariable o
+        /// RPC dedicato quando servirà.
+        /// </summary>
+        public event Action<float> OnEnginesFailed;
+
         // ── Upgrade Data ──────────────────────────────────────────────────────
         [Header("Upgrade Data")]
         [Tooltip("Array di tier. Index 0 = T1, 1 = T2, ecc.")]
@@ -88,6 +103,29 @@ namespace SpaceSurvivor.Ship
         [Header("Stato Iniziale")]
         [SerializeField] private NavigationState startingState = NavigationState.Anchored;
         [SerializeField] private bool startPowered = true;
+
+        // ── Avaria motori post-impatto (Blocco 3.2.d — Rev AC) ────────────────
+        [Header("Avaria motori post-impatto (Blocco 3.2.d — Rev AC)")]
+        [Tooltip("Durata in secondi del blackout motori scatenato da un impatto " +
+                 "in Manual/Coasting/Autopilot. Durante questo periodo TargetSpeed " +
+                 "è forzato a 0 e ogni input pilota (W/S in Manual) è ignorato. " +
+                 "Alla fine, il TargetSpeed viene ripristinato gradualmente al " +
+                 "valore pre-urto con rate 'throttleRecoveryRate'.\n\n" +
+                 "Default 1.5s = punto di partenza per playtest. Debito D14 " +
+                 "(Rev AC): rendere proporzionale a radialInward.")]
+        [Min(0f)]
+        [SerializeField] private float engineFailureDuration = 1.5f;
+
+        [Tooltip("Rate in u/s con cui TargetSpeed viene ripristinato verso il " +
+                 "valore pre-urto (_savedTargetSpeed) durante la fase di recovery, " +
+                 "in assenza di input pilota. Il pilota può interferire: se preme " +
+                 "W/S in Manual, l'input pilota sovrascrive il recovery per quel " +
+                 "frame (Q3+Opzione A confermate Rev AC).\n\n" +
+                 "Default 20 u/s: recovery da 0 a 100 in ~5s, più lento di un " +
+                 "ripristino manuale con W tenuto (accel tipico 20-30 u/s²) — " +
+                 "il pilota può 'aiutare' a riprendere velocità intervenendo.")]
+        [Min(0f)]
+        [SerializeField] private float throttleRecoveryRate = 20f;
 
         // ── Network Variables ─────────────────────────────────────────────────
         private readonly NetworkVariable<float> _netHealth =
@@ -125,6 +163,17 @@ namespace SpaceSurvivor.Ship
         private float _fuelTickTimer;
         private float _manualThrottleInput; // Rev T — [-1, +1], W/S dal Pilota
         private const float FuelTickInterval = 1f;
+
+        // Rev AC — stato avaria motori (server-only)
+        // _engineFailureUntil: Time.time-stamp fino a cui il blackout è attivo.
+        //   Time.time < _engineFailureUntil → avaria in corso, target forzato a 0.
+        //   Time.time >= _engineFailureUntil → avaria terminata.
+        // _savedTargetSpeed: TargetSpeed al momento dell'impatto (o mid-recovery
+        //   per urti concatenati). 0 = nessun recovery attivo. > 0 = recovery in
+        //   corso verso questo valore. Azzerato quando il recovery si completa
+        //   (o quando il pilota raggiunge/supera il valore intervenendo con W).
+        private float _engineFailureUntil;
+        private float _savedTargetSpeed;
 
         // ── Proprietà pubbliche ───────────────────────────────────────────────
         public NavigationState CurrentNavState => (NavigationState)_netNavState.Value;
@@ -240,6 +289,18 @@ namespace SpaceSurvivor.Ship
         ///               ship.LogicalPosition. Il throttle main è sospeso.
         ///   DOCKED    → target/current forzati a 0. Come Anchored ma con
         ///               AnchoredPoiId != 0.
+        ///
+        /// AVARIA MOTORI (Blocco 3.2.d — Rev AC):
+        ///   In Manual/Coasting/Autopilot, se _engineFailureUntil è nel futuro
+        ///   il target viene forzato a 0 e ogni input pilota è ignorato.
+        ///   Alla fine dell'avaria, se _savedTargetSpeed > 0 il target viene
+        ///   ripristinato gradualmente verso min(_savedTargetSpeed, maxCap) con
+        ///   rate throttleRecoveryRate. In Manual, il pilota può interferire:
+        ///   input W/S sovrascrive il ramp di recovery per quel frame (Q3+
+        ///   Opzione A confermate Rev AC). In Coasting/Autopilot il recovery
+        ///   è puramente time-based (nessun input pilota diretto sul target).
+        ///   In Anchored/Docking/Docked l'avaria è inapplicabile e il filtro
+        ///   Q6=B in TriggerEngineFailure lo garantisce all'ingresso.
         /// </summary>
         private void UpdateThrottleAndSpeed()
         {
@@ -258,6 +319,13 @@ namespace SpaceSurvivor.Ship
             var navState = CurrentNavState;
             float maxCap = MaxSpeedAtDegradation;
 
+            // Rev AC — stato avaria motori. Valido solo per Manual/Coasting/
+            // Autopilot; negli altri stati _engineFailureUntil e _savedTargetSpeed
+            // restano ai default 0 grazie al filtro Q6=B in TriggerEngineFailure
+            // e al reset in OnNavStateChanged.
+            bool inFailure = Time.time < _engineFailureUntil;
+            bool isRecovering = _savedTargetSpeed > 0f;
+
             // 1. Aggiorna TargetSpeed in base allo stato
             switch (navState)
             {
@@ -266,17 +334,81 @@ namespace SpaceSurvivor.Ship
                     break;
 
                 case NavigationState.Autopilot:
-                    // Segue automaticamente il cap del degrado
-                    _netTargetSpeed.Value = maxCap;
+                    if (inFailure)
+                    {
+                        // Motori offline: sovrascrivi target = maxCap con 0.
+                        _netTargetSpeed.Value = 0f;
+                    }
+                    else if (isRecovering)
+                    {
+                        // Recovery time-based verso min(saved, maxCap).
+                        // maxCap può essere sceso sotto _savedTargetSpeed per
+                        // degrado subito durante l'avaria — clampa di conseguenza.
+                        float recTarget = Mathf.Min(_savedTargetSpeed, maxCap);
+                        float newT = _netTargetSpeed.Value + throttleRecoveryRate * dt;
+                        if (newT >= recTarget)
+                        {
+                            _netTargetSpeed.Value = recTarget;
+                            _savedTargetSpeed = 0f; // recovery completato
+                        }
+                        else
+                        {
+                            _netTargetSpeed.Value = newT;
+                        }
+                    }
+                    else
+                    {
+                        // Segue automaticamente il cap del degrado
+                        _netTargetSpeed.Value = maxCap;
+                    }
                     break;
 
                 case NavigationState.Manual:
-                    // Throttle sposta il target con lo stesso rate dell'accelerazione
-                    if (!Mathf.Approximately(_manualThrottleInput, 0f))
+                    if (inFailure)
                     {
+                        // Motori offline: target a 0, _manualThrottleInput
+                        // (che PilotStation continua a scrivere) è ignorato.
+                        _netTargetSpeed.Value = 0f;
+                    }
+                    else if (!Mathf.Approximately(_manualThrottleInput, 0f))
+                    {
+                        // Input pilota attivo — sovrascrive il ramp di recovery
+                        // per questo frame (Q3+Opzione A: recovery interruttibile).
+                        // Comportamento identico al Manual base pre-Rev AC.
                         float newTarget = _netTargetSpeed.Value
                                         + _manualThrottleInput * accel * dt;
                         _netTargetSpeed.Value = Mathf.Clamp(newTarget, 0f, maxCap);
+
+                        // Rev AC fix bug 1: qualsiasi input pilota post-avaria
+                        // (W o S, in qualsiasi direzione) cancella il debito
+                        // recovery. Semantica: "il pilota ha ripreso il controllo,
+                        // il ripristino automatico non serve più". Senza questa
+                        // cancellazione, se il pilota preme S durante recovery
+                        // il target scende ma al rilascio il ramp automatico
+                        // riparte verso _savedTargetSpeed, contraddicendo
+                        // l'intenzione del pilota di rallentare. Con il fix:
+                        // per tornare al valore pre-urto, il pilota deve
+                        // premere W esplicitamente.
+                        if (isRecovering)
+                            _savedTargetSpeed = 0f;
+                    }
+                    else if (isRecovering)
+                    {
+                        // Nessun input + recovery attivo: rampa time-based.
+                        // Se il pilota preme S poi rilascia, la rampa riprende
+                        // dal valore corrente verso _savedTargetSpeed — il
+                        // debito persiste finché non saldato o cancellato.
+                        float recTarget = Mathf.Min(_savedTargetSpeed, maxCap);
+                        float newT = _netTargetSpeed.Value + throttleRecoveryRate * dt;
+                        if (newT >= recTarget)
+                        {
+                            _netTargetSpeed.Value = recTarget;
+                            _savedTargetSpeed = 0f;
+                        }
+                        else
+                        {
+                            _netTargetSpeed.Value = newT;
+                        }
                     }
                     else
                     {
@@ -286,14 +418,37 @@ namespace SpaceSurvivor.Ship
                     break;
 
                 case NavigationState.Coasting:
-                    // Target invariato — inerzia nello spazio vuoto
+                    if (inFailure)
+                    {
+                        // Motori offline: forza target a 0 sovrascrivendo
+                        // il freeze inerzia. CurrentSpeed rampa verso 0.
+                        _netTargetSpeed.Value = 0f;
+                    }
+                    else if (isRecovering)
+                    {
+                        // Recovery time-based (nessun input pilota in Coasting).
+                        float recTarget = Mathf.Min(_savedTargetSpeed, maxCap);
+                        float newT = _netTargetSpeed.Value + throttleRecoveryRate * dt;
+                        if (newT >= recTarget)
+                        {
+                            _netTargetSpeed.Value = recTarget;
+                            _savedTargetSpeed = 0f;
+                        }
+                        else
+                        {
+                            _netTargetSpeed.Value = newT;
+                        }
+                    }
+                    // else: target invariato — inerzia nello spazio vuoto
                     break;
 
                 case NavigationState.Docking:
                 case NavigationState.Docked:
                     // Fase 3 Blocco 3.1 — throttle main sospeso, tutto a 0.
                     // Il DockingController gestisce lo strafe scrivendo
-                    // direttamente ship.LogicalPosition.
+                    // direttamente ship.LogicalPosition. Il filtro Q6=B in
+                    // TriggerEngineFailure garantisce che _engineFailureUntil
+                    // e _savedTargetSpeed siano irrilevanti qui.
                     _netTargetSpeed.Value = 0f;
                     break;
             }
@@ -585,6 +740,92 @@ namespace SpaceSurvivor.Ship
             _netCurrentSpeed.Value = Mathf.Clamp(newSpeed, -cap, cap);
         }
 
+        /// <summary>
+        /// Blocco 3.2.d — Rev AC. Server-only. Scatena un'avaria motori
+        /// temporanea (blackout di durata engineFailureDuration secondi):
+        ///   1. Salva TargetSpeed corrente in _savedTargetSpeed (per il recovery).
+        ///   2. Azzera TargetSpeed (la UI riflette immediato via NetworkVariable).
+        ///   3. Imposta _engineFailureUntil = Time.time + engineFailureDuration.
+        ///
+        /// Durante l'avaria (UpdateThrottleAndSpeed):
+        ///   - TargetSpeed forzato a 0 in Manual/Coasting/Autopilot.
+        ///   - Input pilota (_manualThrottleInput in Manual) è ignorato.
+        ///   - Il case Docking/Docked mantiene la propria semantica invariata.
+        ///
+        /// Alla fine dell'avaria: recovery graduale di TargetSpeed verso
+        /// _savedTargetSpeed con rate throttleRecoveryRate (interrompibile
+        /// dal pilota in Manual — Q3+Opzione A confermate Rev AC).
+        ///
+        /// CHIAMANTE PREVISTO:
+        ///   ShipImpactHandler.HandleHardCollision, dopo il fire di
+        ///   OnDamageInflicted (Q1=B confermata Rev AC: orchestrazione
+        ///   centralizzata nel handler dedicato alle conseguenze di impatto).
+        ///
+        /// FILTRO (Q6=B, confermato Rev AC):
+        ///   L'avaria è applicabile solo negli stati con ramp Rev T attivo:
+        ///   Manual, Coasting, Autopilot. In Anchored/Docking/Docked il
+        ///   TargetSpeed è già forzato a 0 dal ramp (docking usa RCS strafe
+        ///   diretto su LogicalPosition, non passa da CurrentSpeed) e
+        ///   applicare l'avaria sarebbe semanticamente sporco ("salvare 0 per
+        ///   ripristinare 0"). Early-return con log diagnostico.
+        ///
+        /// DOPPIO URTO:
+        ///   Se già in avaria (Time.time &lt; _engineFailureUntil), la chiamata
+        ///   viene ignorata: _savedTargetSpeed originale è preservato (il
+        ///   primo urto ha già determinato il debito recovery) e la durata
+        ///   non viene estesa artificiosamente da urti ripetuti mentre la
+        ///   nave è già ferma.
+        ///
+        ///   Se in fase recovery (Time.time &gt;= _engineFailureUntil ma
+        ///   _savedTargetSpeed &gt; 0), la chiamata azzera il target corrente
+        ///   mid-recovery (es. da 40 in su a 0), salva quel 40 come nuovo
+        ///   _savedTargetSpeed (B1 confermata Rev AC — no exploit di reset
+        ///   al valore alto originale) e ricomincia l'avaria da capo.
+        ///
+        /// EVENTO OnEnginesFailed(duration): fire dopo il setup dello stato,
+        /// solo se l'avaria è effettivamente scattata (non se filtrata).
+        /// </summary>
+        public void TriggerEngineFailure()
+        {
+            if (!IsServer)
+            {
+                Debug.LogError("[PropulsionSystem] TriggerEngineFailure called on client — ignored.");
+                return;
+            }
+
+            var state = CurrentNavState;
+
+            // Q6=B — filtro stati non applicabili
+            if (state != NavigationState.Manual
+                && state != NavigationState.Coasting
+                && state != NavigationState.Autopilot)
+            {
+                Debug.Log($"[PropulsionSystem] Impatto in {state} — avaria motori " +
+                          $"non applicabile (ramp Rev T sospeso in questo stato).");
+                return;
+            }
+
+            // Doppio urto — già in avaria: ignoro per preservare
+            // _savedTargetSpeed originale e non estendere la durata.
+            if (Time.time < _engineFailureUntil)
+            {
+                Debug.Log($"[PropulsionSystem] Avaria già in corso (residuo " +
+                          $"{_engineFailureUntil - Time.time:F2}s) — nuovo impatto ignorato.");
+                return;
+            }
+
+            // Salva il TargetSpeed corrente (potrebbe essere il valore pre-urto
+            // originale, oppure un valore mid-recovery per urti in fase recovery).
+            _savedTargetSpeed = _netTargetSpeed.Value;
+            _netTargetSpeed.Value = 0f;
+            _engineFailureUntil = Time.time + engineFailureDuration;
+
+            Debug.LogWarning($"[PropulsionSystem] Avaria motori: {engineFailureDuration:F2}s " +
+                             $"(TargetSpeed salvato: {_savedTargetSpeed:F1} m/s, state: {state})");
+
+            OnEnginesFailed?.Invoke(engineFailureDuration);
+        }
+
         // ── Fuel Consumption ──────────────────────────────────────────────────
         private void ConsumeFuelTick()
         {
@@ -689,6 +930,13 @@ namespace SpaceSurvivor.Ship
             {
                 _fuelAccumulator = 0f;
 
+                // Rev AC — reset stato avaria motori ad ogni transizione.
+                // Se stavamo in Manual con recovery attivo e passiamo a Docking,
+                // poi torniamo a Manual, non dovremmo trovare il recovery
+                // sospeso: ogni cambio stato è un "reset dei sistemi".
+                _engineFailureUntil = 0f;
+                _savedTargetSpeed = 0f;
+
                 switch (newState)
                 {
                     case NavigationState.Anchored:
@@ -776,6 +1024,16 @@ namespace SpaceSurvivor.Ship
             GUILayout.Label($"FTL Override: {_ftlOverride}");
             GUILayout.Label($"AnchoredPoi: {_netAnchoredPoiId.Value}");
 
+            // Rev AC — stato avaria motori
+            bool inFailureDbg = Time.time < _engineFailureUntil;
+            bool isRecoveringDbg = _savedTargetSpeed > 0f;
+            if (inFailureDbg)
+                GUILayout.Label($"Avaria: {_engineFailureUntil - Time.time:F2}s (saved {_savedTargetSpeed:F1})");
+            else if (isRecoveringDbg)
+                GUILayout.Label($"Recovery → {_savedTargetSpeed:F1} m/s");
+            else
+                GUILayout.Label("Avaria: —");
+
             if (IsServer)
             {
                 GUILayout.Space(4);
@@ -801,6 +1059,7 @@ namespace SpaceSurvivor.Ship
                 if (GUILayout.Button("-50 HP")) ApplyDamageInternal(50f);
                 GUILayout.EndHorizontal();
                 if (GUILayout.Button("Repair 100%")) ((IRepairable)this).ApplyRepair(100f);
+                if (GUILayout.Button("Trigger Avaria")) TriggerEngineFailure();
             }
 
             GUILayout.EndVertical();
