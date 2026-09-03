@@ -154,6 +154,18 @@ namespace SpaceSurvivor.Ship
         private readonly NetworkVariable<ulong> _netAnchoredPoiId =
             new(0ul, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Server);
 
+        // Rev AE — D13 esposizione stato avaria motori a tutti i client
+        // (banner "MOTORI OFFLINE"). QH-1 confermata: 1 NetworkVariable double
+        // per timestamp ServerTime + 1 float per duration totale. 2 writes per
+        // avaria (start), 0 writes durante il countdown — client calcola
+        // remaining/ratio localmente via NetworkManager.ServerTime.Time
+        // (sincronizzato NGO). Bandwidth minimo, timing preciso.
+        private readonly NetworkVariable<double> _netEngineFailureUntilServerTime =
+            new(0.0, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Server);
+
+        private readonly NetworkVariable<float> _netEngineFailureDuration =
+            new(0f, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Server);
+
         // ── Runtime (server) ──────────────────────────────────────────────────
         private PropulsionUpgradeData _data;
         private PowerManager _powerManager;
@@ -207,6 +219,62 @@ namespace SpaceSurvivor.Ship
         /// Coerente con CurrentNavState: != 0 solo se stato è Docking o Docked.
         /// </summary>
         public ulong AnchoredPoiId => _netAnchoredPoiId.Value;
+
+        // ── Stato avaria motori — D13, Rev AE ─────────────────────────────────
+        // Property leggibili da tutti i client (server e non), derivate dalle
+        // NetworkVariable sopra. Nessun setter pubblico: lo stato avaria è
+        // scritto server-side esclusivamente da TriggerEngineFailure e
+        // dall'auto-clear alla scadenza.
+
+        /// <summary>
+        /// True se l'avaria motori è in corso. Confronto tra ServerTime
+        /// corrente e timestamp di fine avaria — sincrono su tutti i client
+        /// grazie a NGO ServerTime.
+        /// </summary>
+        public bool IsInEngineFailure
+        {
+            get
+            {
+                if (NetworkManager.Singleton == null) return false;
+                return NetworkManager.Singleton.ServerTime.Time < _netEngineFailureUntilServerTime.Value;
+            }
+        }
+
+        /// <summary>
+        /// Secondi rimanenti prima del ripristino motori. 0 se non in avaria.
+        /// </summary>
+        public float EngineFailureRemaining
+        {
+            get
+            {
+                if (NetworkManager.Singleton == null) return 0f;
+                double delta = _netEngineFailureUntilServerTime.Value - NetworkManager.Singleton.ServerTime.Time;
+                return (float)System.Math.Max(0.0, delta);
+            }
+        }
+
+        /// <summary>
+        /// Duration totale dell'avaria in corso (secondi). 0 se non in avaria.
+        /// Usato dal banner per calcolare il ratio di progresso ripristino.
+        /// </summary>
+        public float EngineFailureTotalDuration => _netEngineFailureDuration.Value;
+
+        /// <summary>
+        /// Ratio di progresso del ripristino: 0 = appena scattata avaria,
+        /// 1 = ripristino completo. 1 anche quando non c'è avaria in corso
+        /// (stato "motori operativi = ripristino al 100%"). Consumato dal
+        /// banner UI per progress bar.
+        /// </summary>
+        public float EngineFailureRatio
+        {
+            get
+            {
+                float total = _netEngineFailureDuration.Value;
+                if (total <= 0f) return 1f;
+                float remaining = EngineFailureRemaining;
+                return Mathf.Clamp01(1f - remaining / total);
+            }
+        }
 
         // ── Lifecycle NGO ─────────────────────────────────────────────────────
         public override void OnNetworkSpawn()
@@ -819,6 +887,14 @@ namespace SpaceSurvivor.Ship
             _savedTargetSpeed = _netTargetSpeed.Value;
             _netTargetSpeed.Value = 0f;
             _engineFailureUntil = Time.time + engineFailureDuration;
+
+            // Rev AE — D13: esponi stato avaria a tutti i client via
+            // NetworkVariable. ServerTime.Time è sincronizzato NGO — ogni
+            // client può calcolare remaining/ratio localmente senza ulteriori
+            // writes durante il countdown.
+            _netEngineFailureUntilServerTime.Value =
+                NetworkManager.Singleton.ServerTime.Time + engineFailureDuration;
+            _netEngineFailureDuration.Value = engineFailureDuration;
 
             Debug.LogWarning($"[PropulsionSystem] Avaria motori: {engineFailureDuration:F2}s " +
                              $"(TargetSpeed salvato: {_savedTargetSpeed:F1} m/s, state: {state})");

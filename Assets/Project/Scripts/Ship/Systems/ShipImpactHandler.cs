@@ -363,6 +363,15 @@ namespace SpaceSurvivor.Ship
             // ── Notifica consumer di feedback teatrale (Blocco 3.2.d) ─────────
             OnDamageInflicted?.Invoke(damage, impactVelocity, poi);
 
+            // ── Feedback teatrale client-side (Blocco 3.2.d parte 2 — Rev AE) ─
+            // QG-3 confermata: ClientRpc per canali impulsivi (shake camera +
+            // audio one-shot). Il banner "MOTORI OFFLINE" NON passa da qui:
+            // legge direttamente le NetworkVariable di PropulsionSystem
+            // aggiornate dal TriggerEngineFailure sotto. Separazione pulita:
+            // impulsivi via RPC, stato persistente via NV.
+            ImpactSeverity severity = ImpactThresholdTable.Classify(impactVelocity);
+            PlayImpactFeedbackClientRpc(severity, impactVelocity);
+
             // ── Avaria motori post-impatto (Blocco 3.2.d — Rev AC) ────────────
             // Q1=B confermata Rev AC: l'orchestrazione dell'avaria motori è
             // centralizzata in questo handler (canale unico delle conseguenze
@@ -381,6 +390,41 @@ namespace SpaceSurvivor.Ship
             {
                 Debug.LogWarning("[ShipImpactHandler] PropulsionSystem.Instance null — " +
                                  "avaria motori skippata.");
+            }
+        }
+
+        // ── ClientRpc: feedback teatrale impulsivo (Rev AE) ──────────────────
+        /// <summary>
+        /// Fire-and-forget su tutti i client (server e non): triggera lo
+        /// screen shake della camera locale e l'audio one-shot d'impatto,
+        /// con severity classificata server-side (single source of truth
+        /// in ImpactThresholdTable).
+        ///
+        /// SendTo.ClientsAndHost coerente col pattern esistente
+        /// (DoubleDoorOpenAuto.PlaySoundClientRpc). Payload minimo:
+        /// 1 byte severity + 4 byte velocity = 5 byte per impatto,
+        /// bandwidth trascurabile.
+        ///
+        /// impactVelocity è passato per uso in log/diagnostica lato client
+        /// (o eventuali futuri feedback velocity-dipendenti oltre le 3
+        /// soglie discrete). CameraShaker e ImpactAudioController usano
+        /// solo severity.
+        /// </summary>
+        [Rpc(SendTo.ClientsAndHost)]
+        private void PlayImpactFeedbackClientRpc(ImpactSeverity severity, float impactVelocity)
+        {
+            // Shake della camera del player LOCALE (LocalInstance è null sui
+            // client dove il player non è ancora spawnato o dove il componente
+            // si è auto-disabilitato — safe navigation).
+            CameraShaker.LocalInstance?.Trigger(severity);
+
+            // Audio one-shot sulla nave locale (singleton per client).
+            ImpactAudioController.Instance?.PlayImpact(severity);
+
+            if (logImpacts)
+            {
+                Debug.Log($"[ShipImpactHandler] Client-side feedback: " +
+                          $"{ImpactThresholdTable.DebugLabel(severity)} (v={impactVelocity:F2} u/s)");
             }
         }
 

@@ -38,6 +38,17 @@ public class EngineeringDashboardUI : MonoBehaviour, IDashboardPanel
     [SerializeField] private Transform lightsListParent;
     [SerializeField] private GameObject lightControlPrefab;
 
+    // ── D13, Rev AE — Banner "MOTORI OFFLINE" durante avaria post-impatto ──
+    // Il controller polla PropulsionSystem.IsInEngineFailure/Ratio e gestisce
+    // autonomamente show/hide + fade + pulse + label. Nessuna logica qui: solo
+    // il riferimento inspector per fare in modo che l'istanza appartenga a
+    // questo canvas HUD (una per HUD).
+    [Header("Engine Failure Banner (D13)")]
+    [Tooltip("Riferimento all'istanza di EngineFailureBannerController figlia " +
+             "di questo Canvas. Il controller è self-managed: si attiva/disattiva " +
+             "da solo in base a PropulsionSystem.IsInEngineFailure.")]
+    [SerializeField] private EngineFailureBannerController engineFailureBanner;
+
     [Header("Debug")]
     [Tooltip("Se true, stampa log informativi di flusso (selezione EventSystem, " +
              "refresh lista luci, toggle luci, ripristini della rete di sicurezza). " +

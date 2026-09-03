@@ -68,6 +68,17 @@ public class PilotFlightHUD : MonoBehaviour, IDashboardPanel
              "si limita a SetActive true/false.")]
     [SerializeField] private GameObject warningNoSteer;
 
+    // ── D13, Rev AE — Banner "MOTORI OFFLINE" durante avaria post-impatto ──
+    // Il controller polla PropulsionSystem.IsInEngineFailure/Ratio e gestisce
+    // autonomamente show/hide + fade + pulse + label. Nessuna logica qui: solo
+    // il riferimento inspector per fare in modo che l'istanza appartenga a
+    // questo canvas HUD (una per HUD).
+    [Header("— Banner MOTORI OFFLINE (D13) —")]
+    [Tooltip("Riferimento all'istanza di EngineFailureBannerController figlia " +
+             "di questo Canvas. Il controller è self-managed: si attiva/disattiva " +
+             "da solo in base a PropulsionSystem.IsInEngineFailure.")]
+    [SerializeField] private EngineFailureBannerController engineFailureBanner;
+
     // =========================================================================
     // COLORI VELOCITÀ (coerenti col PilotHUD)
     // =========================================================================
