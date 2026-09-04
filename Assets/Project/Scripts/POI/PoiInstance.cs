@@ -390,6 +390,37 @@ namespace SpaceSurvivor.Poi
             _logicalVelocity.Value += deltaV;
         }
 
+        /// <summary>
+        /// Azzera istantaneamente la velocità logica del POI. Server-only.
+        /// Rev AF (Blocco 3.2.d.e — chiusura Milestone 3): consumato da
+        /// DockingController.RequestConfirmAnchorInternal per fermare il
+        /// relitto al momento della conferma dell'ancoraggio, evitando che
+        /// un POI precedentemente colpito (con velocity residua da momentum
+        /// transfer Rev Z) continui a driftare dopo l'attracco — situazione
+        /// scorretta perché il POI è semanticamente vincolato alla nave.
+        ///
+        /// Setter esplicito e semanticamente distinto da AddImpulse(deltaV):
+        /// evita il pattern hackish AddImpulse(-_logicalVelocity.Value) e
+        /// rende leggibile l'intent del caller.
+        ///
+        /// Note che questo NON impedisce ulteriori AddImpulse dopo la
+        /// chiamata: se un consumer post-Docked applicasse un nuovo impulso
+        /// (scenario ipotetico M4 con nemici che colpiscono nave-ancorata),
+        /// il POI si rimetterebbe in moto. Il caso non è coperto in Rev AF
+        /// (Q3-A confermata): se emerge in playtest futuro, aprire debito
+        /// per progettazione dedicata (POI ancorato = massa infinita?).
+        /// </summary>
+        public void ResetVelocity()
+        {
+            if (!IsServer)
+            {
+                Debug.LogError("[PoiInstance] ResetVelocity called on client — ignored.");
+                return;
+            }
+
+            _logicalVelocity.Value = Vector3.zero;
+        }
+
         // ── Callback NetVar ──────────────────────────────────────────────────
 
         private void HandleLogicalPositionChanged(Vector3 _, Vector3 __)

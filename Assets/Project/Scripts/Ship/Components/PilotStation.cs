@@ -61,12 +61,15 @@ using UnityEngine.InputSystem;
 ///   dockingStrafeZ  (3.1.4) → strafe assiale approach     [Q/E KB / LT-RT GP]
 ///   confirmAnchorAction (3.1.4) → Docking only:
 ///          conferma attracco se IsInAnchorTolerance      [Space KB / A GP]
-///   cancelDockingAction (3.1.4) → Docking/Docked only:
+///   cancelDockingAction (3.1.4, ristretto Rev AG a solo Docking):
 ///          undock (torna a Manual), resta seduto         [Esc KB / B GP]
 ///
 /// SEMANTICA UNDOCK / CANCEL (3.1.4):
-///   Undock via qualsiasi via (ToggleAnchor in Docking/Docked, CancelDocking,
-///   o Esc del map UI) → RequestUndock → Manual (fallback Coasting).
+///   Undock via (Rev AG):
+///     - ToggleAnchor (T/X) in Docking o Docked mentre seduti → RequestUndock.
+///     - CancelDocking (Esc/buttonEast) SOLO in Docking → RequestUndock.
+///     - RequestNavigationState(Autopilot/Manual) da Docked → undock automatico.
+///   → target: Manual (fallback Coasting).
 ///   AnchorSystem.RequestUndock gestisce internamente la scelta del target.
 ///
 ///   IMPORTANTE: durante Docking/Docked, il tasto Cancel del map UI (Esc)
@@ -74,11 +77,18 @@ using UnityEngine.InputSystem;
 ///   seduto. Uscita dalla postazione richiede un secondo Esc dopo che si è
 ///   tornati a Manual/Coasting. Semantica confermata da design 3.1.4.
 ///
-/// LOGICA USCITA (TryExitStation):
-///   DOCKING/DOCKED    → RequestUndock (torna a Manual), NON alza il pilota
-///                       (return dopo l'undock). Semantica confermata:
-///                       "cancel durante docking = torna alla guida manuale,
-///                       resta seduto".
+/// LOGICA USCITA (TryExitStation) — Rev AG (chiusura Milestone 3):
+///   DOCKING           → RequestUndock (torna a Manual), NON alza il pilota.
+///                       Motivo: Docking richiede input continuo del pilota
+///                       (RCS strafe); senza pilota il minigioco va in
+///                       stallo → meglio annullare.
+///   DOCKED            → pilota si alza normalmente, nave RESTA Docked.
+///                       Ancoraggio persistente (relazione fisica nave↔POI,
+///                       indipendente dalla presenza del pilota). Undock
+///                       solo via ToggleAnchor (T/X, seduti) o transizione
+///                       a Autopilot/Manual.
+///                       Cambio di design rispetto Fase 3.1.4 originale
+///                       ("Cancel_docking = torna alla guida manuale").
 ///   MANUAL attivo     → RequestNavigationState(Coasting) [nessuno al timone]
 ///   AUTOPILOT attivo  → lasciato invariato               [nave continua da sola]
 ///   ANCHORED/COASTING → lasciato invariato
@@ -465,21 +475,24 @@ public class PilotStation : MonoBehaviour, IInteractable
             }
         }
 
-        // FASE 3.1.4 — SEMANTICA CANCEL DURANTE DOCKING/DOCKED:
-        // Cancel (Esc / B) durante Docking o Docked NON alza il pilota dalla
-        // postazione. Esegue solo undock (torna a Manual, fallback Coasting)
-        // e il pilota resta seduto. Uscita dalla postazione richiede un
-        // secondo Cancel dopo la transizione a Manual/Coasting.
-        // Confermato da design: "Cancel_docking = torna alla guida manuale,
-        // Exit_from_docking = stessa cosa".
+        // Rev AG (chiusura Milestone 3) — SEMANTICA CANCEL DURANTE DOCKING:
+        // Cancel (Esc / B) durante DOCKING non alza il pilota: esegue undock
+        // (torna a Manual, fallback Coasting), pilota resta seduto. Motivo:
+        // il minigioco Docking richiede input continuo (RCS strafe); senza
+        // pilota si andrebbe in stallo, meglio annullare esplicitamente.
+        //
+        // In DOCKED (post-conferma ancoraggio) il pilota si alza normalmente
+        // e la nave RESTA ancorata al POI. L'ancoraggio è persistente perché
+        // è una relazione fisica nave↔POI, indipendente dalla presenza del
+        // pilota. Undock esplicito richiesto: ToggleAnchor (T/X) mentre
+        // seduti, oppure transizione a Autopilot/Manual che triggerano
+        // undock automatico (comportamento esistente e funzionante).
         var ps = PropulsionSystem.Instance;
-        if (ps != null
-            && (ps.CurrentNavState == NavigationState.Docking
-                || ps.CurrentNavState == NavigationState.Docked))
+        if (ps != null && ps.CurrentNavState == NavigationState.Docking)
         {
-            Debug.Log("[PilotStation] Cancel durante Docking/Docked — undock, resta seduto.");
+            Debug.Log("[PilotStation] Cancel durante Docking — undock, resta seduto.");
             AnchorSystem.Instance?.RequestUndock();
-            return; // Non alziamo il pilota.
+            return; // Non alziamo il pilota (Docking richiede input continuo).
         }
 
         // Riporta la camera sotto il player prima dell'uscita
@@ -1022,10 +1035,20 @@ public class PilotStation : MonoBehaviour, IInteractable
         var an = AnchorSystem.Instance;
         if (ps == null || an == null) return;
 
-        if (ps.CurrentNavState != NavigationState.Docking
-            && ps.CurrentNavState != NavigationState.Docked)
+        // Rev AG (chiusura Milestone 3) — CancelDocking undock SOLO durante
+        // DOCKING (fase in corso di attracco). In DOCKED il tasto Cancel/Esc
+        // non deve invocare undock: serve solo per uscire dalla postazione
+        // (via TryExitStation, che preserva l'ancoraggio). L'undock esplicito
+        // da Docked richiede ToggleAnchor (T/X) mentre seduti, oppure
+        // attivazione Autopilot/Manual che triggerano undock automatico.
+        //
+        // Bug pre-Rev AG: cancelDockingAction e cancelAction ascoltano lo
+        // stesso input Esc → premere Esc in Docked triggerava sia
+        // TryExitStation (pilota si alza) sia OnCancelDocking (undock),
+        // vanificando la persistenza dell'ancoraggio.
+        if (ps.CurrentNavState != NavigationState.Docking)
         {
-            Debug.LogWarning($"[PilotStation] CancelDocking: non in Docking/Docked " +
+            Debug.LogWarning($"[PilotStation] CancelDocking: non in Docking " +
                              $"(stato: {ps.CurrentNavState}).");
             return;
         }

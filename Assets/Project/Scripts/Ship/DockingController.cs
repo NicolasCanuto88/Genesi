@@ -921,6 +921,14 @@ namespace SpaceSurvivor.Ship
             if (_currentPoi != null)
             {
                 _currentPoi.SetScanState(PoiScanState.Anchored);
+
+                // Rev AF (chiusura Milestone 3): azzera velocity residua del
+                // POI al momento della conferma ancoraggio. Un relitto
+                // precedentemente colpito (momentum transfer Rev Z) potrebbe
+                // avere _logicalVelocity != 0 e continuerebbe a driftare
+                // dopo l'attracco — scorretto perché il POI è semanticamente
+                // vincolato alla nave in stato Anchored/Docked.
+                _currentPoi.ResetVelocity();
             }
 
             propulsion.RequestNavigationState(NavigationState.Docked);
