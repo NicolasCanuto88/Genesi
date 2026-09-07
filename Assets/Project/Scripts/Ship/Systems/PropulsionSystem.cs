@@ -214,6 +214,15 @@ namespace SpaceSurvivor.Ship
                                           ? _data.pitchAcceleration * GetDegradationMults().speed : 0f;
 
         /// <summary>
+        /// Rev AH (QD-γ) — Accelerazione angolare roll (deg/sec²) scalata dal degrado.
+        /// Per ShipMovement. Il roll è direct steering (A/D) ma il rate decelera con
+        /// inerzia simmetrica a yaw/pitch. Default in PropulsionData: 45°/s² (=
+        /// pitchAcceleration), tunabile separatamente.
+        /// </summary>
+        public float RollAcceleration => _data != null
+                                         ? _data.rollAcceleration * GetDegradationMults().speed : 0f;
+
+        /// <summary>
         /// Fase 3 Blocco 3.1 — NetworkObjectId del POI attualmente ancorato,
         /// o 0 se la nave non è ancorata. Scritto server-side da AnchorSystem.
         /// Coerente con CurrentNavState: != 0 solo se stato è Docking o Docked.

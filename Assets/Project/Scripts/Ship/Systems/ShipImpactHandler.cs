@@ -121,17 +121,15 @@ namespace SpaceSurvivor.Ship
         /// promuoverà questa costante a property (o ShipMovement property)
         /// derivata dall'upgrade, senza refactor di nessun consumer.
         /// </summary>
-        private const float EffectiveShipMass = 1.0f;
-
-        /// <summary>
-        /// Distanza minima nave↔POI (u logiche) sotto cui il trasferimento
-        /// di momento viene skippato: la direzione radiale è degenere.
-        /// Edge case teorico (overlap perfetto), il clamp posizionale del
-        /// DockingController lo rende praticamente irraggiungibile — ma
-        /// vale la spesa dell'if per prevenire NaN/Infinity in caso di
-        /// bug o refactor futuri.
-        /// </summary>
-        private const float DegenerateRadialDistanceEpsilon = 1e-4f;
+        // Rev AI (refactor rotation collision): la costante EffectiveShipMass
+        // e DegenerateRadialDistanceEpsilon sono state SPOSTATE a
+        // PoiCollisionResolver, insieme al metodo ApplyMomentumTransferToPoi.
+        // Motivazione: il trasferimento di momento al POI è ora responsabilità
+        // del resolver (chiamato sia da ResolveCollision traslazionale sia da
+        // ResolveRotationPenetration). ShipImpactHandler resta responsabile
+        // solo dell'effettistica ship-side (damage, event OnDamageInflicted,
+        // ClientRpc shake/audio, banner MOTORI OFFLINE via TriggerEngineFailure).
+        // Nessuna funzionalità persa — pattern architetturale più pulito.
 
         // ── Inspector ─────────────────────────────────────────────────────────
         [Header("Formula danno da impatto (Blocco 3.2.a)")]
@@ -358,7 +356,15 @@ namespace SpaceSurvivor.Ship
             }
 
             // ── Trasferimento momento al POI colpito (Blocco 3.2.b) ───────────
-            ApplyMomentumTransferToPoi(impactVelocity, poi);
+            // Rev AI (refactor): la chiamata a ApplyMomentumTransferToPoi è
+            // stata RIMOSSA da qui. L'impulse fisico al POI è ora responsabilità
+            // di PoiCollisionResolver (chiamato PRIMA di OnHardCollision?.Invoke
+            // dentro ResolveCollision, e anche dal nuovo ResolveRotationPenetration).
+            // Questo handler ora è dedicato SOLO all'effettistica ship-side:
+            // damage, event, ClientRpc shake/audio, banner motori.
+            // Semantica utente invariata per collision traslazionali —
+            // l'impulse arriva sempre al POI, solo il codice che lo emette è
+            // spostato all'authority collision (resolver).
 
             // ── Notifica consumer di feedback teatrale (Blocco 3.2.d) ─────────
             OnDamageInflicted?.Invoke(damage, impactVelocity, poi);
@@ -428,62 +434,20 @@ namespace SpaceSurvivor.Ship
             }
         }
 
-        /// <summary>
-        /// Calcola direzione radiale nave→POI e applica un impulso a
-        /// PoiInstance secondo la formula di trasferimento momento
-        /// (Q3 confermata Rev Z: EffectiveShipMass = 1.0).
-        ///
-        /// Fail-safe: se ShipMovement.Instance è assente o la distanza
-        /// radiale è degenere (overlap perfetto), skippa l'impulso e
-        /// logga warning. Il danno alla nave è già stato applicato
-        /// separatamente — questa funzione può fallire senza compromettere
-        /// il resto della catena.
-        /// </summary>
-        private void ApplyMomentumTransferToPoi(float impactVelocity, PoiInstance poi)
-        {
-            var shipMovement = ShipMovement.Instance;
-            if (shipMovement == null)
-            {
-                Debug.LogWarning($"[ShipImpactHandler] ShipMovement.Instance null — " +
-                                 $"trasferimento momento skippato (POI={poi.Data.DisplayName}).");
-                return;
-            }
-
-            Vector3 shipToPoi = poi.LogicalPosition - shipMovement.LogicalPosition;
-            float dist = shipToPoi.magnitude;
-
-            if (dist < DegenerateRadialDistanceEpsilon)
-            {
-                Debug.LogWarning($"[ShipImpactHandler] Direzione radiale degenere " +
-                                 $"(dist={dist:E2} u) — trasferimento momento skippato " +
-                                 $"(POI={poi.Data.DisplayName}).");
-                return;
-            }
-
-            Vector3 radialDir = shipToPoi / dist;
-
-            float poiMass = poi.Data.Mass;
-            // PoiData.Mass ha [Min(0.1f)] a livello di Inspector — divisione
-            // sempre safe, ma teniamo un guard difensivo per non fidarci del
-            // pattern nel caso PoiData venga modificato in futuro.
-            if (poiMass <= 0f)
-            {
-                Debug.LogWarning($"[ShipImpactHandler] PoiData.Mass non positiva ({poiMass}) su " +
-                                 $"{poi.Data.DisplayName} — trasferimento momento skippato.");
-                return;
-            }
-
-            float deltaVMagnitude = impactVelocity * EffectiveShipMass / poiMass;
-            Vector3 impulse = radialDir * deltaVMagnitude;
-
-            poi.AddImpulse(impulse);
-
-            if (logImpulses)
-            {
-                Debug.Log($"[ShipImpactHandler] IMPULSO → POI={poi.Data.DisplayName}, " +
-                          $"deltaV={deltaVMagnitude:F3} u/s, dir=({radialDir.x:F2},{radialDir.y:F2},{radialDir.z:F2}), " +
-                          $"poiMass={poiMass:F1}, shipMass={EffectiveShipMass:F1}, v={impactVelocity:F2} u/s");
-            }
-        }
+        // Rev AI (refactor rotation collision): metodo ApplyMomentumTransferToPoi
+        // RIMOSSO. Spostato a PoiCollisionResolver.ApplyMomentumTransferToPoi
+        // (privato del resolver). Motivazione: l'impulse fisico al POI è ora
+        // responsabilità del resolver (chiamato da ResolveCollision traslazionale
+        // E da ResolveRotationPenetration). ShipImpactHandler mantiene solo
+        // damage + event + ClientRpc effettistica + banner motori.
+        // Le costanti EffectiveShipMass e DegenerateRadialDistanceEpsilon
+        // sono state spostate insieme (vedi PoiCollisionResolver.cs sezione
+        // "Costanti fisiche").
+        //
+        // Il campo SerializeField logImpulses (Header "Trasferimento momento")
+        // resta orfano — può essere rimosso dall'Inspector, oppure ripurposed
+        // per debug futuro (es. log di impulse ricevuti come subscriber di
+        // OnDamageInflicted). Lasciato in place per non complicare Rev AI:
+        // Nicolas può rimuoverlo dallo Scene se preferisce.
     }
 }

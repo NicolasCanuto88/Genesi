@@ -1,5 +1,6 @@
 using System.Collections;
 using SpaceSurvivor.Ship;
+using SpaceSurvivor.Ship.Components;
 using SpaceSurvivor.Ship.Systems;
 using UnityEngine;
 using UnityEngine.InputSystem;
@@ -107,25 +108,46 @@ using UnityEngine.InputSystem;
 /// strafe (Docking) aggiorna ShipMovement.LogicalPosition direttamente.
 ///
 /// DIPENDE DA: PropulsionSystem ✅ · FTLDrive ✅ · ShieldSystem ✅
-///   ShipMovement (Blocco 2) · shipChaseCamPoint da creare in Editor come
-///   figlio fisso di "Nave" · action "Throttle" nell'asset InputActions ·
+///   ShipMovement (Blocco 2) · action "Throttle" nell'asset InputActions ·
 ///   AnchorSystem (3.1.2) · DockingController (3.1.3) · nuovi map
 ///   `PilotAnchor` (1 action) e `PilotDocking` (4 action) nell'asset
 ///   InputActions (3.1.4 — vedi istruzioni Editor).
+///
+///   REV AH.2 (REORG-C): rimossa dipendenza da shipChaseCamPoint. Cockpit
+///   view interno è ora l'unica modalità di guida (QA-1). La camera del
+///   pilota resta sempre figlia del Player durante la seduta — nessun
+///   re-parenting camera. HUD unificato in PilotFlightHUD Screen Space
+///   Overlay (assorbe telemetria di PilotHUD monitor World Space, ora
+///   deprecato). Swap: PilotFlightHUD attivo tranne durante Docking
+///   (dove cede la scena al DockingMinigame_Canvas World Space, mantenuto
+///   intatto per la sua logica radiale spaziale del minigame).
 /// </summary>
 [RequireComponent(typeof(BoxCollider))]
 public class PilotStation : MonoBehaviour, IInteractable
 {
     // ── HUD ───────────────────────────────────────────────────────────────
-    [Header("HUD — Cockpit (World Space, sul monitor)")]
-    [SerializeField] private PilotHUD pilotHUD;
-    [SerializeField] private Canvas hudCanvas;
-
-    [Header("HUD — Volo esterno MANUAL (Screen Space Overlay)")]
-    [Tooltip("PilotFlightHUD (Rev T): HUD sovrapposto durante il volo in vista " +
-             "terza persona. Toggle mutualmente esclusivo con PilotHUD — visibile " +
-             "solo quando EnterThirdPersonChaseCam è attivo.")]
+    [Header("HUD — Volo (Screen Space Overlay, unico HUD del pilota — Rev AH.2)")]
+    [Tooltip("PilotFlightHUD (Rev AH.2 REORG-C): HUD unico Screen Space Overlay del " +
+             "pilota, assorbe TUTTA la telemetria (zone, nav, fuel, velocità, throttle, " +
+             "FTL, scudi, docking prompts, banner MOTORI OFFLINE). Sostituisce " +
+             "definitivamente il vecchio PilotHUD World Space monitor. Attivato in " +
+             "EnterStation, disattivato in TryExitStation. Swap Close/Open durante " +
+             "transizione a Docking / da Docking per lasciare la scena visiva al " +
+             "DockingMinigame_Canvas World Space (mantenuto intatto per la sua logica " +
+             "radiale spaziale del minigame).")]
     [SerializeField] private PilotFlightHUD flightHUD;
+
+    // ── LookToSteerController (Rev AH.3) ──────────────────────────────────
+    [Header("Look-to-Steer (Rev AH.3)")]
+    [Tooltip("Componente LookToSteerController che gestisce la rotazione camera " +
+             "entro il cono di libertà (QB-2 ±20°/±15°), l'auto-recenter " +
+             "(RC1-b/RC2-c/RC3-c) e il coupling con easing verso la nave (QC-2). " +
+             "Setup Editor: creare un GameObject vuoto figlio di PilotStation " +
+             "(nome consigliato 'CockpitLookAnchor'), aggiungere il componente " +
+             "LookToSteerController, e trascinarlo qui. PilotStation lo Bind() " +
+             "in EnterStation, lo Tick() in PollManualFlightState (branch Manual), " +
+             "lo Unbind() in TryExitStation.")]
+    [SerializeField] private LookToSteerController lookController;
 
     [Header("HUD — Minigioco Docking (Fase 3.1.5)")]
     [Tooltip("GameObject del Canvas World Space del minigioco di docking " +
@@ -154,14 +176,24 @@ public class PilotStation : MonoBehaviour, IInteractable
     [SerializeField] private float snapTransitionSpeed = 5f;
     [SerializeField] private float cameraTransitionSpeed = 8f;
 
-    // ── Camera terza persona (Blocco 2) ─────────────────────────────────────
-    [Header("Camera Terza Persona — MANUAL (Blocco 2)")]
-    [Tooltip("⚠️ EDITOR: crea un GameObject vuoto figlio di 'Nave' (statico, " +
-             "la nave non si muove mai — vedi nota architetturale in testa al " +
-             "file), posizionato dietro/sopra la plancia, orientato lungo la " +
-             "prua. Nessun asset necessario — solo un Transform vuoto. Se " +
-             "lasciato vuoto, il pilotaggio MANUAL resta in prima persona.")]
-    [SerializeField] private Transform shipChaseCamPoint;
+    // ── Camera Terza Persona — RIMOSSA IN REV AH.2 (QA-1) ─────────────────
+    // Il pattern EnterThirdPersonChaseCam / ExitThirdPersonChaseCam +
+    // shipChaseCamPoint (re-parenting camera pilota fuori dalla nave durante
+    // Manual) è stato ABOLITO in Rev AH.2. Cockpit view interno è ora l'unica
+    // modalità di guida. La camera del pilota resta sempre figlia del Player
+    // durante la seduta.
+    //
+    // Rimossi: shipChaseCamPoint (SerializeField), isChaseCamActive (state),
+    // originalCameraParent + originalCameraLocalPosition (state per ripristino
+    // parent — non più necessari, la camera NON viene mai re-parented durante
+    // la seduta).
+    //
+    // Bonus collaterale: CameraShaker abortiva lo shake su cambio parent
+    // mid-shake (edge case Rev AE). Con la camera sempre stabile sotto Player
+    // durante Manual, questo edge case non si verifica più. Shake sempre pulito.
+    //
+    // Nicolas può rimuovere il GameObject shipChaseCamPoint figlio di Nave
+    // (rimane orfano ma non dannoso — sarà rimosso in AH.4 cleanup finale).
 
     // ── Docking Cone Visibility (Rev W — D9) ─────────────────────────────────
     [Header("— Docking Cone Visibility (Rev W — D9) —")]
@@ -225,6 +257,16 @@ public class PilotStation : MonoBehaviour, IInteractable
              "avvicinati al POI.")]
     [SerializeField] private InputActionReference dockingStrafeZAction;
 
+    [Tooltip("Rev AH.3 — Roll nave (map Pilot). 1D Axis Composite. Convenzione: " +
+             "A = negative (-1), D = positive (+1). Gamepad: leftTrigger negative, " +
+             "rightTrigger positive. Value / Axis 1D type. Conflitto binding LT/RT " +
+             "con dockingStrafeZAction (stessi tasti fisici gamepad) risolto dalla " +
+             "mutua esclusione dei map (Pilot ↔ PilotDocking): runtime attivo un " +
+             "solo map alla volta, nessuna race di lettura. Il valore letto viene " +
+             "passato a LookToSteerController.Tick come rollInput e poi diretto a " +
+             "ShipMovement.SetManualLookInput.z (Roll-γ + Roll-inertia-2).")]
+    [SerializeField] private InputActionReference rollAction;
+
     [Tooltip("Conferma attracco durante Docking (map PilotDocking): se " +
              "IsInAnchorTolerance, transiziona a Docked. Button type. " +
              "Consigliato: Space (KB) / A buttonSouth (GP).")]
@@ -259,11 +301,17 @@ public class PilotStation : MonoBehaviour, IInteractable
     private Quaternion targetCameraLocalRotation;
     private bool wasPlayerControllerEnabled;
 
-    // Blocco 2 — stato camera terza persona / polling NavState
-    private Transform originalCameraParent;
-    private Vector3 originalCameraLocalPosition;
-    private bool isChaseCamActive;
+    // Blocco 2 — stato polling NavState (usato per rilevare transizioni tra
+    // Manual/Docking/altro in PollManualFlightState). Rev AH.2: rimossi
+    // isChaseCamActive, originalCameraParent, originalCameraLocalPosition —
+    // cockpit view interno = unica modalità (QA-1), camera pilota mai
+    // re-parented durante la seduta.
     private NavigationState lastPolledNavState;
+
+    // Rev AH.3 — flag per emettere warning una sola volta se lookController
+    // non è wired in Inspector. Il fallback pattern AH.1 funziona (input
+    // mouse diretto a nave) ma perde tutto il layer look-to-steer.
+    private bool _hasWarnedMissingLookController;
 
     // Rev W (D9) — stato per ripristino della cullingMask della camera del
     // Player locale seduto. Salvato in EnterStation, ripristinato in
@@ -347,9 +395,9 @@ public class PilotStation : MonoBehaviour, IInteractable
             return;
         }
 
-        // FIX (Rev Q) — assegna la camera del giocatore che entra ora.
-        if (hudCanvas != null)
-            hudCanvas.worldCamera = playerCamera;
+        // Rev AH.2: rimossa assegnazione hudCanvas.worldCamera (PilotHUD World
+        // Space monitor deprecato — HUD ora è Screen Space Overlay unico
+        // via PilotFlightHUD, non serve worldCamera).
 
         // Rev W (D9) — abilita la visibilità del cono di attracco SOLO su
         // questa camera (Player locale seduto). Idempotente rispetto al
@@ -373,10 +421,9 @@ public class PilotStation : MonoBehaviour, IInteractable
         originalCameraRotation = playerCamera.transform.localRotation;
         wasPlayerControllerEnabled = playerController.enabled;
 
-        // Blocco 2 — stato camera per il possibile swap a terza persona
-        originalCameraParent = playerCamera.transform.parent;
-        originalCameraLocalPosition = playerCamera.transform.localPosition;
-        isChaseCamActive = false;
+        // Rev AH.2: rimossi originalCameraParent / originalCameraLocalPosition —
+        // no re-parenting camera in cockpit view interno (QA-1). La camera
+        // resta figlia del Player per tutta la durata della seduta.
         lastPolledNavState = PropulsionSystem.Instance != null
             ? PropulsionSystem.Instance.CurrentNavState
             : NavigationState.Anchored;
@@ -402,9 +449,28 @@ public class PilotStation : MonoBehaviour, IInteractable
                              || lastPolledNavState == NavigationState.Docked;
         ApplyMapActivation(isInDockingState);
 
-        // Attiva HUD
-        if (pilotHUD != null)
-            pilotHUD.gameObject.SetActive(true);
+        // Rev AH.2: HUD unificato PilotFlightHUD attivato SE non stiamo
+        // entrando durante Docking (dove è il DockingMinigame_Canvas che
+        // occupa la scena visiva). Se entriamo in Docking (edge case altro
+        // pilota si è alzato mid-docking), attiviamo direttamente il minigame
+        // canvas invece del flightHUD.
+        bool isInDockingActive = lastPolledNavState == NavigationState.Docking;
+        if (isInDockingActive)
+        {
+            if (dockingMinigameCanvas != null) dockingMinigameCanvas.SetActive(true);
+            // flightHUD resta SetActive(false) — il minigame ha la scena.
+        }
+        else
+        {
+            if (flightHUD != null) flightHUD.Open();
+        }
+
+        // Rev AH.3: Bind del LookToSteerController alla camera del pilota
+        // corrente. Il controller resetta il proprio stato interno (offset
+        // camera a zero) e si prepara a ricevere Tick() da
+        // PollManualFlightState nel branch Manual.
+        if (lookController != null)
+            lookController.Bind(playerCamera);
 
         StartCoroutine(TransitionToStation(interactor));
     }
@@ -428,10 +494,11 @@ public class PilotStation : MonoBehaviour, IInteractable
         t.rotation = targetRot;
         isTransitioning = false;
 
+        // Rev AH.2: flightHUD è già stato attivato in EnterStation prima
+        // della coroutine (se non entrati in Docking). Qui gestiamo solo
+        // l'eventuale routine di orientamento camera verso il cockpit anchor.
         if (cameraLookAtPoint != null)
             StartCoroutine(LookAtCockpitRoutine());
-        else if (pilotHUD != null)
-            pilotHUD.Open();
     }
 
     private IEnumerator LookAtCockpitRoutine()
@@ -452,8 +519,8 @@ public class PilotStation : MonoBehaviour, IInteractable
 
         playerCamera.transform.localRotation = targetCameraLocalRotation;
 
-        if (pilotHUD != null)
-            pilotHUD.Open();
+        // Rev AH.2: rimosso pilotHUD.Open() — l'HUD unico (flightHUD) è già
+        // stato attivato in EnterStation prima di StartCoroutine(TransitionToStation).
     }
 
     // =========================================================================
@@ -495,11 +562,13 @@ public class PilotStation : MonoBehaviour, IInteractable
             return; // Non alziamo il pilota (Docking richiede input continuo).
         }
 
-        // Riporta la camera sotto il player prima dell'uscita
-        ExitThirdPersonChaseCam(restoreLookAtCockpit: false);
+        // Rev AH.2: rimossa ExitThirdPersonChaseCam(restoreLookAtCockpit:false).
+        // Cockpit view interno = unica modalità (QA-1). La camera del pilota
+        // è sempre stata figlia del Player durante la seduta — nessun
+        // re-parenting da annullare.
 
-        // Azzera input pilota logici
-        ShipMovement.Instance?.SetManualLookInput(Vector2.zero);
+        // Azzera input pilota logici (Rev AH: firma Vector3, .z = roll)
+        ShipMovement.Instance?.SetManualLookInput(Vector3.zero);
         PropulsionSystem.Instance?.SetManualThrottleInput(0f);
         DockingController.Instance?.SetStrafeInput(Vector3.zero);
 
@@ -522,13 +591,11 @@ public class PilotStation : MonoBehaviour, IInteractable
         UnbindPilotActions();
         DisableAllPilotMaps();
 
-        if (pilotHUD != null)
-        {
-            pilotHUD.Close();
-            pilotHUD.gameObject.SetActive(false);
-        }
-
-        // Rev T — sicurezza: chiudi FlightHUD se ancora aperto
+        // Rev AH.2: HUD unico = flightHUD. Close() spegne il GameObject
+        // (compreso il banner MOTORI OFFLINE figlio self-managed — sicuro
+        // perché l'avaria è filtrata da Q6=B in stati non-Manual/Coasting/
+        // Autopilot, quindi il banner non sta mostrando alcun evento in
+        // corso al momento dell'uscita).
         if (flightHUD != null && flightHUD.gameObject.activeSelf)
             flightHUD.Close();
 
@@ -543,6 +610,14 @@ public class PilotStation : MonoBehaviour, IInteractable
         // posizione originale il player non vede più il cono (comportamento
         // atteso, non è più pilota).
         ApplyDockingConeCullingBit(false);
+
+        // Rev AH.3: Unbind del LookToSteerController. Rilascia il riferimento
+        // alla camera e resetta lo stato interno (offset a zero, velocità
+        // SmoothDamp a zero). NON tenta di riportare la camera al centro —
+        // la coroutine TransitionFromStation gestisce il ripristino della
+        // camera all'orientation originalCameraRotation.
+        if (lookController != null)
+            lookController.Unbind();
 
         StartCoroutine(TransitionFromStation());
     }
@@ -580,7 +655,7 @@ public class PilotStation : MonoBehaviour, IInteractable
     }
 
     // =========================================================================
-    // PILOTAGGIO — steering logico + throttle + strafe docking + camera terza persona
+    // PILOTAGGIO — steering logico + throttle + strafe docking (Rev AH.2: no camera swap)
     // =========================================================================
 
     private void PollManualFlightState()
@@ -588,15 +663,10 @@ public class PilotStation : MonoBehaviour, IInteractable
         var ps = PropulsionSystem.Instance;
         NavigationState navState = ps != null ? ps.CurrentNavState : NavigationState.Anchored;
 
-        // Camera swap + context switching dei map su transizioni di stato
+        // Context switching su transizioni di stato (Rev AH.2: rimosso camera
+        // swap chase cam ↔ cockpit — cockpit è unica modalità QA-1)
         if (navState != lastPolledNavState)
         {
-            // Camera: Manual ↔ non-Manual (chase cam)
-            if (navState == NavigationState.Manual)
-                EnterThirdPersonChaseCam();
-            else if (lastPolledNavState == NavigationState.Manual)
-                ExitThirdPersonChaseCam();
-
             // Fase 3.1.4 — context switching Pilot ↔ PilotDocking sulla base
             // di ingresso/uscita da Docking/Docked. PilotAnchor resta sempre
             // ON mentre seduti (non serve toccarlo qui).
@@ -608,48 +678,36 @@ public class PilotStation : MonoBehaviour, IInteractable
             if (wasInDockingState != isInDockingState)
                 ApplyMapActivation(isInDockingState);
 
-            // Fase 3.1.5 — HUD swap PilotHUD ↔ DockingMinigameCanvas.
-            // Il DockingMinigameCanvas è attivo SOLO in Docking (fase attiva del
-            // minigioco). In Docked il PilotHUD torna attivo per mostrare
-            // "DOCKED TO [POI]" (3.1.6). In Manual la chase cam è già gestita
-            // sopra (PilotHUD.Close + FlightHUD.Open) — se veniamo da Docking
-            // e passiamo direttamente a Manual (edge case: cancel + toggle
-            // manual rapido), il PilotHUD verrà comunque chiuso da
-            // EnterThirdPersonChaseCam. Coerente.
+            // Rev AH.2 (REORG-C) — HUD swap FlightHUD ↔ DockingMinigameCanvas.
             //
-            // IMPORTANTE: uso gameObject.SetActive() sul PilotHUD, non solo
-            // Close(): Close() disattiva la logica interna dell'HUD ma NON
-            // nasconde il Canvas (che resta visualmente presente). Per far
-            // "spegnere" il monitor durante Docking (i due canvas fratelli
-            // sono sovrapposti), serve disabilitare il GameObject.
+            // FlightHUD (Screen Space Overlay) è l'HUD unico del pilota per
+            // TUTTI gli stati NAV tranne Docking (fase attiva del minigioco).
+            // Durante Docking cede la scena visiva al DockingMinigame_Canvas
+            // (World Space, mantenuto intatto — la sua logica radiale spaziale
+            // vive naturalmente nello spazio 3D del cockpit, decisione Nicolas).
+            //
+            // In Docked → Manual/Coasting/Autopilot/Anchored: FlightHUD riaperto
+            // (mostra "ATTRACCATA A: [POI]" quando Docked, prompt e telemetria
+            // in altri stati).
+            //
+            // NOTA: uso Close()/Open() che internamente fanno gameObject.SetActive
+            // (Rev AH.2: PilotFlightHUD.Open/Close ora gestiscono il SetActive
+            // internamente, semantica esplicita).
             bool wasInDockingActive = (lastPolledNavState == NavigationState.Docking);
             bool isInDockingActive = (navState == NavigationState.Docking);
             if (wasInDockingActive != isInDockingActive)
             {
                 if (isInDockingActive)
                 {
-                    // Entrata in Docking: mostra minigame canvas, spegni PilotHUD
-                    if (pilotHUD != null)
-                    {
-                        pilotHUD.Close();
-                        pilotHUD.gameObject.SetActive(false);
-                    }
+                    // Entrata in Docking: mostra minigame canvas, spegni FlightHUD
+                    if (flightHUD != null) flightHUD.Close();
                     if (dockingMinigameCanvas != null) dockingMinigameCanvas.SetActive(true);
                 }
                 else
                 {
-                    // Uscita da Docking: nascondi minigame canvas, riaccendi PilotHUD
-                    // (a meno che stiamo transitando verso Manual — in quel caso
-                    // la chase cam gestisce la vista esterna e PilotHUD deve
-                    // restare chiuso; EnterThirdPersonChaseCam sopra ha già
-                    // richiamato pilotHUD.Close ma il GameObject dobbiamo
-                    // decidere qui se riaccenderlo).
+                    // Uscita da Docking: nascondi minigame canvas, riaccendi FlightHUD
                     if (dockingMinigameCanvas != null) dockingMinigameCanvas.SetActive(false);
-                    if (pilotHUD != null && navState != NavigationState.Manual)
-                    {
-                        pilotHUD.gameObject.SetActive(true);
-                        pilotHUD.Open();
-                    }
+                    if (flightHUD != null) flightHUD.Open();
                 }
             }
 
@@ -665,7 +723,40 @@ public class PilotStation : MonoBehaviour, IInteractable
             if (IsLookFromMouse())
                 lookDelta *= mouseSensitivity;
 
-            ShipMovement.Instance?.SetManualLookInput(lookDelta);
+            // Rev AH.3 — Read input roll (A/D + gamepad LT/RT). L'action è nel
+            // map Pilot (attivo in Manual/Coasting/Autopilot/Docked). Conflitto
+            // binding LT/RT con dockingStrafeZAction (map PilotDocking) risolto
+            // dalla mutua esclusione dei map — runtime attivo un solo map.
+            float rollInput = rollAction != null && rollAction.action != null
+                ? rollAction.action.ReadValue<float>()
+                : 0f;
+
+            // Rev AH.3 — Delega al LookToSteerController che internamente:
+            //   1. Applica lookDelta alla camera dentro il cono ±20°/±15° (QB-2).
+            //   2. Auto-recentra la camera se lookDelta < deadzone (RC1-b + RC2-c).
+            //   3. Calcola l'eccedenza fuori cono e la passa con easing (QC-2)
+            //      a ShipMovement.SetManualLookInput.x/y.
+            //   4. Passa rollInput diretto a SetManualLookInput.z (Roll-γ).
+            // Se lookController non è wired in Inspector, fallback al pattern AH.1
+            // (input mouse → nave diretto, senza layer camera). Log warning una
+            // sola volta per aiutare setup.
+            if (lookController != null)
+            {
+                lookController.Tick(lookDelta, rollInput);
+            }
+            else
+            {
+                if (!_hasWarnedMissingLookController)
+                {
+                    _hasWarnedMissingLookController = true;
+                    Debug.LogWarning("[PilotStation] LookToSteerController NON assegnato — " +
+                                     "fallback al pattern AH.1 (input mouse diretto a nave, " +
+                                     "no layer camera, no coupling). Configurare 'Look Controller' " +
+                                     "nell'Inspector con un GameObject figlio contenente " +
+                                     "LookToSteerController (vedi guida Editor AH.3).");
+                }
+                ShipMovement.Instance?.SetManualLookInput(new Vector3(lookDelta.x, lookDelta.y, rollInput));
+            }
 
             float throttle = throttleAction != null && throttleAction.action != null
                 ? throttleAction.action.ReadValue<float>()
@@ -686,46 +777,41 @@ public class PilotStation : MonoBehaviour, IInteractable
                 : 0f;
             DockingController.Instance?.SetStrafeInput(new Vector3(strafeXY.x, strafeXY.y, strafeZ));
 
-            // Azzera Look + Throttle
-            ShipMovement.Instance?.SetManualLookInput(Vector2.zero);
+            // Azzera Look + Throttle (Rev AH: firma Vector3)
+            ShipMovement.Instance?.SetManualLookInput(Vector3.zero);
             ps?.SetManualThrottleInput(0f);
+
+            // Rev AH.3 — se il lookController è ancora bound (pilota seduto),
+            // fallo girare a input zero per il recenter smooth della camera.
+            // In Docking la camera del pilota non ha coupling (non stiamo
+            // guidando), ma se veniamo da Manual con la camera decentrata,
+            // il recenter la riporta al centro con lo stesso spring RC2-c.
+            if (lookController != null)
+                lookController.Tick(Vector2.zero, 0f);
         }
         else
         {
             // Anchored, Coasting, Autopilot, Docked: nessun input attivo.
-            ShipMovement.Instance?.SetManualLookInput(Vector2.zero);
+            // (Rev AH: firma Vector3)
+            ShipMovement.Instance?.SetManualLookInput(Vector3.zero);
             ps?.SetManualThrottleInput(0f);
             DockingController.Instance?.SetStrafeInput(Vector3.zero);
+
+            // Rev AH.3 — recenter camera se lookController bound. Coerente
+            // col branch Docking sopra: qualunque stato non-Manual, la camera
+            // deve tornare al centro se il player si è spostato in Manual e
+            // poi ha cambiato stato.
+            if (lookController != null)
+                lookController.Tick(Vector2.zero, 0f);
         }
     }
 
-    private void EnterThirdPersonChaseCam()
-    {
-        if (isChaseCamActive || shipChaseCamPoint == null || playerCamera == null) return;
-
-        playerCamera.transform.SetParent(shipChaseCamPoint, worldPositionStays: false);
-        playerCamera.transform.localPosition = Vector3.zero;
-        playerCamera.transform.localRotation = Quaternion.identity;
-        isChaseCamActive = true;
-
-        if (pilotHUD != null) pilotHUD.Close();
-        if (flightHUD != null) flightHUD.Open();
-    }
-
-    private void ExitThirdPersonChaseCam(bool restoreLookAtCockpit = true)
-    {
-        if (!isChaseCamActive || playerCamera == null) return;
-
-        playerCamera.transform.SetParent(originalCameraParent, worldPositionStays: false);
-        playerCamera.transform.localPosition = originalCameraLocalPosition;
-        isChaseCamActive = false;
-
-        if (flightHUD != null) flightHUD.Close();
-        if (pilotHUD != null) pilotHUD.Open();
-
-        if (restoreLookAtCockpit && cameraLookAtPoint != null)
-            StartCoroutine(LookAtCockpitRoutine());
-    }
+    // Rev AH.2: metodi EnterThirdPersonChaseCam / ExitThirdPersonChaseCam RIMOSSI.
+    // Cockpit view interno = unica modalità (QA-1). La camera del pilota resta
+    // sempre figlia del Player durante la seduta — nessun re-parenting camera.
+    // Rimossi anche i field associati: shipChaseCamPoint, isChaseCamActive,
+    // originalCameraParent, originalCameraLocalPosition (vedi sezione state
+    // in testa al file).
 
     // =========================================================================
     // DOCKING CONE VISIBILITY (Rev W — D9)

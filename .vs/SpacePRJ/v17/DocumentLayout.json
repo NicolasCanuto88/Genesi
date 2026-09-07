@@ -3,19 +3,47 @@
   "WorkspaceRootPath": "C:\\Users\\nicol\\UnityProjects\\SpacePRJ\\",
   "Documents": [
     {
-      "AbsoluteMoniker": "D:0:0:{D02C7C30-1E04-944D-CA4B-BF4BFB5FB4B6}|Assembly-CSharp.csproj|C:\\Users\\nicol\\UnityProjects\\SpacePRJ\\assets\\project\\scripts\\ship\\components\\pilotstation.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
-      "RelativeMoniker": "D:0:0:{D02C7C30-1E04-944D-CA4B-BF4BFB5FB4B6}|Assembly-CSharp.csproj|solutionrelative:assets\\project\\scripts\\ship\\components\\pilotstation.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+      "AbsoluteMoniker": "D:0:0:{D02C7C30-1E04-944D-CA4B-BF4BFB5FB4B6}|Assembly-CSharp.csproj|C:\\Users\\nicol\\UnityProjects\\SpacePRJ\\assets\\project\\scripts\\ship\\poicollisionresolver.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{D02C7C30-1E04-944D-CA4B-BF4BFB5FB4B6}|Assembly-CSharp.csproj|solutionrelative:assets\\project\\scripts\\ship\\poicollisionresolver.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
     },
     {
-      "AbsoluteMoniker": "D:0:0:{D02C7C30-1E04-944D-CA4B-BF4BFB5FB4B6}|Assembly-CSharp.csproj|C:\\Users\\nicol\\UnityProjects\\SpacePRJ\\assets\\project\\scripts\\ship\\dockingcontroller.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
-      "RelativeMoniker": "D:0:0:{D02C7C30-1E04-944D-CA4B-BF4BFB5FB4B6}|Assembly-CSharp.csproj|solutionrelative:assets\\project\\scripts\\ship\\dockingcontroller.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+      "AbsoluteMoniker": "D:0:0:{D02C7C30-1E04-944D-CA4B-BF4BFB5FB4B6}|Assembly-CSharp.csproj|c:\\users\\nicol\\unityprojects\\spaceprj\\assets\\project\\scripts\\ship\\shipmovement.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{D02C7C30-1E04-944D-CA4B-BF4BFB5FB4B6}|Assembly-CSharp.csproj|solutionrelative:assets\\project\\scripts\\ship\\shipmovement.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{D02C7C30-1E04-944D-CA4B-BF4BFB5FB4B6}|Assembly-CSharp.csproj|C:\\Users\\nicol\\UnityProjects\\SpacePRJ\\assets\\project\\scripts\\ship\\systems\\shipimpacthandler.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{D02C7C30-1E04-944D-CA4B-BF4BFB5FB4B6}|Assembly-CSharp.csproj|solutionrelative:assets\\project\\scripts\\ship\\systems\\shipimpacthandler.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{D02C7C30-1E04-944D-CA4B-BF4BFB5FB4B6}|Assembly-CSharp.csproj|C:\\Users\\nicol\\UnityProjects\\SpacePRJ\\assets\\project\\scripts\\ui\\pilotflighthud.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{D02C7C30-1E04-944D-CA4B-BF4BFB5FB4B6}|Assembly-CSharp.csproj|solutionrelative:assets\\project\\scripts\\ui\\pilotflighthud.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
     },
     {
       "AbsoluteMoniker": "D:0:0:{D02C7C30-1E04-944D-CA4B-BF4BFB5FB4B6}|Assembly-CSharp.csproj|C:\\Users\\nicol\\UnityProjects\\SpacePRJ\\assets\\project\\scripts\\poi\\poiinstance.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
       "RelativeMoniker": "D:0:0:{D02C7C30-1E04-944D-CA4B-BF4BFB5FB4B6}|Assembly-CSharp.csproj|solutionrelative:assets\\project\\scripts\\poi\\poiinstance.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
     },
     {
-      "AbsoluteMoniker": "D:0:0:{D02C7C30-1E04-944D-CA4B-BF4BFB5FB4B6}|Assembly-CSharp.csproj|c:\\users\\nicol\\unityprojects\\spaceprj\\assets\\project\\scripts\\player\\camerashaker.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "AbsoluteMoniker": "D:0:0:{D02C7C30-1E04-944D-CA4B-BF4BFB5FB4B6}|Assembly-CSharp.csproj|C:\\Users\\nicol\\UnityProjects\\SpacePRJ\\assets\\project\\scripts\\ship\\anchorsystem.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{D02C7C30-1E04-944D-CA4B-BF4BFB5FB4B6}|Assembly-CSharp.csproj|solutionrelative:assets\\project\\scripts\\ship\\anchorsystem.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{D02C7C30-1E04-944D-CA4B-BF4BFB5FB4B6}|Assembly-CSharp.csproj|C:\\Users\\nicol\\UnityProjects\\SpacePRJ\\assets\\project\\scripts\\ship\\components\\pilotstation.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{D02C7C30-1E04-944D-CA4B-BF4BFB5FB4B6}|Assembly-CSharp.csproj|solutionrelative:assets\\project\\scripts\\ship\\components\\pilotstation.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{D02C7C30-1E04-944D-CA4B-BF4BFB5FB4B6}|Assembly-CSharp.csproj|C:\\Users\\nicol\\UnityProjects\\SpacePRJ\\assets\\project\\scripts\\ship\\systems\\propulsionsystem.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{D02C7C30-1E04-944D-CA4B-BF4BFB5FB4B6}|Assembly-CSharp.csproj|solutionrelative:assets\\project\\scripts\\ship\\systems\\propulsionsystem.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{D02C7C30-1E04-944D-CA4B-BF4BFB5FB4B6}|Assembly-CSharp.csproj|C:\\Users\\nicol\\UnityProjects\\SpacePRJ\\assets\\project\\scripts\\ship\\systems\\propulsionupgradedata.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{D02C7C30-1E04-944D-CA4B-BF4BFB5FB4B6}|Assembly-CSharp.csproj|solutionrelative:assets\\project\\scripts\\ship\\systems\\propulsionupgradedata.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{D02C7C30-1E04-944D-CA4B-BF4BFB5FB4B6}|Assembly-CSharp.csproj|C:\\Users\\nicol\\UnityProjects\\SpacePRJ\\assets\\project\\scripts\\ship\\dockingcontroller.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{D02C7C30-1E04-944D-CA4B-BF4BFB5FB4B6}|Assembly-CSharp.csproj|solutionrelative:assets\\project\\scripts\\ship\\dockingcontroller.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{D02C7C30-1E04-944D-CA4B-BF4BFB5FB4B6}|Assembly-CSharp.csproj|C:\\Users\\nicol\\UnityProjects\\SpacePRJ\\assets\\project\\scripts\\player\\camerashaker.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
       "RelativeMoniker": "D:0:0:{D02C7C30-1E04-944D-CA4B-BF4BFB5FB4B6}|Assembly-CSharp.csproj|solutionrelative:assets\\project\\scripts\\player\\camerashaker.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
     },
     {
@@ -31,36 +59,12 @@
       "RelativeMoniker": "D:0:0:{D02C7C30-1E04-944D-CA4B-BF4BFB5FB4B6}|Assembly-CSharp.csproj|solutionrelative:assets\\project\\scripts\\ui\\pilothud.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
     },
     {
-      "AbsoluteMoniker": "D:0:0:{D02C7C30-1E04-944D-CA4B-BF4BFB5FB4B6}|Assembly-CSharp.csproj|C:\\Users\\nicol\\UnityProjects\\SpacePRJ\\assets\\project\\scripts\\ui\\pilotflighthud.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
-      "RelativeMoniker": "D:0:0:{D02C7C30-1E04-944D-CA4B-BF4BFB5FB4B6}|Assembly-CSharp.csproj|solutionrelative:assets\\project\\scripts\\ui\\pilotflighthud.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
-    },
-    {
-      "AbsoluteMoniker": "D:0:0:{D02C7C30-1E04-944D-CA4B-BF4BFB5FB4B6}|Assembly-CSharp.csproj|C:\\Users\\nicol\\UnityProjects\\SpacePRJ\\assets\\project\\scripts\\ship\\systems\\shipimpacthandler.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
-      "RelativeMoniker": "D:0:0:{D02C7C30-1E04-944D-CA4B-BF4BFB5FB4B6}|Assembly-CSharp.csproj|solutionrelative:assets\\project\\scripts\\ship\\systems\\shipimpacthandler.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
-    },
-    {
-      "AbsoluteMoniker": "D:0:0:{D02C7C30-1E04-944D-CA4B-BF4BFB5FB4B6}|Assembly-CSharp.csproj|C:\\Users\\nicol\\UnityProjects\\SpacePRJ\\assets\\project\\scripts\\ship\\systems\\propulsionsystem.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
-      "RelativeMoniker": "D:0:0:{D02C7C30-1E04-944D-CA4B-BF4BFB5FB4B6}|Assembly-CSharp.csproj|solutionrelative:assets\\project\\scripts\\ship\\systems\\propulsionsystem.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
-    },
-    {
-      "AbsoluteMoniker": "D:0:0:{D02C7C30-1E04-944D-CA4B-BF4BFB5FB4B6}|Assembly-CSharp.csproj|C:\\Users\\nicol\\UnityProjects\\SpacePRJ\\assets\\project\\scripts\\ship\\shipmovement.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
-      "RelativeMoniker": "D:0:0:{D02C7C30-1E04-944D-CA4B-BF4BFB5FB4B6}|Assembly-CSharp.csproj|solutionrelative:assets\\project\\scripts\\ship\\shipmovement.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
-    },
-    {
       "AbsoluteMoniker": "D:0:0:{D02C7C30-1E04-944D-CA4B-BF4BFB5FB4B6}|Assembly-CSharp.csproj|C:\\Users\\nicol\\UnityProjects\\SpacePRJ\\assets\\project\\scripts\\collision\\compoundcollidermath.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
       "RelativeMoniker": "D:0:0:{D02C7C30-1E04-944D-CA4B-BF4BFB5FB4B6}|Assembly-CSharp.csproj|solutionrelative:assets\\project\\scripts\\collision\\compoundcollidermath.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
     },
     {
-      "AbsoluteMoniker": "D:0:0:{D02C7C30-1E04-944D-CA4B-BF4BFB5FB4B6}|Assembly-CSharp.csproj|C:\\Users\\nicol\\UnityProjects\\SpacePRJ\\assets\\project\\scripts\\ship\\poicollisionresolver.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
-      "RelativeMoniker": "D:0:0:{D02C7C30-1E04-944D-CA4B-BF4BFB5FB4B6}|Assembly-CSharp.csproj|solutionrelative:assets\\project\\scripts\\ship\\poicollisionresolver.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
-    },
-    {
       "AbsoluteMoniker": "D:0:0:{D02C7C30-1E04-944D-CA4B-BF4BFB5FB4B6}|Assembly-CSharp.csproj|C:\\Users\\nicol\\UnityProjects\\SpacePRJ\\assets\\project\\scripts\\poi\\poispawner.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
       "RelativeMoniker": "D:0:0:{D02C7C30-1E04-944D-CA4B-BF4BFB5FB4B6}|Assembly-CSharp.csproj|solutionrelative:assets\\project\\scripts\\poi\\poispawner.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
-    },
-    {
-      "AbsoluteMoniker": "D:0:0:{D02C7C30-1E04-944D-CA4B-BF4BFB5FB4B6}|Assembly-CSharp.csproj|C:\\Users\\nicol\\UnityProjects\\SpacePRJ\\assets\\project\\scripts\\ship\\anchorsystem.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
-      "RelativeMoniker": "D:0:0:{D02C7C30-1E04-944D-CA4B-BF4BFB5FB4B6}|Assembly-CSharp.csproj|solutionrelative:assets\\project\\scripts\\ship\\anchorsystem.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
     },
     {
       "AbsoluteMoniker": "D:0:0:{D02C7C30-1E04-944D-CA4B-BF4BFB5FB4B6}|Assembly-CSharp.csproj|C:\\Users\\nicol\\UnityProjects\\SpacePRJ\\assets\\project\\scripts\\poi\\poidata.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
@@ -73,10 +77,6 @@
     {
       "AbsoluteMoniker": "D:0:0:{D02C7C30-1E04-944D-CA4B-BF4BFB5FB4B6}|Assembly-CSharp.csproj|C:\\Users\\nicol\\UnityProjects\\SpacePRJ\\assets\\project\\scripts\\poi\\poiscanstate.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
       "RelativeMoniker": "D:0:0:{D02C7C30-1E04-944D-CA4B-BF4BFB5FB4B6}|Assembly-CSharp.csproj|solutionrelative:assets\\project\\scripts\\poi\\poiscanstate.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
-    },
-    {
-      "AbsoluteMoniker": "D:0:0:{D02C7C30-1E04-944D-CA4B-BF4BFB5FB4B6}|Assembly-CSharp.csproj|C:\\Users\\nicol\\UnityProjects\\SpacePRJ\\assets\\project\\scripts\\ship\\systems\\propulsionupgradedata.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
-      "RelativeMoniker": "D:0:0:{D02C7C30-1E04-944D-CA4B-BF4BFB5FB4B6}|Assembly-CSharp.csproj|solutionrelative:assets\\project\\scripts\\ship\\systems\\propulsionupgradedata.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
     },
     {
       "AbsoluteMoniker": "D:0:0:{D02C7C30-1E04-944D-CA4B-BF4BFB5FB4B6}|Assembly-CSharp.csproj|C:\\Users\\nicol\\UnityProjects\\SpacePRJ\\assets\\project\\scripts\\ship\\shipskyboxrotator.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
@@ -250,55 +250,32 @@
       "DocumentGroups": [
         {
           "DockedWidth": 200,
-          "SelectedChildIndex": 7,
+          "SelectedChildIndex": 15,
           "Children": [
             {
               "$type": "Document",
-              "DocumentIndex": 18,
+              "DocumentIndex": 8,
               "Title": "PropulsionUpgradeData.cs",
               "DocumentMoniker": "C:\\Users\\nicol\\UnityProjects\\SpacePRJ\\Assets\\Project\\Scripts\\Ship\\Systems\\PropulsionUpgradeData.cs",
               "RelativeDocumentMoniker": "Assets\\Project\\Scripts\\Ship\\Systems\\PropulsionUpgradeData.cs",
               "ToolTip": "C:\\Users\\nicol\\UnityProjects\\SpacePRJ\\Assets\\Project\\Scripts\\Ship\\Systems\\PropulsionUpgradeData.cs",
               "RelativeToolTip": "Assets\\Project\\Scripts\\Ship\\Systems\\PropulsionUpgradeData.cs",
-              "ViewState": "AgIAABsAAAAAAAAAAAAuwFQAAAABAAAAAAAAAA==",
+              "ViewState": "AgIAACUAAAAAAAAAAAAwwF4AAAABAAAAAAAAAA==",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
               "WhenOpened": "2026-07-20T16:58:35.018Z"
             },
             {
               "$type": "Document",
-              "DocumentIndex": 10,
+              "DocumentIndex": 1,
               "Title": "ShipMovement.cs",
               "DocumentMoniker": "C:\\Users\\nicol\\UnityProjects\\SpacePRJ\\Assets\\Project\\Scripts\\Ship\\ShipMovement.cs",
               "RelativeDocumentMoniker": "Assets\\Project\\Scripts\\Ship\\ShipMovement.cs",
               "ToolTip": "C:\\Users\\nicol\\UnityProjects\\SpacePRJ\\Assets\\Project\\Scripts\\Ship\\ShipMovement.cs",
               "RelativeToolTip": "Assets\\Project\\Scripts\\Ship\\ShipMovement.cs",
-              "ViewState": "AgIAAGgBAAAAAAAAAAAuwKEBAAABAAAAAAAAAA==",
+              "ViewState": "AgIAAPkBAAAAAAAAAAA8wDICAAABAAAAAAAAAA==",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
-              "WhenOpened": "2026-07-20T16:52:45.309Z"
-            },
-            {
-              "$type": "Document",
-              "DocumentIndex": 24,
-              "Title": "TabletStation.cs",
-              "DocumentMoniker": "C:\\Users\\nicol\\UnityProjects\\SpacePRJ\\Assets\\Project\\Scripts\\Player\\TabletStation.cs",
-              "RelativeDocumentMoniker": "Assets\\Project\\Scripts\\Player\\TabletStation.cs",
-              "ToolTip": "C:\\Users\\nicol\\UnityProjects\\SpacePRJ\\Assets\\Project\\Scripts\\Player\\TabletStation.cs",
-              "RelativeToolTip": "Assets\\Project\\Scripts\\Player\\TabletStation.cs",
-              "ViewState": "AgIAADgAAAAAAAAAAAAxwAAAAAAAAAAAAAAAAA==",
-              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
-              "WhenOpened": "2026-07-19T21:42:30.453Z"
-            },
-            {
-              "$type": "Document",
-              "DocumentIndex": 32,
-              "Title": "TestRepairable.cs",
-              "DocumentMoniker": "C:\\Users\\nicol\\UnityProjects\\SpacePRJ\\Assets\\Project\\Scripts\\Ship\\Systems\\TestRepairable.cs",
-              "RelativeDocumentMoniker": "Assets\\Project\\Scripts\\Ship\\Systems\\TestRepairable.cs",
-              "ToolTip": "C:\\Users\\nicol\\UnityProjects\\SpacePRJ\\Assets\\Project\\Scripts\\Ship\\Systems\\TestRepairable.cs",
-              "RelativeToolTip": "Assets\\Project\\Scripts\\Ship\\Systems\\TestRepairable.cs",
-              "ViewState": "AgIAAAAAAAAAAAAAAAAAABQAAAABAAAAAAAAAA==",
-              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
-              "WhenOpened": "2026-06-09T20:56:20.511Z"
+              "WhenOpened": "2026-07-20T16:52:45.309Z",
+              "EditorCaption": ""
             },
             {
               "$type": "Document",
@@ -338,32 +315,31 @@
             },
             {
               "$type": "Document",
-              "DocumentIndex": 0,
+              "DocumentIndex": 6,
               "Title": "PilotStation.cs",
               "DocumentMoniker": "C:\\Users\\nicol\\UnityProjects\\SpacePRJ\\Assets\\Project\\Scripts\\Ship\\Components\\PilotStation.cs",
               "RelativeDocumentMoniker": "Assets\\Project\\Scripts\\Ship\\Components\\PilotStation.cs",
               "ToolTip": "C:\\Users\\nicol\\UnityProjects\\SpacePRJ\\Assets\\Project\\Scripts\\Ship\\Components\\PilotStation.cs",
               "RelativeToolTip": "Assets\\Project\\Scripts\\Ship\\Components\\PilotStation.cs",
-              "ViewState": "AgIAAPUDAAAAAAAAAAAgwCwEAAABAAAAAAAAAA==",
+              "ViewState": "AgIAAEkEAAAAAAAAAAAuwF0EAAA/AAAAAAAAAA==",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
-              "WhenOpened": "2026-07-19T12:31:20.295Z",
-              "EditorCaption": ""
+              "WhenOpened": "2026-07-19T12:31:20.295Z"
             },
             {
               "$type": "Document",
-              "DocumentIndex": 14,
+              "DocumentIndex": 5,
               "Title": "AnchorSystem.cs",
               "DocumentMoniker": "C:\\Users\\nicol\\UnityProjects\\SpacePRJ\\Assets\\Project\\Scripts\\Ship\\AnchorSystem.cs",
               "RelativeDocumentMoniker": "Assets\\Project\\Scripts\\Ship\\AnchorSystem.cs",
               "ToolTip": "C:\\Users\\nicol\\UnityProjects\\SpacePRJ\\Assets\\Project\\Scripts\\Ship\\AnchorSystem.cs",
               "RelativeToolTip": "Assets\\Project\\Scripts\\Ship\\AnchorSystem.cs",
-              "ViewState": "AgIAABQBAAAAAAAAAAAuwE0BAAABAAAAAAAAAA==",
+              "ViewState": "AgIAAHEBAAAAAAAAAAAuwKoBAAABAAAAAAAAAA==",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
               "WhenOpened": "2026-07-29T21:08:03.19Z"
             },
             {
               "$type": "Document",
-              "DocumentIndex": 1,
+              "DocumentIndex": 9,
               "Title": "DockingController.cs",
               "DocumentMoniker": "C:\\Users\\nicol\\UnityProjects\\SpacePRJ\\Assets\\Project\\Scripts\\Ship\\DockingController.cs",
               "RelativeDocumentMoniker": "Assets\\Project\\Scripts\\Ship\\DockingController.cs",
@@ -371,8 +347,7 @@
               "RelativeToolTip": "Assets\\Project\\Scripts\\Ship\\DockingController.cs",
               "ViewState": "AgIAAK4DAAAAAAAAAAAgwOUDAAABAAAAAAAAAA==",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
-              "WhenOpened": "2026-07-30T12:38:30.224Z",
-              "EditorCaption": ""
+              "WhenOpened": "2026-07-30T12:38:30.224Z"
             },
             {
               "$type": "Document",
@@ -388,7 +363,7 @@
             },
             {
               "$type": "Document",
-              "DocumentIndex": 16,
+              "DocumentIndex": 17,
               "Title": "DockingMinigameUI.cs",
               "DocumentMoniker": "C:\\Users\\nicol\\UnityProjects\\SpacePRJ\\Assets\\Project\\Scripts\\UI\\DockingMinigameUI.cs",
               "RelativeDocumentMoniker": "Assets\\Project\\Scripts\\UI\\DockingMinigameUI.cs",
@@ -400,7 +375,7 @@
             },
             {
               "$type": "Document",
-              "DocumentIndex": 15,
+              "DocumentIndex": 16,
               "Title": "PoiData.cs",
               "DocumentMoniker": "C:\\Users\\nicol\\UnityProjects\\SpacePRJ\\Assets\\Project\\Scripts\\POI\\PoiData.cs",
               "RelativeDocumentMoniker": "Assets\\Project\\Scripts\\POI\\PoiData.cs",
@@ -412,19 +387,20 @@
             },
             {
               "$type": "Document",
-              "DocumentIndex": 8,
+              "DocumentIndex": 2,
               "Title": "ShipImpactHandler.cs",
               "DocumentMoniker": "C:\\Users\\nicol\\UnityProjects\\SpacePRJ\\Assets\\Project\\Scripts\\Ship\\Systems\\ShipImpactHandler.cs",
               "RelativeDocumentMoniker": "Assets\\Project\\Scripts\\Ship\\Systems\\ShipImpactHandler.cs",
               "ToolTip": "C:\\Users\\nicol\\UnityProjects\\SpacePRJ\\Assets\\Project\\Scripts\\Ship\\Systems\\ShipImpactHandler.cs",
               "RelativeToolTip": "Assets\\Project\\Scripts\\Ship\\Systems\\ShipImpactHandler.cs",
-              "ViewState": "AgIAALEBAAAAAAAAAAAgwOgBAAABAAAAAAAAAA==",
+              "ViewState": "AgIAAIsBAAAAAAAAAAAuwMQBAAABAAAAAAAAAA==",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
-              "WhenOpened": "2026-08-28T20:57:30.884Z"
+              "WhenOpened": "2026-08-28T20:57:30.884Z",
+              "EditorCaption": ""
             },
             {
               "$type": "Document",
-              "DocumentIndex": 5,
+              "DocumentIndex": 12,
               "Title": "EngineeringDashboardUI.cs",
               "DocumentMoniker": "C:\\Users\\nicol\\UnityProjects\\SpacePRJ\\Assets\\Project\\Scripts\\UI\\EngineeringDashboardUI.cs",
               "RelativeDocumentMoniker": "Assets\\Project\\Scripts\\UI\\EngineeringDashboardUI.cs",
@@ -436,7 +412,7 @@
             },
             {
               "$type": "Document",
-              "DocumentIndex": 13,
+              "DocumentIndex": 15,
               "Title": "PoiSpawner.cs",
               "DocumentMoniker": "C:\\Users\\nicol\\UnityProjects\\SpacePRJ\\Assets\\Project\\Scripts\\POI\\PoiSpawner.cs",
               "RelativeDocumentMoniker": "Assets\\Project\\Scripts\\POI\\PoiSpawner.cs",
@@ -448,7 +424,7 @@
             },
             {
               "$type": "Document",
-              "DocumentIndex": 11,
+              "DocumentIndex": 14,
               "Title": "CompoundColliderMath.cs",
               "DocumentMoniker": "C:\\Users\\nicol\\UnityProjects\\SpacePRJ\\Assets\\Project\\Scripts\\Collision\\CompoundColliderMath.cs",
               "RelativeDocumentMoniker": "Assets\\Project\\Scripts\\Collision\\CompoundColliderMath.cs",
@@ -460,40 +436,76 @@
             },
             {
               "$type": "Document",
-              "DocumentIndex": 12,
+              "DocumentIndex": 0,
               "Title": "PoiCollisionResolver.cs",
               "DocumentMoniker": "C:\\Users\\nicol\\UnityProjects\\SpacePRJ\\Assets\\Project\\Scripts\\Ship\\PoiCollisionResolver.cs",
               "RelativeDocumentMoniker": "Assets\\Project\\Scripts\\Ship\\PoiCollisionResolver.cs",
               "ToolTip": "C:\\Users\\nicol\\UnityProjects\\SpacePRJ\\Assets\\Project\\Scripts\\Ship\\PoiCollisionResolver.cs",
               "RelativeToolTip": "Assets\\Project\\Scripts\\Ship\\PoiCollisionResolver.cs",
-              "ViewState": "AgIAAOYBAAAAAAAAAAAuwB8CAAABAAAAAAAAAA==",
+              "ViewState": "AgIAANYDAAAAAAAAAAAwwA8EAAABAAAAAAAAAA==",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
-              "WhenOpened": "2026-08-29T21:26:09.904Z"
+              "WhenOpened": "2026-08-29T21:26:09.904Z",
+              "EditorCaption": ""
             },
             {
               "$type": "Document",
-              "DocumentIndex": 2,
+              "DocumentIndex": 4,
               "Title": "PoiInstance.cs",
               "DocumentMoniker": "C:\\Users\\nicol\\UnityProjects\\SpacePRJ\\Assets\\Project\\Scripts\\POI\\PoiInstance.cs",
               "RelativeDocumentMoniker": "Assets\\Project\\Scripts\\POI\\PoiInstance.cs",
               "ToolTip": "C:\\Users\\nicol\\UnityProjects\\SpacePRJ\\Assets\\Project\\Scripts\\POI\\PoiInstance.cs",
               "RelativeToolTip": "Assets\\Project\\Scripts\\POI\\PoiInstance.cs",
-              "ViewState": "AgIAANQBAAAAAAAAAAAuwA0CAAABAAAAAAAAAA==",
+              "ViewState": "AgIAAN4BAAAAAAAAAAAuwBcCAAABAAAAAAAAAA==",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
-              "WhenOpened": "2026-07-25T21:54:09.712Z",
-              "EditorCaption": ""
+              "WhenOpened": "2026-07-25T21:54:09.712Z"
             },
             {
               "$type": "Document",
-              "DocumentIndex": 9,
+              "DocumentIndex": 7,
               "Title": "PropulsionSystem.cs",
               "DocumentMoniker": "C:\\Users\\nicol\\UnityProjects\\SpacePRJ\\Assets\\Project\\Scripts\\Ship\\Systems\\PropulsionSystem.cs",
               "RelativeDocumentMoniker": "Assets\\Project\\Scripts\\Ship\\Systems\\PropulsionSystem.cs",
               "ToolTip": "C:\\Users\\nicol\\UnityProjects\\SpacePRJ\\Assets\\Project\\Scripts\\Ship\\Systems\\PropulsionSystem.cs",
               "RelativeToolTip": "Assets\\Project\\Scripts\\Ship\\Systems\\PropulsionSystem.cs",
-              "ViewState": "AgIAAEIEAAAAAAAAAAAiwHkEAAABAAAAAAAAAA==",
+              "ViewState": "AgIAAEkEAAAAAAAAAAAwwIIEAAABAAAAAAAAAA==",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
               "WhenOpened": "2026-07-20T16:58:52.872Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 3,
+              "Title": "PilotFlightHUD.cs",
+              "DocumentMoniker": "C:\\Users\\nicol\\UnityProjects\\SpacePRJ\\Assets\\Project\\Scripts\\UI\\PilotFlightHUD.cs",
+              "RelativeDocumentMoniker": "Assets\\Project\\Scripts\\UI\\PilotFlightHUD.cs",
+              "ToolTip": "C:\\Users\\nicol\\UnityProjects\\SpacePRJ\\Assets\\Project\\Scripts\\UI\\PilotFlightHUD.cs",
+              "RelativeToolTip": "Assets\\Project\\Scripts\\UI\\PilotFlightHUD.cs",
+              "ViewState": "AgIAAKkCAAAAAAAAAAAuwOICAAABAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2026-07-20T21:54:00.549Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 32,
+              "Title": "TestRepairable.cs",
+              "DocumentMoniker": "C:\\Users\\nicol\\UnityProjects\\SpacePRJ\\Assets\\Project\\Scripts\\Ship\\Systems\\TestRepairable.cs",
+              "RelativeDocumentMoniker": "Assets\\Project\\Scripts\\Ship\\Systems\\TestRepairable.cs",
+              "ToolTip": "C:\\Users\\nicol\\UnityProjects\\SpacePRJ\\Assets\\Project\\Scripts\\Ship\\Systems\\TestRepairable.cs",
+              "RelativeToolTip": "Assets\\Project\\Scripts\\Ship\\Systems\\TestRepairable.cs",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAABQAAAABAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2026-06-09T20:56:20.511Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 24,
+              "Title": "TabletStation.cs",
+              "DocumentMoniker": "C:\\Users\\nicol\\UnityProjects\\SpacePRJ\\Assets\\Project\\Scripts\\Player\\TabletStation.cs",
+              "RelativeDocumentMoniker": "Assets\\Project\\Scripts\\Player\\TabletStation.cs",
+              "ToolTip": "C:\\Users\\nicol\\UnityProjects\\SpacePRJ\\Assets\\Project\\Scripts\\Player\\TabletStation.cs",
+              "RelativeToolTip": "Assets\\Project\\Scripts\\Player\\TabletStation.cs",
+              "ViewState": "AgIAADgAAAAAAAAAAAAxwAAAAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2026-07-19T21:42:30.453Z"
             },
             {
               "$type": "Document",
@@ -509,19 +521,7 @@
             },
             {
               "$type": "Document",
-              "DocumentIndex": 7,
-              "Title": "PilotFlightHUD.cs",
-              "DocumentMoniker": "C:\\Users\\nicol\\UnityProjects\\SpacePRJ\\Assets\\Project\\Scripts\\UI\\PilotFlightHUD.cs",
-              "RelativeDocumentMoniker": "Assets\\Project\\Scripts\\UI\\PilotFlightHUD.cs",
-              "ToolTip": "C:\\Users\\nicol\\UnityProjects\\SpacePRJ\\Assets\\Project\\Scripts\\UI\\PilotFlightHUD.cs",
-              "RelativeToolTip": "Assets\\Project\\Scripts\\UI\\PilotFlightHUD.cs",
-              "ViewState": "AgIAAJ4AAAAAAAAAAAAgwNUAAAABAAAAAAAAAA==",
-              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
-              "WhenOpened": "2026-07-20T21:54:00.549Z"
-            },
-            {
-              "$type": "Document",
-              "DocumentIndex": 6,
+              "DocumentIndex": 13,
               "Title": "PilotHUD.cs",
               "DocumentMoniker": "C:\\Users\\nicol\\UnityProjects\\SpacePRJ\\Assets\\Project\\Scripts\\UI\\PilotHUD.cs",
               "RelativeDocumentMoniker": "Assets\\Project\\Scripts\\UI\\PilotHUD.cs",
@@ -533,7 +533,7 @@
             },
             {
               "$type": "Document",
-              "DocumentIndex": 3,
+              "DocumentIndex": 10,
               "Title": "CameraShaker.cs",
               "DocumentMoniker": "C:\\Users\\nicol\\UnityProjects\\SpacePRJ\\Assets\\Project\\Scripts\\Player\\CameraShaker.cs",
               "RelativeDocumentMoniker": "Assets\\Project\\Scripts\\Player\\CameraShaker.cs",
@@ -541,12 +541,11 @@
               "RelativeToolTip": "Assets\\Project\\Scripts\\Player\\CameraShaker.cs",
               "ViewState": "AgIAAKMAAAAAAAAAAAAwwNwAAAABAAAAAAAAAA==",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
-              "WhenOpened": "2026-09-03T15:24:41.005Z",
-              "EditorCaption": ""
+              "WhenOpened": "2026-09-03T15:24:41.005Z"
             },
             {
               "$type": "Document",
-              "DocumentIndex": 4,
+              "DocumentIndex": 11,
               "Title": "EngineFailureBannerController.cs",
               "DocumentMoniker": "C:\\Users\\nicol\\UnityProjects\\SpacePRJ\\Assets\\Project\\Scripts\\UI\\EngineFailureBannerController.cs",
               "RelativeDocumentMoniker": "Assets\\Project\\Scripts\\UI\\EngineFailureBannerController.cs",
@@ -581,7 +580,7 @@
             },
             {
               "$type": "Document",
-              "DocumentIndex": 17,
+              "DocumentIndex": 18,
               "Title": "PoiScanState.cs",
               "DocumentMoniker": "C:\\Users\\nicol\\UnityProjects\\SpacePRJ\\Assets\\Project\\Scripts\\POI\\PoiScanState.cs",
               "RelativeDocumentMoniker": "Assets\\Project\\Scripts\\POI\\PoiScanState.cs",

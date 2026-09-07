@@ -233,6 +233,16 @@ namespace SpaceSurvivor.Poi
             }
         }
 
+        // Rev AI (fix geometria post-playtest): la property DockingAnchorUpWorld
+        // introdotta nella prima passata di Rev AI è stata RIMOSSA. Errore di
+        // interpretazione della geometria: la formula corretta per l'allineamento
+        // ship-POI è Dot(shipUp, POI→ship), non Dot(shipUp, poiUp). Il portellone
+        // di attracco della NAVE (montato sulla sua Y locale) deve puntare VERSO
+        // il POI, indipendentemente dall'orientation del POI stesso. La direzione
+        // POI→ship si calcola già da LogicalPosition dei due (nessuna property
+        // aggiuntiva necessaria su PoiInstance). Vedi AnchorSystem.EvaluateAnchorability
+        // per l'implementazione corretta.
+
         // ── Eventi pubblici (per-instance) ───────────────────────────────────
         public event Action<PoiScanState, PoiScanState> OnScanStateChanged;
 

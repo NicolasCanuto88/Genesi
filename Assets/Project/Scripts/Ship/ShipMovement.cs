@@ -9,7 +9,8 @@ namespace SpaceSurvivor.Ship
     /// ShipMovement — Milestone 3, Blocco 2 + Blocco 3 fase 2 (Rev T),
     /// esteso Fase 3 Blocco 3.1 (Sotto-step 3.1.3) con setter server-only
     /// per DockingController (strafe RCS + auto-align rotazionale),
-    /// esteso Rev AB (Blocco 3.2.d D5 — Compound Collider).
+    /// esteso Rev AB (Blocco 3.2.d D5 — Compound Collider),
+    /// esteso Rev AH (Blocco AH.1 — 6DoF QD-γ + look-to-steer coupling).
     ///
     /// DECISIONE ARCHITETTURALE (invariata da Rev Q): "Nave" NON si muove mai
     /// fisicamente nel mondo. Resta esattamente dov'è piazzata in Editor, per
@@ -26,7 +27,7 @@ namespace SpaceSurvivor.Ship
     ///   - INERZIA ROTAZIONALE: yaw e pitch hanno un rate corrente che insegue
     ///     il target con accelerazione angolare finita.
     ///   - NO STEERING A VELOCITÀ ZERO: sotto minSpeedToSteer (default 3 m/s)
-    ///     l'orientamento è bloccato.
+    ///     l'orientamento è bloccato. → RIMOSSO IN REV AH (MS-2), vedi sotto.
     ///
     /// ESTENSIONE Blocco 3.2.c — hook di collisione POI in UpdatePosition:
     ///   In Manual/Coasting/Autopilot la nave attraversava i POI come fantasmi
@@ -39,33 +40,90 @@ namespace SpaceSurvivor.Ship
     /// ── MODIFICHE REV AB (Blocco 3.2.d D5) ──────────────────────────────────
     ///
     ///   RIMOSSO: shipCollisionRadius (SerializeField) + property
-    ///   ShipCollisionRadius. Rev AA lo aveva introdotto come contributo
-    ///   sferico della nave alla formula "distanza min tra centri = somma
-    ///   dei raggi". Rev AB sostituisce il modello sferico con un compound
-    ///   collider (OBB+Sphere multipli, decisioni Q1-Q3 Rev AA workshop):
-    ///   la geometria della nave è ora descritta da CompoundColliderAuthoring.
+    ///   ShipCollisionRadius. Sostituito da compound collider (OBB+Sphere) via
+    ///   CompoundColliderAuthoring. Consumer di Compound: PoiCollisionResolver
+    ///   e DockingController.
     ///
-    ///   AGGIUNTO: cache _compound (CompoundColliderAuthoring) + property
-    ///   Compound. Il componente CompoundColliderAuthoring va aggiunto al
-    ///   GameObject della Nave (fratello di questo script) e configurato in
-    ///   Inspector con i volumi che rappresentano fusoliera + ali + eventuali
-    ///   motori. Se assente, il compound è vuoto e degrada al fallback
-    ///   "nave = punto" (Rev AD, F-C: il fallback è ora un GUARD per setup
-    ///   incompleti, non una modalità di gameplay — vedi
-    ///   CompoundColliderMath aIsPoint per la singolarità geometrica associata).
+    /// ── MODIFICHE REV AH (Blocco AH.1 — QD-γ) ───────────────────────────────
     ///
-    ///   Consumer di Compound: PoiCollisionResolver.ResolveCollision e
-    ///   DockingController.RunDockingTick (Rev AD: entrambi ora passano
-    ///   ShipVolumes non-null a CompoundColliderMath).
+    ///   QD-γ (6DoF completo con roll): estensione della rotazione logica da
+    ///   yaw+pitch (Euler-based) a full 6DoF via Quaternion incrementale locale.
     ///
-    /// DESIGN — controllo pilotaggio:
-    ///   - Assi rotazione: yaw + pitch, no roll
+    ///   CAMBIAMENTI:
+    ///
+    ///   1. FIRMA SetManualLookInput: Vector2 → Vector3.
+    ///        .x = look horizontal (yaw input), da -1 a +1
+    ///        .y = look vertical   (pitch input), da -1 a +1
+    ///        .z = roll input, da -1 (A) a +1 (D)
+    ///      La componente z è NUOVA (Rev AH). Chiamanti: solo PilotStation
+    ///      (aggiornato in AH.1).
+    ///
+    ///   2. STATO server-only esteso: aggiunto _currentRollRate accanto ai
+    ///      due esistenti (yaw, pitch).
+    ///
+    ///   3. ROTATION MATH: da
+    ///        _logicalRotation.Value = Quaternion.Euler(pitch, yaw, 0)
+    ///      a
+    ///        Quaternion delta = Quaternion.Euler(dPitch, dYaw, dRoll)
+    ///        _logicalRotation.Value = _logicalRotation.Value * delta  // local
+    ///
+    ///      Il moltiplicare a destra applica delta in LOCAL SPACE della nave:
+    ///      yaw = rotazione attorno all'up locale, pitch = attorno al right
+    ///      locale, roll = attorno al forward locale. Feel spaziale corretto
+    ///      (Elite Dangerous style) — "ruota la nave come se fossi tu dentro".
+    ///
+    ///   4. GIMBAL LOCK: eliminato. Il clamp Euler pitch ±80° è RIMOSSO
+    ///      (variabile pitchClampDegrees eliminata). Nessun singularità Euler
+    ///      perché non usiamo più Euler come rappresentazione di stato — solo
+    ///      come delta locale per il moltiplicatore, e piccoli delta (dt ×
+    ///      rate) non hanno singolarità.
+    ///
+    ///   5. MS-2 (rimozione minSpeedToSteer): la restrizione "no steering a
+    ///      velocità < 3 m/s" (Rev T post-playtest) è RIMOSSA. Motivazione
+    ///      Rev AH: nello spazio senza atmosfera la nave dispone di RCS/
+    ///      thruster laterali che permettono riorientamento anche da ferma.
+    ///      Coerente con QD-γ 6DoF (Elite Dangerous, Freelancer, ecc.).
+    ///      canSteer ora dipende solo dallo stato Manual, non dalla velocità.
+    ///
+    ///      NOTA MIGRAZIONE: PilotFlightHUD ha un campo mirror
+    ///      minSpeedToSteerMirror usato per il warning "avvia motori per
+    ///      sterzare". Con MS-2 il warning non ha più senso ma il campo
+    ///      continuerà a triggerarsi sotto 3 m/s. Non dannoso — PilotFlightHUD
+    ///      sarà ELIMINATO in AH.4 (remigrazione UI a Screen Space Overlay
+    ///      unificato). Fino ad AH.4 il warning è cosmeticamente presente
+    ///      ma disallineato dalla realtà runtime.
+    ///
+    ///   6. ROLL SEMANTICA (Roll-γ + Roll-hold + Roll-inertia-2):
+    ///        - Roll-γ: direct steering nave, la camera del player NON rolla
+    ///          (motion sickness prevention).
+    ///        - Roll-hold: l'assetto roll accumulato NON torna a zero al
+    ///          rilascio (nessuna gravità simulata che raddrizzi la nave).
+    ///          Coerente con yaw/pitch che sono già hold-behavior.
+    ///        - Roll-inertia-2: il rate di roll decelera con inerzia (nuovo
+    ///          rollAcceleration in PropulsionUpgradeData, default 45°/s²),
+    ///          simmetrico a yaw/pitch.
+    ///
+    ///   7. RECENTER CAMERA (RC1-b + RC2-c + RC3-c): NON gestito qui.
+    ///      Delegato a LookToSteerController (nuovo, AH.3) che intercetta
+    ///      l'input mouse, applica cono ±20°/±15° alla camera del player,
+    ///      auto-recentra sotto deadzone, e passa l'ECCEDENZA fuori cono a
+    ///      SetManualLookInput. Rev AH.1 lavora sulla layer "rotazione logica"
+    ///      trasparente al look-to-steer.
+    ///
+    /// DESIGN — controllo pilotaggio Rev AH:
+    ///   - Assi rotazione: yaw + pitch + ROLL (6DoF completo QD-γ)
     ///   - Convenzione mouse: FPS standard (mouse su = muso su)
-    ///   - Pitch clamp: ±80°
+    ///   - Convenzione roll: A/D con D positivo (nave rolla verso destra
+    ///     dal PoV pilota, orizzonte sale a sinistra) — Elite Dangerous style.
+    ///     Se in playtest il feel risulta invertito, cambiare segno in PilotStation
+    ///     oppure invertire il binding A/D nel InputActions asset.
+    ///   - Nessun clamp pitch (6DoF completo, ogni assetto raggiungibile).
     ///
-    /// DIPENDE DA: PropulsionSystem, CompoundColliderAuthoring (Rev AB).
+    /// DIPENDE DA: PropulsionSystem (YawAcceleration, PitchAcceleration,
+    ///   RollAcceleration [Rev AH], CurrentSpeed, CurrentNavState),
+    ///   CompoundColliderAuthoring (Rev AB).
     /// USATO DA:   ExternalWorldFollower, PilotStation, DockingController,
-    ///             PoiCollisionResolver.
+    ///             PoiCollisionResolver, LookToSteerController (Rev AH.3).
     /// </summary>
     public class ShipMovement : NetworkBehaviour
     {
@@ -84,12 +142,11 @@ namespace SpaceSurvivor.Ship
                  "Convenzione FPS: mouse su = muso su.")]
         [SerializeField] private float manualPitchSpeedDegPerSec = 60f;
 
-        [Tooltip("Clamp assoluto del pitch in gradi (±). Default 80°.")]
-        [SerializeField] private float pitchClampDegrees = 80f;
-
-        [Tooltip("Velocità lineare minima (m/s) sotto la quale la rotazione è " +
-                 "BLOCCATA. Default 3 m/s.")]
-        [SerializeField] private float minSpeedToSteer = 3f;
+        [Tooltip("Rev AH (QD-γ) — Rate MASSIMO di roll in gradi/secondo, a input Z " +
+                 "massimo (±1). Default 90°/s (roll è più vivace di pitch — standard " +
+                 "genre sim spaziali). Il rate corrente insegue questo target con " +
+                 "inerzia (data.rollAcceleration, Rev AH).")]
+        [SerializeField] private float manualRollSpeedDegPerSec = 90f;
 
         // ── Stato di rete ─────────────────────────────────────────────────────
         private readonly NetworkVariable<Quaternion> _logicalRotation = new NetworkVariable<Quaternion>(
@@ -103,9 +160,12 @@ namespace SpaceSurvivor.Ship
             NetworkVariableWritePermission.Server);
 
         // Stato server-only (non replicato).
-        private Vector2 _manualLookInput;
+        // Rev AH: _manualLookInput esteso a Vector3 (.z = roll input), aggiunto
+        // _currentRollRate simmetrico a _currentYawRate / _currentPitchRate.
+        private Vector3 _manualLookInput;
         private float _currentYawRate;
         private float _currentPitchRate;
+        private float _currentRollRate;
 
         // ── Cache compound collider (Rev AB) ─────────────────────────────────
         [Header("Collisione compound (Rev AB — Blocco 3.2.d D5)")]
@@ -142,6 +202,21 @@ namespace SpaceSurvivor.Ship
         public Quaternion LogicalRotation => _logicalRotation.Value;
         public Vector3 LogicalPosition => _logicalPosition.Value;
         public Vector3 LogicalForward => _logicalRotation.Value * Vector3.forward;
+
+        /// <summary>
+        /// Rev AI — Asse Y locale della nave espresso in world logic space.
+        /// Usato da AnchorSystem per il check di allineamento Y-con-Y con
+        /// l'asse Y del POI durante la valutazione docking (portellone di
+        /// attracco montato su asse Y della nave). Analogo a LogicalForward
+        /// ma per l'asse up.
+        ///
+        /// Nota architetturale (Rev Q): questa property NON legge
+        /// transform.up della Nave (che è fissa in world space per invariante
+        /// Rev Q), ma deriva da LogicalRotation. La Nave non si muove mai
+        /// fisicamente, il suo "up logico" cambia solo tramite rotation
+        /// applicata via SetManualLookInput (yaw/pitch/roll).
+        /// </summary>
+        public Vector3 LogicalUp => _logicalRotation.Value * Vector3.up;
 
         public float CurrentSpeed =>
             PropulsionSystem.Instance != null ? PropulsionSystem.Instance.CurrentSpeed : 0f;
@@ -225,50 +300,97 @@ namespace SpaceSurvivor.Ship
         }
 
         /// <summary>
-        /// Server-only. Se in MANUAL e velocità ≥ minSpeedToSteer, insegue i
-        /// rate target con accelerazione angolare, poi applica i rate al
-        /// quaternion. Quando la nave rallenta sotto minSpeedToSteer, i rate
-        /// decadono a zero.
+        /// Server-only. Rev AH (QD-γ): rotazione 6DoF via Quaternion incrementale
+        /// locale. Se in MANUAL, insegue i rate target (yaw+pitch+roll) con
+        /// accelerazione angolare, poi compone il delta locale sul quaternion
+        /// corrente.
+        ///
+        /// MS-2 (Rev AH): rimossa la restrizione minSpeedToSteer. Rotation
+        /// disponibile in Manual indipendentemente dalla velocità (coerente con
+        /// 6DoF spaziale: la nave ha RCS per riorientarsi da ferma).
+        ///
+        /// Local space multiply: LogRot * delta applica delta come rotazione
+        /// egocentrica (attorno agli assi locali della nave). Feel corretto per
+        /// sim spaziale — "il pilota muove la nave dal suo punto di vista".
         /// </summary>
         private void UpdateOrientation()
         {
             var propulsion = PropulsionSystem.Instance;
-            bool canSteer = CurrentNavState == NavigationState.Manual
-                         && CurrentSpeed >= minSpeedToSteer;
+
+            // MS-2 (Rev AH): canSteer non dipende più dalla velocità.
+            // Vecchio: canSteer = Manual && CurrentSpeed >= minSpeedToSteer
+            // Nuovo:   canSteer = Manual
+            bool canSteer = CurrentNavState == NavigationState.Manual;
 
             float dt = Time.fixedDeltaTime;
 
             float targetYawRate = canSteer ? _manualLookInput.x * manualYawSpeedDegPerSec : 0f;
             float targetPitchRate = canSteer ? -_manualLookInput.y * manualPitchSpeedDegPerSec : 0f;
+            float targetRollRate = canSteer ? _manualLookInput.z * manualRollSpeedDegPerSec : 0f;
 
-            float yawAccel, pitchAccel;
+            float yawAccel, pitchAccel, rollAccel;
             if (propulsion != null && propulsion.YawAcceleration > 0f)
             {
                 yawAccel = propulsion.YawAcceleration;
                 pitchAccel = propulsion.PitchAcceleration;
+                rollAccel = propulsion.RollAcceleration;
             }
             else
             {
+                // Fallback quando PropulsionData non è configurata (edge case
+                // di boot / test senza SO). Default coerenti con PropulsionUpgradeData.
                 yawAccel = 60f;
                 pitchAccel = 45f;
+                rollAccel = 45f;
             }
 
             _currentYawRate = MoveToward(_currentYawRate, targetYawRate, yawAccel * dt);
             _currentPitchRate = MoveToward(_currentPitchRate, targetPitchRate, pitchAccel * dt);
+            _currentRollRate = MoveToward(_currentRollRate, targetRollRate, rollAccel * dt);
 
-            if (Mathf.Abs(_currentYawRate) < 0.01f && Mathf.Abs(_currentPitchRate) < 0.01f)
+            // Early exit: nessun rate significativo su nessun asse.
+            if (Mathf.Abs(_currentYawRate) < 0.01f
+             && Mathf.Abs(_currentPitchRate) < 0.01f
+             && Mathf.Abs(_currentRollRate) < 0.01f)
                 return;
 
-            Vector3 euler = _logicalRotation.Value.eulerAngles;
-            float yaw = NormalizeAngle(euler.y);
-            float pitch = NormalizeAngle(euler.x);
+            // Rev AH (QD-γ) — Quaternion incrementale locale:
+            //   delta rappresenta rotazione (pitchDelta, yawDelta, rollDelta) in
+            //   local space della nave. Applicato via post-multiply (LogRot * delta):
+            //     - pitch attorno al RIGHT locale (X)
+            //     - yaw   attorno all'UP locale   (Y)
+            //     - roll  attorno al FORWARD locale (Z)
+            //   NO gimbal lock (dt piccolo → nessuna singolarità Euler nel delta).
+            //   NO clamp pitch (6DoF completo, ogni assetto raggiungibile).
+            Quaternion delta = Quaternion.Euler(
+                _currentPitchRate * dt,
+                _currentYawRate * dt,
+                _currentRollRate * dt);
 
-            yaw += _currentYawRate * dt;
-            pitch += _currentPitchRate * dt;
+            _logicalRotation.Value = _logicalRotation.Value * delta;
 
-            pitch = Mathf.Clamp(pitch, -pitchClampDegrees, +pitchClampDegrees);
-
-            _logicalRotation.Value = Quaternion.Euler(pitch, yaw, 0f);
+            // Rev AI (fix rotation collision v3 — definitivo).
+            //
+            // Sostituisce il fix v1 (freeze reattivo, che incastrava la nave)
+            // e il fix v2 (freeze preventivo, mai testato). Approccio Nicolas:
+            // il POI risponde all'urto come per una collision traslazionale —
+            // riceve impulse e scivola via per inerzia. Il player ottiene
+            // spazio per manovrare senza freeze rotation.
+            //
+            // ResolveRotationPenetration:
+            //   - Rileva compenetrazione post-rotation.
+            //   - Applica SEMPRE impulse push-out al POI (Q1-B — uniforme
+            //     con collision traslazionale).
+            //   - Emette OnHardCollision SE impactVelocity ≥ soglia → chain
+            //     effettistica completa (damage hull, shake, audio, banner
+            //     MOTORI OFFLINE via ShipImpactHandler).
+            //
+            // Fix strutturale completo (rotation swept CCD) resta debito D18 M4+.
+            var resolver = PoiCollisionResolver.Instance;
+            if (resolver != null)
+            {
+                resolver.ResolveRotationPenetration(_logicalPosition.Value, _logicalRotation.Value, dt);
+            }
         }
 
         /// <summary>
@@ -329,21 +451,32 @@ namespace SpaceSurvivor.Ship
         // =========================================================================
 
         /// <summary>
-        /// Chiamato da PilotStation, una volta per frame, mentre il Pilota è
-        /// seduto e NavigationState == Manual. lookDelta atteso in [-1, 1].
+        /// Chiamato da PilotStation (via LookToSteerController in AH.3), una volta
+        /// per frame, mentre il Pilota è seduto e NavigationState == Manual.
+        ///
+        /// Rev AH (QD-γ) — firma estesa da Vector2 a Vector3:
+        ///   .x = look horizontal (yaw input), in [-1, +1]
+        ///   .y = look vertical   (pitch input), in [-1, +1] (mouse su = +y → muso su)
+        ///   .z = roll input, in [-1, +1] (A = -1, D = +1 by convention)
+        ///
+        /// Il chiamante (LookToSteerController, AH.3) passa qui l'ECCEDENZA fuori
+        /// dal cono per look, e l'input roll diretto A/D. In AH.1 (prima di AH.3),
+        /// il chiamante temporaneo è PilotStation che passa direttamente il valore
+        /// dell'action "Look" — il coupling completo emerge in AH.3.
         /// </summary>
-        public void SetManualLookInput(Vector2 lookDelta)
+        public void SetManualLookInput(Vector3 lookAndRollInput)
         {
-            Vector2 clamped = new Vector2(
-                Mathf.Clamp(lookDelta.x, -1f, 1f),
-                Mathf.Clamp(lookDelta.y, -1f, 1f));
+            Vector3 clamped = new Vector3(
+                Mathf.Clamp(lookAndRollInput.x, -1f, 1f),
+                Mathf.Clamp(lookAndRollInput.y, -1f, 1f),
+                Mathf.Clamp(lookAndRollInput.z, -1f, 1f));
 
             if (IsServer) _manualLookInput = clamped;
             else SetManualLookInputRpc(clamped);
         }
 
         [Rpc(SendTo.Server)]
-        private void SetManualLookInputRpc(Vector2 lookDelta) => _manualLookInput = lookDelta;
+        private void SetManualLookInputRpc(Vector3 lookAndRollInput) => _manualLookInput = lookAndRollInput;
 
         /// <summary>
         /// Fase 3 3.1.3 — server-only setter di LogicalPosition, chiamato dal
@@ -362,6 +495,13 @@ namespace SpaceSurvivor.Ship
         /// <summary>
         /// Fase 3 3.1.3 — server-only setter di LogicalRotation, chiamato dal
         /// DockingController per l'auto-align rotazionale.
+        ///
+        /// NOTA STORICA (Rev AH audit): l'auto-align rotazionale è stato RIMOSSO
+        /// in Fase 3.1.5 (Opzione 3). Grep procedurale conferma zero callers
+        /// esterni di questa API. Mantenuta come API per eventuali riabilitazioni
+        /// future dell'auto-align o override server-driven della rotation nave.
+        /// Non rimuoverla senza controllare che il debito D nessuno l'abbia
+        /// nel frattempo riesumata.
         /// </summary>
         public void SetLogicalRotation(Quaternion newRot)
         {
@@ -384,34 +524,39 @@ namespace SpaceSurvivor.Ship
             return current + Mathf.Sign(diff) * maxDelta;
         }
 
-        private static float NormalizeAngle(float angleDeg)
-        {
-            angleDeg %= 360f;
-            if (angleDeg > 180f) angleDeg -= 360f;
-            else if (angleDeg < -180f) angleDeg += 360f;
-            return angleDeg;
-        }
-
         // =========================================================================
         // DEBUG GUI
         // =========================================================================
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
         private void OnGUI()
         {
+            // Rev AH — display esteso a 6DoF. Rimossa riga "CanSteer" (dipendeva
+            // da minSpeedToSteer, ora sempre true in Manual per MS-2).
+            // Aggiunta riga rate roll accanto a yaw/pitch.
             Vector3 euler = _logicalRotation.Value.eulerAngles;
-            float yaw = NormalizeAngle(euler.y);
-            float pitch = NormalizeAngle(euler.x);
 
-            GUILayout.BeginArea(new Rect(10, Screen.height - 140, 340, 130));
+            GUILayout.BeginArea(new Rect(10, Screen.height - 140, 380, 130));
             GUILayout.BeginVertical("box");
             GUILayout.Label($"[ShipMovement] {(IsServer ? "SRV" : "CLT")} (stato logico — 'Nave' non si muove)");
             GUILayout.Label($"NavState: {CurrentNavState} · Speed: {CurrentSpeed:F1} m/s");
-            GUILayout.Label($"Rotation: yaw {yaw:F1}° · pitch {pitch:F1}°");
-            GUILayout.Label($"Rate: yaw {_currentYawRate:F1}°/s · pitch {_currentPitchRate:F1}°/s");
-            GUILayout.Label($"CanSteer: {(CurrentNavState == NavigationState.Manual && CurrentSpeed >= minSpeedToSteer)}");
+            GUILayout.Label($"Euler(readout): yaw {NormalizeAngleDisplay(euler.y):F0}° · pitch {NormalizeAngleDisplay(euler.x):F0}° · roll {NormalizeAngleDisplay(euler.z):F0}°");
+            GUILayout.Label($"Rate: yaw {_currentYawRate:F1}°/s · pitch {_currentPitchRate:F1}°/s · roll {_currentRollRate:F1}°/s");
             GUILayout.Label($"LogicalPos: ({_logicalPosition.Value.x:F0}, {_logicalPosition.Value.y:F0}, {_logicalPosition.Value.z:F0})");
             GUILayout.EndVertical();
             GUILayout.EndArea();
+        }
+
+        /// <summary>
+        /// Solo per il debug GUI: converte un angolo Euler 0..360 in -180..+180
+        /// per leggibilità. NON usato dalla logica runtime (che opera direttamente
+        /// su Quaternion senza mai convertire in Euler come stato).
+        /// </summary>
+        private static float NormalizeAngleDisplay(float angleDeg)
+        {
+            angleDeg %= 360f;
+            if (angleDeg > 180f) angleDeg -= 360f;
+            else if (angleDeg < -180f) angleDeg += 360f;
+            return angleDeg;
         }
 #endif
     }

@@ -12,12 +12,23 @@ namespace SpaceSurvivor.Ship
     /// Fase 3 Blocco 3.1 — replicato via NetworkVariable su AnchorSystem.
     /// La UI (PilotHUD/PilotFlightHUD) leggerà questo enum per decidere quale
     /// prompt mostrare (nessuno / warning velocità / disponibile).
+    ///
+    /// Rev AI (QAI-2a): aggiunto Misaligned per il check di allineamento
+    /// asse Y ship con asse Y POI (portellone di attracco su Y).
     /// </summary>
     public enum AnchorabilityState : byte
     {
         None = 0,
         InRangeTooFast = 1,
-        Anchorable = 2
+        Anchorable = 2,
+        /// <summary>
+        /// Rev AI (QAI-1a + QAI-2a) — Tutte le precondizioni base (range,
+        /// cono di approccio, velocità) sono soddisfatte, ma l'asse Y della
+        /// nave non è sufficientemente allineato con l'asse Y del POI. Il
+        /// check è bidirezionale (QAI-4b): la nave capovolta è comunque
+        /// valida. Prompt HUD atteso: "▲ ALLINEA LA NAVE — asse Y con relitto".
+        /// </summary>
+        Misaligned = 3
     }
 
     // ─── AnchorSystem ─────────────────────────────────────────────────────────
@@ -59,6 +70,19 @@ namespace SpaceSurvivor.Ship
                  "grigio. In futuro modulabile per ruolo del Pilota.")]
         [Min(0f)]
         [SerializeField] private float maxSpeedToStartDocking = 30f;
+
+        [Tooltip("Rev AI (QAI-3b) — Soglia MINIMA per |Dot(shipUp, poiUp)| che " +
+                 "l'allineamento sia considerato valido. Bidirezionale (QAI-4b): " +
+                 "la nave capovolta rispetto al POI è accettata (portelloni sopra " +
+                 "e sotto entrambi funzionanti).\n\n" +
+                 "Conversione dot → angolo:\n" +
+                 "  0.99 = 8°  · 0.94 = 20° · 0.87 = 30° (default) · 0.71 = 45° · 0.5 = 60°\n\n" +
+                 "Default 0.87 (tolleranza 30°): stretta ma non punitiva. Con vista " +
+                 "in prima persona limitata, 30° è 'grosso modo dritto' " +
+                 "percettivamente e non richiede zoom mentale sulla precisione. " +
+                 "Sotto la soglia → AnchorabilityState.Misaligned (prompt 'allinea').")]
+        [Range(0f, 1f)]
+        [SerializeField] private float alignmentMinDot = 0.87f;
 
         // ── Network Variables ─────────────────────────────────────────────────
         private readonly NetworkVariable<ulong> _netCurrentAnchorableId =
@@ -187,12 +211,81 @@ namespace SpaceSurvivor.Ship
                 return;
             }
 
+            // Rev AI (QAI-1a) — Priorità dei check post-cone:
+            //   1. Speed (InRangeTooFast) — condizione più basilare, indica
+            //      che il player non ha ancora rallentato per la manovra.
+            //   2. Alignment (Misaligned) — condizione più fine, indica che
+            //      è arrivato ok ma serve piccolo aggiustamento di orientation.
+            //   3. Anchorable — tutto ok.
+            //
+            // Rationale UX: se il player è veloce E disallineato, mostro
+            // prima il warning velocità. Sistemata la velocità, il feedback
+            // passa a Misaligned. Un problema alla volta, dal più basico al
+            // più raffinato.
             float shipSpeed = propulsion.CurrentSpeed;
-            var newState = shipSpeed > maxSpeedToStartDocking
-                ? AnchorabilityState.InRangeTooFast
-                : AnchorabilityState.Anchorable;
+            if (shipSpeed > maxSpeedToStartDocking)
+            {
+                SetAnchorability(bestPoi.NetworkObjectId, AnchorabilityState.InRangeTooFast);
+                return;
+            }
 
-            SetAnchorability(bestPoi.NetworkObjectId, newState);
+            // Rev AI (QAI-3b + QAI-4b) — Check allineamento asse Y ship VERSO il POI.
+            //
+            // CORREZIONE GEOMETRIA post-playtest: la formula precedente
+            // Dot(shipUp, poiUp) validava l'ALLINEAMENTO tra due orientation
+            // (Y ship parallelo a Y POI). Sbagliato per il design: il portellone
+            // di attracco della NAVE è sulla sua Y locale, quindi deve puntare
+            // VERSO il POI, indipendentemente dall'orientation del POI stesso.
+            //
+            // Formula corretta:
+            //   shipUp = LogicalRotation ship * Vector3.up (asse Y ship in world)
+            //   fromPoiToShip = shipPos - poiPos (vettore POI → ship, GIÀ calcolato
+            //     nel loop di cone check e ancora in scope qui — sfruttato per
+            //     evitare ricalcolo).
+            //   dot = Dot(shipUp_norm, fromPoiToShip_norm)
+            //
+            // Interpretazione:
+            //   dot = +1: shipUp punta LONTANO dal POI → pancia verso POI ✓
+            //   dot = -1: shipUp punta VERSO il POI      → dorso verso POI ✓
+            //   dot ≈ 0: shipUp perpendicolare a POI→ship → muso o coda verso POI ✗
+            //
+            // |dot| ≥ threshold: bidirezionalità QAI-4b (pancia OR dorso, entrambi
+            // OK — portelloni sopra e sotto la nave).
+            //
+            // NOTA: uso poi.LogicalPosition (centro POI) invece di
+            // DockingAnchorPositionWorld (posizione portellone POI). Coerente col
+            // resto del sistema (distance e cone check usano LogicalPosition) e
+            // con la tolleranza generosa (30° default) la differenza è
+            // percettivamente trascurabile anche se l'anchor è offset dal centro.
+            //
+            // CONTESTO: fromPoiToShip qui è ricalcolato perché nel loop sopra è
+            // scope-local a foreach — a questo punto siamo fuori dal foreach ed
+            // è più chiaro ricalcolarlo con bestPoi che catturarlo out-of-scope.
+            var shipMovement = ShipMovement.Instance;
+            if (shipMovement != null)
+            {
+                Vector3 shipUp = shipMovement.LogicalUp;
+                Vector3 fromPoiToShip = shipMovement.LogicalPosition - bestPoi.LogicalPosition;
+                float distSqr = fromPoiToShip.sqrMagnitude;
+
+                // Guard degenere: ship == poi (già escluso dal cone check sopra,
+                // ma difensivo). Se distanza ≈ 0 skip il check — non ha senso
+                // parlare di direzione POI→ship se sono sovrapposti.
+                if (distSqr > 1e-4f)
+                {
+                    float alignDot = Vector3.Dot(shipUp.normalized, fromPoiToShip / Mathf.Sqrt(distSqr));
+                    if (Mathf.Abs(alignDot) < alignmentMinDot)
+                    {
+                        SetAnchorability(bestPoi.NetworkObjectId, AnchorabilityState.Misaligned);
+                        return;
+                    }
+                }
+            }
+            // Se ShipMovement.Instance è null (edge case boot), skip alignment
+            // check — degradazione elegante: permette il debug in scene senza
+            // ship, coerente con altri fallback nel sistema.
+
+            SetAnchorability(bestPoi.NetworkObjectId, AnchorabilityState.Anchorable);
         }
 
         private void SetAnchorability(ulong poiId, AnchorabilityState state)

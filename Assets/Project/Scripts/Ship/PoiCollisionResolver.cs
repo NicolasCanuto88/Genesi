@@ -121,6 +121,50 @@ namespace SpaceSurvivor.Ship
         [Min(1.01f)]
         [SerializeField] private float collisionReleaseHysteresis = 1.2f;
 
+        [Tooltip("Rev AI (fix v3.1) — Fattore di attenuazione dell'impulse " +
+                 "rotation-caused rispetto al calcolo raw depth/dt. Default 0.3 " +
+                 "(30% del calcolo raw). Motivazione: rotation collision applica " +
+                 "impulse ogni frame in cui c'è penetrazione (auto-regolante ma " +
+                 "cumulativo). Il calcolo raw depth/dt può essere alto (es. " +
+                 "25 u/s per penetrazione 0.5m), sovraccaricando il POI. " +
+                 "Attenuazione moltiplicativa: impulse effettivo = " +
+                 "(depth/dt × rotationImpulseFactor) × shipMass / poiMass. " +
+                 "\n\nTuning: 0.1 = molto morbido (POI scivola lentamente), " +
+                 "0.3 = default (buon compromesso), 1.0 = raw depth/dt (POI " +
+                 "vola via). Nota: NON impatta la soglia effettistica " +
+                 "(ConfirmMaxVelocity vs impactVelocity raw), solo la forza " +
+                 "fisica applicata al POI.")]
+        [Range(0.01f, 2f)]
+        [SerializeField] private float rotationImpulseFactor = 0.3f;
+
+        [Tooltip("Rev AI (fix v3.3) — Cap sull'impactVelocity raw calcolato come " +
+                 "depth/dt per rotation-caused collisions. Default 8 u/s.\n\n" +
+                 "Motivazione: la formula depth/dt è geometricamente sbagliata come " +
+                 "proxy di velocità di impatto per rotation. Se un compound OBB " +
+                 "allungato entra 'di piatto' (es. dorso/pancia della nave contro " +
+                 "POI), la depth iniziale al primo frame di contatto è governata " +
+                 "dalla LARGHEZZA DELLA FACCIA che compenetra, non dal movimento " +
+                 "angolare vero. Risultato: depth/dt sovrastima drasticamente " +
+                 "l'intensità dell'urto rispetto a un contatto 'di punta' (muso/" +
+                 "coda). Effetti a cascata: severity classification salta a Heavy " +
+                 "(audio più forte con riverbero), damage quadratico esplode, " +
+                 "impulse POI eccessivo.\n\n" +
+                 "Fix minimo: cap l'impactVelocityRaw. Qualunque sia la geometria " +
+                 "di contatto, l'urto rotation-caused non può classificarsi come " +
+                 "più violento di questo valore. Non è fisicamente corretto (la " +
+                 "fisica pura richiederebbe ω × r, velocità tangenziale del " +
+                 "punto di contatto), ma è PERCETTIVAMENTE COERENTE con il " +
+                 "design 'rotation = spinta cinematica moderata, non schianto " +
+                 "violento'.\n\n" +
+                 "Tuning: 5 = molto contenuto (rotation quasi mai Heavy), " +
+                 "8 = default (bilancia coerenza percettiva e feedback fisico), " +
+                 "20 = permissivo (differenza muso/dorso ancora percepibile). " +
+                 "Solo il caso rotation è cappato — le collision traslazionali " +
+                 "usano impactVelocity radialInward non cappata (fisicamente " +
+                 "corretta per il caso traslazionale).")]
+        [Min(0.1f)]
+        [SerializeField] private float rotationImpactVelocityCap = 8f;
+
         [Header("Debug")]
         [Tooltip("Log dettagliato di ogni collisione risolta. Utile in playtest; " +
                  "disattivare in build finale.")]
@@ -133,6 +177,24 @@ namespace SpaceSurvivor.Ship
                  "gameplay normale — introduce rumore in console.")]
         [SerializeField] private bool debugVerbose = false;
 
+        // ── Costanti fisiche (Rev AI — refactor rotation collision) ──────────
+        //
+        // Spostate da ShipImpactHandler in Rev AI. Motivazione: il trasferimento
+        // di momento al POI (ApplyMomentumTransferToPoi) è ora responsabilità
+        // di questo resolver (chiamato sia da ResolveCollision traslazionale
+        // sia da ResolveRotationPenetration). Nessun altro sistema usa queste
+        // costanti — sono dedicate al calcolo dell'impulse fisico.
+        //
+        // Q3 confermata Rev Z: EffectiveShipMass è costante = 1.0. PoiData.Mass
+        // agisce come "manopola del rapporto di massa". Se cambia in futuro,
+        // modificare solo qui — nessun altro punto del sistema lo referenzia.
+
+        /// <summary>Massa effettiva della nave nel calcolo di momento. Q3=1.0 (Rev Z).</summary>
+        private const float EffectiveShipMass = 1.0f;
+
+        /// <summary>Soglia sotto cui la direzione radiale ship→POI è degenere (ship ≈ POI).</summary>
+        private const float DegenerateRadialDistanceEpsilon = 1e-4f;
+
         // ── Stato server-only ─────────────────────────────────────────────────
 
         /// <summary>
@@ -142,6 +204,30 @@ namespace SpaceSurvivor.Ship
         /// o quando il POI despawna.
         /// </summary>
         private readonly HashSet<ulong> _latchedPoiIds = new HashSet<ulong>();
+
+        /// <summary>
+        /// Rev AI (fix v3.2) — Sottoinsieme di _latchedPoiIds che traccia i POI
+        /// il cui latch è stato causato da collisione TRASLAZIONALE (ResolveCollision).
+        ///
+        /// Motivazione: nel caso ibrido "traslazione + rotazione simultanee"
+        /// (nave che arriva a POI con velocità E rotea), l'impulse traslazionale
+        /// è già forte e sufficiente a spingere il POI. Se anche
+        /// ResolveRotationPenetration applicasse il suo impulse (attenuato ma
+        /// continuo), i due si sommerebbero e il POI verrebbe spinto più del
+        /// dovuto (bug segnalato da Nicolas post-v3.1).
+        ///
+        /// Uso di questo set: ResolveRotationPenetration skippa l'impulse
+        /// rotation quando il POI è in _translationLatchedPoiIds
+        /// (traslazione ha già applicato impulse forte). Se il POI è latched
+        /// solo per rotazione (_latchedPoiIds ma NON _translationLatchedPoiIds),
+        /// l'impulse rotation continua ad essere applicato per garantire
+        /// il push-out effettivo.
+        ///
+        /// Coerenza: quando UpdateLatchHysteresis rimuove un POI da
+        /// _latchedPoiIds, deve rimuoverlo anche da questo set. OnNetworkSpawn
+        /// e OnPoiDespawn devono clearare/rimuovere in entrambi i set.
+        /// </summary>
+        private readonly HashSet<ulong> _translationLatchedPoiIds = new HashSet<ulong>();
 
         /// <summary>
         /// Rev AB — frame counter per throttle del log diagnostico "Heartbeat"
@@ -184,6 +270,7 @@ namespace SpaceSurvivor.Ship
             {
                 PoiInstance.OnAnyPoiDespawned -= HandlePoiDespawned;
                 _latchedPoiIds.Clear();
+                _translationLatchedPoiIds.Clear();
             }
 
             if (Instance == this) Instance = null;
@@ -192,7 +279,9 @@ namespace SpaceSurvivor.Ship
         private void HandlePoiDespawned(PoiInstance poi)
         {
             if (poi == null || poi.NetworkObject == null) return;
-            _latchedPoiIds.Remove(poi.NetworkObject.NetworkObjectId);
+            ulong id = poi.NetworkObject.NetworkObjectId;
+            _latchedPoiIds.Remove(id);
+            _translationLatchedPoiIds.Remove(id);
         }
 
         // =========================================================================
@@ -209,6 +298,80 @@ namespace SpaceSurvivor.Ship
 
             /// <summary>true se il clamp ha ridotto la velocità (radial inward > 0). Il chiamante deve chiamare SetCurrentSpeedFromCollision solo se true.</summary>
             public bool VelocityWasClamped;
+        }
+
+        /// <summary>
+        /// Rev AI (fix D18 anticipato, opzione D1-a) — Query-only: verifica se
+        /// il compound della nave, alla posizione+rotation date, compenetra un
+        /// qualunque POI attualmente in scena.
+        ///
+        /// MOTIVAZIONE:
+        ///   Con QD-γ (rotation libera 6DoF Rev AH) la nave può ruotare in place
+        ///   e "spazzare" muso/coda attraverso un POI vicino. ResolveCollision
+        ///   gestisce SOLO clamp traslazionale (candidatePos vs currentPos);
+        ///   la rotation non produce un delta di posizione da clampare, quindi
+        ///   la penetrazione via rotation non viene mai rilevata dal path
+        ///   posizionale.
+        ///
+        ///   Questo metodo esiste come **query pura** (nessun clamp, nessun
+        ///   side effect, nessuna emissione OnHardCollision) da chiamare da
+        ///   ShipMovement.UpdateOrientation PRIMA di applicare la rotation
+        ///   incrementale, per decidere se congelare la rotation nel frame
+        ///   corrente (freeze pattern "sei incastrato, non puoi ruotare").
+        ///
+        ///   Il fix strutturale completo (rotation swept CCD) resta debito
+        ///   D18 per M4+. Questo metodo è la copertura minimale del gap
+        ///   emerso post-AH.
+        ///
+        /// PARAMETRI:
+        ///   shipPos      — posizione da testare (tipicamente
+        ///                  shipMovement.LogicalPosition corrente).
+        ///   shipRotation — rotation da testare (tipicamente
+        ///                  shipMovement.LogicalRotation corrente).
+        ///
+        /// RITORNA:
+        ///   true se ALMENO UN POI ha compenetrazione con il compound ship.
+        ///   Early exit al primo hit (nessun sort, nessuna selezione winner).
+        ///
+        /// COSTO:
+        ///   O(POIs × shipVolumes × poiVolumes) worst case. In pratica basso
+        ///   perché ComputeMaxPenetration ha fast rejection interna (bounding
+        ///   sphere distance) su coppie di volumi non-vicini.
+        ///   Se in playtest emerge lag con molti POI in scena, aggiungere
+        ///   early rejection tramite Data.ApproximateRadius prima della
+        ///   chiamata a ComputeMaxPenetration.
+        ///
+        /// GUARD:
+        ///   Se non IsServer, ship compound non configurato, o zero POI in
+        ///   scena → ritorna false (degradazione elegante).
+        /// </summary>
+        public bool IsShipPenetratingAnyPoi(Vector3 shipPos, Quaternion shipRotation)
+        {
+            if (!IsServer) return false;
+
+            var shipMovement = ShipMovement.Instance;
+            IReadOnlyList<CompoundVolume> shipVolumes =
+                (shipMovement != null && shipMovement.Compound != null)
+                    ? shipMovement.Compound.Volumes
+                    : null;
+            if (shipVolumes == null || shipVolumes.Count == 0) return false;
+
+            foreach (var poi in PoiRegistry.All)
+            {
+                if (poi == null || poi.Data == null) continue;
+                var poiVolumes = poi.CollisionVolumes;
+                if (poiVolumes == null || poiVolumes.Count == 0) continue;
+
+                CompoundColliderMath.PairContact pair =
+                    CompoundColliderMath.ComputeMaxPenetration(
+                        shipPos, shipRotation, shipVolumes,
+                        poi.LogicalPosition, poi.LogicalRotation, poiVolumes,
+                        fallbackNormal: Vector3.up);
+
+                if (pair.Depth > 0f) return true;  // early exit — un hit basta
+            }
+
+            return false;
         }
 
         /// <summary>
@@ -407,6 +570,22 @@ namespace SpaceSurvivor.Ship
             // Emissione evento OnHardCollision (con latch anti-spam per-POI).
             // Semantica invariata: fire una sola volta per sessione di
             // contatto, condizione = velocity aveva componente inward.
+            //
+            // Rev AI (refactor): l'impulse fisico al POI è ora applicato QUI
+            // dal resolver (spostato da ShipImpactHandler.ApplyMomentumTransferToPoi).
+            // Q1-B: applicato SEMPRE indipendente dalla soglia velocità
+            // (nessun early return per impactVelocity sotto ConfirmMaxVelocity).
+            // Il latch anti-spam si applica anche all'impulse: un solo impulso
+            // per sessione di contatto (evita impulse ripetuti mentre POI e
+            // ship sono in contatto continuo). Il POI decade poi per inerzia
+            // (PoiInstance._logicalVelocity decay).
+            //
+            // Il caso rotation-caused (ResolveRotationPenetration) segue una
+            // semantica diversa: impulse ogni frame senza latch, auto-regolato
+            // dalla profondità di penetrazione. Coerente concettualmente:
+            //   - traslazione: "colpo secco" (bam, un impulso forte, POI decade)
+            //   - rotation: "spinta continua" (spingi via il POI mentre ci
+            //                 ruoti dentro, auto-regolato)
             if (radialInward > 0f)
             {
                 ulong poiId = winner.NetworkObject != null
@@ -416,6 +595,18 @@ namespace SpaceSurvivor.Ship
                 if (poiId != 0ul && !_latchedPoiIds.Contains(poiId))
                 {
                     _latchedPoiIds.Add(poiId);
+
+                    // Rev AI (fix v3.2): marca il POI come "latched per traslazione".
+                    // Usato da ResolveRotationPenetration per skippare l'impulse
+                    // rotation-attenuato (che si sommerebbe alla spinta traslazionale
+                    // già applicata). Vedi doc di _translationLatchedPoiIds.
+                    _translationLatchedPoiIds.Add(poiId);
+
+                    // Rev AI (refactor): impulse fisico al POI (spostato da
+                    // ShipImpactHandler). Applicato SEMPRE (Q1-B), la soglia
+                    // agisce solo sull'effettistica ship-side downstream.
+                    ApplyMomentumTransferToPoi(radialInward, winner);
+
                     OnHardCollision?.Invoke(radialInward, winner);
 
                     if (logCollisions)
@@ -486,6 +677,7 @@ namespace SpaceSurvivor.Ship
                 if (poi == null || poi.Data == null)
                 {
                     _latchedPoiIds.Remove(id);
+                    _translationLatchedPoiIds.Remove(id);
                     continue;
                 }
 
@@ -494,6 +686,7 @@ namespace SpaceSurvivor.Ship
                 if (delta.sqrMagnitude > releaseThreshold * releaseThreshold)
                 {
                     _latchedPoiIds.Remove(id);
+                    _translationLatchedPoiIds.Remove(id);
                     if (logCollisions)
                     {
                         Debug.Log($"[PoiCollisionResolver] Latch rilasciato per POI={poi.Data.DisplayName} " +
@@ -540,5 +733,308 @@ namespace SpaceSurvivor.Ship
             GUILayout.EndArea();
         }
 #endif
+
+        // =========================================================================
+        // PHYSICS RESPONSE (Rev AI — refactor rotation collision)
+        // =========================================================================
+
+        /// <summary>
+        /// Trasferimento di momento al POI colpito. Applica un impulso radiale
+        /// lungo la direzione ship→POI, con magnitudo proporzionale a
+        /// impactVelocity e scalata dal rapporto di massa (Q3 confermata Rev Z:
+        /// EffectiveShipMass = 1.0, PoiData.Mass è la manopola del rapporto).
+        ///
+        /// Rev AI (refactor): spostato da ShipImpactHandler.ApplyMomentumTransferToPoi.
+        /// Ora è responsabilità del resolver, chiamato SIA da ResolveCollision
+        /// (traslazionale) SIA da ResolveRotationPenetration (rotation-caused).
+        ///
+        /// Q1-B (Rev AI): applicato SEMPRE, senza soglia velocità. Coerenza tra
+        /// rotation-caused e traslation-caused. La soglia si applica SOLO
+        /// all'effettistica ship-side (danno/shake/audio/banner) via
+        /// OnHardCollision → ShipImpactHandler.HandleHardCollision.
+        ///
+        /// GUARD:
+        ///   - dist &lt; DegenerateRadialDistanceEpsilon → skip (direzione radiale
+        ///     mal definita, ship ≈ POI).
+        ///   - poi.Data.Mass ≤ 0 → skip con warning (config invalida).
+        /// </summary>
+        private void ApplyMomentumTransferToPoi(float impactVelocity, PoiInstance poi)
+        {
+            if (poi == null || poi.Data == null) return;
+
+            var shipMovement = ShipMovement.Instance;
+            if (shipMovement == null) return;
+
+            Vector3 shipToPoi = poi.LogicalPosition - shipMovement.LogicalPosition;
+            float dist = shipToPoi.magnitude;
+
+            if (dist < DegenerateRadialDistanceEpsilon)
+            {
+                if (debugVerbose)
+                {
+                    Debug.LogWarning($"[PoiCollisionResolver] Direzione radiale degenere " +
+                                     $"(dist={dist:E2} u) — impulse skippato (POI={poi.Data.DisplayName}).");
+                }
+                return;
+            }
+
+            Vector3 radialDir = shipToPoi / dist;
+
+            float poiMass = poi.Data.Mass;
+            if (poiMass <= 0f)
+            {
+                Debug.LogWarning($"[PoiCollisionResolver] PoiData.Mass non positiva ({poiMass}) " +
+                                 $"su {poi.Data.DisplayName} — impulse skippato.");
+                return;
+            }
+
+            float deltaVMagnitude = impactVelocity * EffectiveShipMass / poiMass;
+            Vector3 impulse = radialDir * deltaVMagnitude;
+
+            poi.AddImpulse(impulse);
+
+            if (debugVerbose)
+            {
+                Debug.Log($"[PoiCollisionResolver] IMPULSO → POI={poi.Data.DisplayName}, " +
+                          $"deltaV={deltaVMagnitude:F3} u/s, " +
+                          $"dir=({radialDir.x:F2},{radialDir.y:F2},{radialDir.z:F2}), " +
+                          $"poiMass={poiMass:F1}, v={impactVelocity:F2} u/s");
+            }
+        }
+
+        /// <summary>
+        /// Rev AI (fix rotation collision v3 definitivo) — Rileva compenetrazione
+        /// causata da rotation pura e applica physics response completa.
+        ///
+        /// MOTIVAZIONE:
+        ///   ResolveCollision gestisce SOLO clamp traslazionale (candidatePos vs
+        ///   currentPos). Con QD-γ (rotation libera 6DoF Rev AH), la nave ferma
+        ///   sopra/dentro un POI che ruota fa "spazzare" muso/coda attraverso
+        ///   il volume POI senza rilevazione dal path posizionale.
+        ///
+        ///   Questo metodo è la copertura del gap: chiamato da
+        ///   ShipMovement.UpdateOrientation DOPO aver applicato la rotation,
+        ///   rileva la penetrazione risultante e:
+        ///     1. Applica SEMPRE impulse push-out al POI (auto-libera la nave
+        ///        via inerzia del POI stesso — invariante Nicolas: "il POI
+        ///        scivola via, il pilota ha spazio per manovrare").
+        ///     2. Emette OnHardCollision solo SE impactVelocity ≥ soglia →
+        ///        chain effettistica completa (danno hull, shake, audio,
+        ///        banner MOTORI OFFLINE).
+        ///
+        ///   Coerente con la chain esistente per collision traslazionale.
+        ///   Il fix strutturale completo (rotation swept CCD) resta debito
+        ///   D18 per M4+.
+        ///
+        /// PARAMETRI:
+        ///   shipPos      — posizione ship corrente (post-integration).
+        ///   shipRotation — rotation ship corrente (post-integration).
+        ///   dt           — Time.fixedDeltaTime, usato per convertire depth →
+        ///                  impactVelocity (depth/dt = "velocità di penetrazione").
+        ///
+        /// FORMULA impactVelocity (Q2 confermata Nicolas):
+        ///   impactVelocity = depth / dt
+        ///   Se penetri 0.1 m in un frame di 0.02s, sei "andato dentro" a
+        ///   5 m/s. Rappresenta l'intensità della compenetrazione. Confrontabile
+        ///   con ConfirmMaxVelocity per la soglia effettistica.
+        ///
+        /// Q1-B (Rev AI): impulse SEMPRE applicato (indipendente da soglia).
+        /// Soglia SOLO per emissione OnHardCollision → effettistica.
+        ///
+        /// GUARD:
+        ///   - Non IsServer / ship compound non configurato / zero POI in scena →
+        ///     no-op silenzioso.
+        ///   - dt ≤ 0 → no-op (frame degenere).
+        /// </summary>
+        public void ResolveRotationPenetration(Vector3 shipPos, Quaternion shipRotation, float dt)
+        {
+            if (!IsServer) return;
+            if (dt <= 0f) return;
+
+            var shipMovement = ShipMovement.Instance;
+            IReadOnlyList<CompoundVolume> shipVolumes =
+                (shipMovement != null && shipMovement.Compound != null)
+                    ? shipMovement.Compound.Volumes
+                    : null;
+            if (shipVolumes == null || shipVolumes.Count == 0)
+            {
+                // Anche senza ship compound, chiama UpdateLatchHysteresis per
+                // rilasciare latch stale (edge case: boot senza ship compound).
+                UpdateLatchHysteresis(shipPos);
+                return;
+            }
+
+            // Selezione POI vincitore: quello con depth di compenetrazione
+            // massima (analogo a ResolveCollision, riuso del pattern).
+            PoiInstance winner = null;
+            float winnerDepth = 0f;
+
+            foreach (var poi in PoiRegistry.All)
+            {
+                if (poi == null || poi.Data == null) continue;
+                var poiVolumes = poi.CollisionVolumes;
+                if (poiVolumes == null || poiVolumes.Count == 0) continue;
+
+                CompoundColliderMath.PairContact pair =
+                    CompoundColliderMath.ComputeMaxPenetration(
+                        shipPos, shipRotation, shipVolumes,
+                        poi.LogicalPosition, poi.LogicalRotation, poiVolumes,
+                        fallbackNormal: Vector3.up);
+
+                if (pair.Depth > winnerDepth)
+                {
+                    winnerDepth = pair.Depth;
+                    winner = poi;
+                }
+            }
+
+            // Rev AI (fix v3.1): rilascia latch stale ANCHE se non c'è
+            // penetrazione corrente. Il POI potrebbe essersi allontanato
+            // per inerzia dall'impulse ricevuto in frame precedenti.
+            // Chiamata prima del early return "no winner" per gestire il
+            // caso "player smette di ruotare, POI decade, latch da liberare".
+            UpdateLatchHysteresis(shipPos);
+
+            if (winner == null) return;  // nessuna penetrazione
+
+            // Q2: velocità di penetrazione raw = depth/dt.
+            // Usata come metrica per la soglia effettistica (confrontabile
+            // con ConfirmMaxVelocity).
+            //
+            // Rev AI (fix v3.3): CAP applicato per correggere lo sballamento
+            // geometrico. La formula depth/dt sovrastima l'intensità quando
+            // il compound ship entra "di piatto" (es. dorso/pancia OBB
+            // allungato contro POI): la depth iniziale è governata dalla
+            // larghezza della faccia che compenetra, non dal movimento
+            // angolare. Cap regolarizza la metrica a un valore percettivamente
+            // coerente con "rotation = spinta cinematica moderata, non
+            // schianto violento". Vedi rotationImpactVelocityCap doc per
+            // motivazione geometrica dettagliata.
+            //
+            // Effetto: qualunque geometria di contatto (muso vs dorso), lo
+            // stesso rate rotazionale produce lo stesso boom + impulse.
+            // La differenza tra "collisione di punta" e "collisione di piatto"
+            // sparisce dal feedback player — coerente con il design semplificato
+            // dell'impulse rotation-caused (applicato al centro POI, senza
+            // generare rotazione POI).
+            float impactVelocityRaw = Mathf.Min(winnerDepth / dt, rotationImpactVelocityCap);
+
+            // Rev AI (fix v3.1): impulse ATTENUATO per rotation-caused.
+            // Motivazione: impulse è applicato ogni frame di contatto
+            // (auto-regolante via depth). Con calcolo raw depth/dt, la
+            // spinta cumulativa era eccessiva (POI volava via troppo forte).
+            // Attenuazione moltiplicativa via rotationImpulseFactor
+            // (default 0.3, tunabile in Inspector).
+            //
+            // NOTA: la soglia effettistica confronta impactVelocityRaw
+            // (metrica intensità urto), NON impactVelocityAttenuated
+            // (usato solo per l'impulse fisico). Un urto rotazionale
+            // "forte" (raw > soglia) triggera boom + banner motori,
+            // indipendentemente dall'attenuazione applicata al POI.
+            float impactVelocityAttenuated = impactVelocityRaw * rotationImpulseFactor;
+
+            // Rev AI (fix v3.2): gate impulse rotation dal secondo latch.
+            //
+            // Se il POI è in _translationLatchedPoiIds, significa che
+            // ResolveCollision (traslazionale) ha già applicato un impulse
+            // FORTE al POI in questo o in un frame precedente della sessione
+            // di contatto corrente. In quel caso, sommare anche l'impulse
+            // rotation-attenuato sarebbe eccessivo (bug segnalato da Nicolas
+            // post-v3.1: "collido con velocità E rotazione, le due cose si
+            // sommano").
+            //
+            // Se il POI è latched SOLO per rotation (in _latchedPoiIds ma NON
+            // in _translationLatchedPoiIds), l'impulse rotation continua ad
+            // essere applicato per garantire il push-out continuo (necessario
+            // in caso puro rotation: nave ferma che rotea contro POI — l'impulse
+            // rotation-only iniziale sarebbe troppo debole per far uscire il
+            // POI oltre soglia isteresi, servono più frame di push-out cumulato).
+            //
+            // Se il POI non è latched affatto → impulse applicato normalmente.
+            //
+            // Q1-B: impulse SEMPRE (indipendente da soglia effettistica) — la
+            // logica di gate qui è ortogonale, riguarda la coesistenza con
+            // traslazione.
+            ulong winnerId = winner.NetworkObject != null
+                ? winner.NetworkObject.NetworkObjectId
+                : 0ul;
+
+            bool translationAlreadyPushed = winnerId != 0ul
+                && _translationLatchedPoiIds.Contains(winnerId);
+
+            if (!translationAlreadyPushed)
+            {
+                // Fix v3.1: applicato con magnitudo attenuata.
+                ApplyMomentumTransferToPoi(impactVelocityAttenuated, winner);
+            }
+            else if (debugVerbose)
+            {
+                Debug.Log($"[PoiCollisionResolver] Impulse rotation SKIPPATO " +
+                          $"su POI={winner.Data.DisplayName} — POI già spinto " +
+                          $"da collisione traslazionale (evita cumulo).");
+            }
+
+            // Effettistica: solo se sopra soglia (chain OnHardCollision →
+            // ShipImpactHandler.HandleHardCollision → damage/shake/audio/banner).
+            // Recupero soglia da DockingController (source of truth invariante
+            // Rev X + Rev Z: un solo tuning globale per la soglia di "urto
+            // significativo"). Se DockingController mancante (edge case boot),
+            // fallback conservativo 1.0 u/s coerente col fallback di
+            // ShipImpactHandler.HandleHardCollision.
+            float threshold = DockingController.Instance != null
+                ? DockingController.Instance.ConfirmMaxVelocity
+                : 1.0f;
+
+            // Rev AI (fix v3.1): LATCH ANTI-SPAM per emissione OnHardCollision.
+            // Il latch è lo STESSO usato da ResolveCollision (traslazionale) —
+            // _latchedPoiIds. Semantica unificata: un solo "boom" per sessione
+            // di contatto con lo stesso POI, sia rotazionale sia traslazionale.
+            //
+            // L'impulse fisico (sopra) resta continuo per garantire push-out
+            // effettivo del POI. Solo la CHAIN EFFETTISTICA (damage hull +
+            // shake camera + audio one-shot + banner MOTORI OFFLINE) è
+            // gated dal latch.
+            //
+            // Il rilascio del latch avviene via UpdateLatchHysteresis
+            // (chiamato ad ogni frame sopra) quando il POI si allontana oltre
+            // ApproximateRadius × collisionReleaseHysteresis (default 1.2).
+            // Il player che continua a ruotare contro POI vede: 1 boom → POI
+            // scivola via silenziosamente per inerzia → se torna a contatto,
+            // nuovo boom (latch rilasciato dall'isteresi distanza).
+            if (impactVelocityRaw >= threshold)
+            {
+                ulong poiId = winner.NetworkObject != null
+                    ? winner.NetworkObject.NetworkObjectId
+                    : 0ul;
+
+                if (poiId != 0ul && !_latchedPoiIds.Contains(poiId))
+                {
+                    _latchedPoiIds.Add(poiId);
+
+                    if (debugVerbose)
+                    {
+                        Debug.LogWarning($"[PoiCollisionResolver] ROTATION COLLISION → " +
+                                         $"POI={winner.Data.DisplayName}, depth={winnerDepth:F3} u, " +
+                                         $"vRaw={impactVelocityRaw:F2} u/s (soglia={threshold:F2}), " +
+                                         $"vAttenuated={impactVelocityAttenuated:F2} u/s → " +
+                                         $"emetto OnHardCollision (effettistica attiva) + latch.");
+                    }
+                    OnHardCollision?.Invoke(impactVelocityRaw, winner);
+                }
+                else if (debugVerbose)
+                {
+                    Debug.Log($"[PoiCollisionResolver] ROTATION COLLISION continua " +
+                              $"su POI={winner.Data.DisplayName} già latched — solo " +
+                              $"impulse push-out attenuato, nessuna emissione ripetuta.");
+                }
+            }
+            else if (debugVerbose)
+            {
+                Debug.Log($"[PoiCollisionResolver] ROTATION COLLISION (sotto soglia) → " +
+                          $"POI={winner.Data.DisplayName}, depth={winnerDepth:F3} u, " +
+                          $"vRaw={impactVelocityRaw:F2} u/s < {threshold:F2} u/s → " +
+                          $"solo impulse push-out attenuato, no effettistica.");
+            }
+        }
     }
 }

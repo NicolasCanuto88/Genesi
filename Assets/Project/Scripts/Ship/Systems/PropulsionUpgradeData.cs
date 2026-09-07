@@ -45,6 +45,16 @@ namespace SpaceSurvivor.Ship
                  "raggiungere piena velocità di pitch da fermo. Moltiplicata per degradazione.")]
         public float pitchAcceleration = 45f;
 
+        [Tooltip("Rev AH (QD-γ, Roll-inertia-2) — accelerazione angolare per roll in " +
+                 "gradi/sec². Il roll è direct steering via A/D (Roll-γ), MA con inerzia " +
+                 "rotazionale simmetrica a yaw/pitch: al rilascio del tasto il rate di " +
+                 "roll decelera con questa accelerazione, non si azzera istantaneo. " +
+                 "L'assetto roll accumulato NON torna a zero (Roll-hold) — coerente con " +
+                 "6DoF spaziale (nessuna gravità che raddrizzi la nave). Default 45°/s² " +
+                 "come pitchAcceleration; tunabile separatamente in playtest. " +
+                 "Moltiplicata per degradazione.")]
+        public float rollAcceleration = 45f;
+
         [Header("Consumo Energetico")]
         [Tooltip("Watt consumati in AUTOPILOT. Moltiplicati per degradazione.")]
         public float wattsAutopilot = 50f;

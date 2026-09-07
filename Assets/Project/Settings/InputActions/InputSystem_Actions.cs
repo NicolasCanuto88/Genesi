@@ -853,7 +853,7 @@ public partial class @InputSystem_Actions: IInputActionCollection2, IDisposable
                 {
                     ""name"": ""negative"",
                     ""id"": ""1e1ba0cc-208e-48ff-8229-c8b4fd44c4b8"",
-                    ""path"": ""<Gamepad>/leftTrigger"",
+                    ""path"": ""<Gamepad>/leftStick/down"",
                     ""interactions"": """",
                     ""processors"": """",
                     ""groups"": """",
@@ -864,7 +864,7 @@ public partial class @InputSystem_Actions: IInputActionCollection2, IDisposable
                 {
                     ""name"": ""positive"",
                     ""id"": ""38b1f8d7-396f-4ccf-b143-b34ff120c671"",
-                    ""path"": ""<Gamepad>/rightTrigger"",
+                    ""path"": ""<Gamepad>/leftStick/up"",
                     ""interactions"": """",
                     ""processors"": """",
                     ""groups"": """",
@@ -1440,6 +1440,15 @@ public partial class @InputSystem_Actions: IInputActionCollection2, IDisposable
                     ""processors"": """",
                     ""interactions"": """",
                     ""initialStateCheck"": false
+                },
+                {
+                    ""name"": ""Roll"",
+                    ""type"": ""Button"",
+                    ""id"": ""cf71ebb4-9ec4-438a-91b6-f87a0b37265f"",
+                    ""expectedControlType"": """",
+                    ""processors"": """",
+                    ""interactions"": """",
+                    ""initialStateCheck"": false
                 }
             ],
             ""bindings"": [
@@ -1530,6 +1539,72 @@ public partial class @InputSystem_Actions: IInputActionCollection2, IDisposable
                     ""action"": ""PilotFTLJump"",
                     ""isComposite"": false,
                     ""isPartOfComposite"": false
+                },
+                {
+                    ""name"": ""1D Axis"",
+                    ""id"": ""f1969eaf-084c-489c-b588-22d89ae3f4bf"",
+                    ""path"": ""1DAxis"",
+                    ""interactions"": """",
+                    ""processors"": """",
+                    ""groups"": """",
+                    ""action"": ""Roll"",
+                    ""isComposite"": true,
+                    ""isPartOfComposite"": false
+                },
+                {
+                    ""name"": ""negative"",
+                    ""id"": ""95ac197c-907e-4868-bdf2-cf5297b59c53"",
+                    ""path"": ""<Keyboard>/d"",
+                    ""interactions"": """",
+                    ""processors"": """",
+                    ""groups"": """",
+                    ""action"": ""Roll"",
+                    ""isComposite"": false,
+                    ""isPartOfComposite"": true
+                },
+                {
+                    ""name"": ""positive"",
+                    ""id"": ""492fa492-b51b-4305-8e63-d27e604439b3"",
+                    ""path"": ""<Keyboard>/a"",
+                    ""interactions"": """",
+                    ""processors"": """",
+                    ""groups"": """",
+                    ""action"": ""Roll"",
+                    ""isComposite"": false,
+                    ""isPartOfComposite"": true
+                },
+                {
+                    ""name"": ""1D Axis"",
+                    ""id"": ""ca9e714c-e7fb-49a9-a107-515d32d8b143"",
+                    ""path"": ""1DAxis"",
+                    ""interactions"": """",
+                    ""processors"": """",
+                    ""groups"": """",
+                    ""action"": ""Roll"",
+                    ""isComposite"": true,
+                    ""isPartOfComposite"": false
+                },
+                {
+                    ""name"": ""negative"",
+                    ""id"": ""b4e324c0-1c2a-4117-ae97-13991e2ada41"",
+                    ""path"": ""<Gamepad>/rightTrigger"",
+                    ""interactions"": """",
+                    ""processors"": """",
+                    ""groups"": """",
+                    ""action"": ""Roll"",
+                    ""isComposite"": false,
+                    ""isPartOfComposite"": true
+                },
+                {
+                    ""name"": ""positive"",
+                    ""id"": ""f8a6d2d5-64d7-48cc-b37b-01af6e9170bb"",
+                    ""path"": ""<Gamepad>/leftTrigger"",
+                    ""interactions"": """",
+                    ""processors"": """",
+                    ""groups"": """",
+                    ""action"": ""Roll"",
+                    ""isComposite"": false,
+                    ""isPartOfComposite"": true
                 }
             ]
         },
@@ -1894,6 +1969,7 @@ public partial class @InputSystem_Actions: IInputActionCollection2, IDisposable
         m_Pilot_PilotManual = m_Pilot.FindAction("PilotManual", throwIfNotFound: true);
         m_Pilot_PilotShieldToggle = m_Pilot.FindAction("PilotShieldToggle", throwIfNotFound: true);
         m_Pilot_PilotFTLJump = m_Pilot.FindAction("PilotFTLJump", throwIfNotFound: true);
+        m_Pilot_Roll = m_Pilot.FindAction("Roll", throwIfNotFound: true);
         // PilotAnchor
         m_PilotAnchor = asset.FindActionMap("PilotAnchor", throwIfNotFound: true);
         m_PilotAnchor_ToggleAnchor = m_PilotAnchor.FindAction("ToggleAnchor", throwIfNotFound: true);
@@ -2469,6 +2545,7 @@ public partial class @InputSystem_Actions: IInputActionCollection2, IDisposable
     private readonly InputAction m_Pilot_PilotManual;
     private readonly InputAction m_Pilot_PilotShieldToggle;
     private readonly InputAction m_Pilot_PilotFTLJump;
+    private readonly InputAction m_Pilot_Roll;
     /// <summary>
     /// Provides access to input actions defined in input action map "Pilot".
     /// </summary>
@@ -2496,6 +2573,10 @@ public partial class @InputSystem_Actions: IInputActionCollection2, IDisposable
         /// Provides access to the underlying input action "Pilot/PilotFTLJump".
         /// </summary>
         public InputAction @PilotFTLJump => m_Wrapper.m_Pilot_PilotFTLJump;
+        /// <summary>
+        /// Provides access to the underlying input action "Pilot/Roll".
+        /// </summary>
+        public InputAction @Roll => m_Wrapper.m_Pilot_Roll;
         /// <summary>
         /// Provides access to the underlying input action map instance.
         /// </summary>
@@ -2534,6 +2615,9 @@ public partial class @InputSystem_Actions: IInputActionCollection2, IDisposable
             @PilotFTLJump.started += instance.OnPilotFTLJump;
             @PilotFTLJump.performed += instance.OnPilotFTLJump;
             @PilotFTLJump.canceled += instance.OnPilotFTLJump;
+            @Roll.started += instance.OnRoll;
+            @Roll.performed += instance.OnRoll;
+            @Roll.canceled += instance.OnRoll;
         }
 
         /// <summary>
@@ -2557,6 +2641,9 @@ public partial class @InputSystem_Actions: IInputActionCollection2, IDisposable
             @PilotFTLJump.started -= instance.OnPilotFTLJump;
             @PilotFTLJump.performed -= instance.OnPilotFTLJump;
             @PilotFTLJump.canceled -= instance.OnPilotFTLJump;
+            @Roll.started -= instance.OnRoll;
+            @Roll.performed -= instance.OnRoll;
+            @Roll.canceled -= instance.OnRoll;
         }
 
         /// <summary>
@@ -3127,6 +3214,13 @@ public partial class @InputSystem_Actions: IInputActionCollection2, IDisposable
         /// <seealso cref="UnityEngine.InputSystem.InputAction.performed" />
         /// <seealso cref="UnityEngine.InputSystem.InputAction.canceled" />
         void OnPilotFTLJump(InputAction.CallbackContext context);
+        /// <summary>
+        /// Method invoked when associated input action "Roll" is either <see cref="UnityEngine.InputSystem.InputAction.started" />, <see cref="UnityEngine.InputSystem.InputAction.performed" /> or <see cref="UnityEngine.InputSystem.InputAction.canceled" />.
+        /// </summary>
+        /// <seealso cref="UnityEngine.InputSystem.InputAction.started" />
+        /// <seealso cref="UnityEngine.InputSystem.InputAction.performed" />
+        /// <seealso cref="UnityEngine.InputSystem.InputAction.canceled" />
+        void OnRoll(InputAction.CallbackContext context);
     }
     /// <summary>
     /// Interface to implement callback methods for all input action callbacks associated with input actions defined by "PilotAnchor" which allows adding and removing callbacks.
