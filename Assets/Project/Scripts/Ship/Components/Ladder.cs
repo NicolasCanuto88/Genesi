@@ -7,6 +7,13 @@ using UnityEngine;
 [RequireComponent(typeof(BoxCollider))]
 public class Ladder : MonoBehaviour, IInteractable
 {
+    [Header("Debug")]
+    [Tooltip("Log diagnostici verbosi (ingresso/uscita/snap scala). Standard Rev BA — default off.")]
+    [SerializeField] private bool logVerbose = false;
+    [Tooltip("Disegna i gizmi dei punti scala (Scene view). Standard Rev BA — default off.")]
+    [SerializeField] private bool drawDebugGizmos = false;
+    private void LogV(string msg) { if (logVerbose) Debug.Log(msg); }
+
     [Header("Ladder Settings")]
     [SerializeField] private float climbSpeed = 3f;
     [SerializeField] private Transform topExitPoint;
@@ -147,7 +154,7 @@ public class Ladder : MonoBehaviour, IInteractable
 
         if (!snapped)
         {
-            Debug.Log("[Ladder] Exit mid-climb - will fall");
+            LogV("[Ladder] Exit mid-climb - will fall");
         }
 
         ExitLadder();
@@ -202,7 +209,7 @@ public class Ladder : MonoBehaviour, IInteractable
         player.transform.rotation = Quaternion.LookRotation(ladderNormal);
         verticalRotation = 0f;
 
-        Debug.Log("[Ladder] Player entered");
+        LogV("[Ladder] Player entered");
     }
 
     private void ExitLadder()
@@ -227,7 +234,7 @@ public class Ladder : MonoBehaviour, IInteractable
         playerCharacterController = null;
         playerCamera = null;
 
-        Debug.Log("[Ladder] Player exited");
+        LogV("[Ladder] Player exited");
     }
 
     private void HandleCameraLook(Vector2 lookInput)
@@ -254,7 +261,7 @@ public class Ladder : MonoBehaviour, IInteractable
             if (dist < snapDistance)
             {
                 currentPlayer.transform.position = topExitPoint.position;
-                Debug.Log($"[Ladder] Snapped to top ({dist:F2}m)");
+                LogV($"[Ladder] Snapped to top ({dist:F2}m)");
                 return true;
             }
         }
@@ -266,7 +273,7 @@ public class Ladder : MonoBehaviour, IInteractable
             if (dist < snapDistance)
             {
                 currentPlayer.transform.position = bottomExitPoint.position;
-                Debug.Log($"[Ladder] Snapped to bottom ({dist:F2}m)");
+                LogV($"[Ladder] Snapped to bottom ({dist:F2}m)");
                 return true;
             }
         }
@@ -302,6 +309,8 @@ public class Ladder : MonoBehaviour, IInteractable
     // Debug gizmos
     private void OnDrawGizmos()
     {
+        if (!drawDebugGizmos) return;
+
         if (topExitPoint != null)
         {
             Gizmos.color = Color.green;

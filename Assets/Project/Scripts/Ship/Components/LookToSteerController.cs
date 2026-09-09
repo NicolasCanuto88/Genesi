@@ -126,7 +126,7 @@ namespace SpaceSurvivor.Ship.Components
                  "eccedenza + coupling ogni frame in cui Tick viene chiamato con " +
                  "input non-zero. Attivare solo per indagare comportamenti " +
                  "anomali del coupling. Off in gameplay normale.")]
-        [SerializeField] private bool debugVerbose = false;
+        [SerializeField] private bool logVerbose = false;
 
         // ── Stato runtime ─────────────────────────────────────────────────
         private Camera _boundCamera;
@@ -258,7 +258,7 @@ namespace SpaceSurvivor.Ship.Components
                     Mathf.Clamp(rollInput, -1f, 1f)));
             }
 
-            if (debugVerbose && (Mathf.Abs(couplingYawInput) > 0.01f
+            if (logVerbose && (Mathf.Abs(couplingYawInput) > 0.01f
                               || Mathf.Abs(couplingPitchInput) > 0.01f
                               || Mathf.Abs(rollInput) > 0.01f))
             {

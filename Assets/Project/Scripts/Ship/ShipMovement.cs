@@ -187,14 +187,16 @@ namespace SpaceSurvivor.Ship
                  "UpdatePosition. Attivare solo per indagare mancate " +
                  "invocazioni del resolver o valori inattesi di CurrentSpeed. " +
                  "Off in gameplay normale — introduce rumore in console.")]
-        [SerializeField] private bool debugVerbose = false;
+        [SerializeField] private bool logVerbose = false;
+        [Tooltip("Overlay OnGUI di diagnostica 6DoF (solo Editor/Development Build). Standard Rev BA — default off.")]
+        [SerializeField] private bool showDebugUI = false;
 
         private CompoundColliderAuthoring _compound;
         private bool _hasWarnedMissingCompound;
 
         /// <summary>
         /// Rev AB — frame counter per throttle del log diagnostico da
-        /// UpdatePosition. Emesso solo se debugVerbose == true.
+        /// UpdatePosition. Emesso solo se logVerbose == true.
         /// </summary>
         private int _debugUpdatePosCounter;
 
@@ -412,9 +414,9 @@ namespace SpaceSurvivor.Ship
         {
             float speed = CurrentSpeed;
 
-            // ── DEBUG HEARTBEAT (guardato da debugVerbose) ───────────────
+            // ── DEBUG HEARTBEAT (guardato da logVerbose) ───────────────
             _debugUpdatePosCounter++;
-            if (debugVerbose && (_debugUpdatePosCounter % 50 == 0))
+            if (logVerbose && (_debugUpdatePosCounter % 50 == 0))
             {
                 var resDbg = PoiCollisionResolver.Instance;
                 Debug.Log($"[ShipMov.UpdatePos] speed={speed:F2}u/s  " +
@@ -530,6 +532,8 @@ namespace SpaceSurvivor.Ship
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
         private void OnGUI()
         {
+            if (!showDebugUI) return;
+
             // Rev AH — display esteso a 6DoF. Rimossa riga "CanSteer" (dipendeva
             // da minSpeedToSteer, ora sempre true in Manual per MS-2).
             // Aggiunta riga rate roll accanto a yaw/pitch.

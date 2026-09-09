@@ -604,7 +604,7 @@ namespace SpaceSurvivor.Ship
             _strafeInput = Vector3.zero;
             _strafeVelocity = Vector3.zero;
 
-            Debug.Log($"[DockingController] EnterDocking → POI {_currentPoi.Data.DisplayName}, " +
+            LogV($"[DockingController] EnterDocking → POI {_currentPoi.Data.DisplayName}, " +
                       $"axial iniziale {_initialAxialDistanceCached:F1}u, " +
                       $"approachAxis {_approachAxisWorld}, " +
                       $"shipExtentTowardPoi={shipExtentTowardPoi:F2}u, " +
@@ -614,7 +614,7 @@ namespace SpaceSurvivor.Ship
 
         private void HandleExitDocking()
         {
-            Debug.Log("[DockingController] ExitDocking — cleanup");
+            LogV("[DockingController] ExitDocking — cleanup");
             _currentPoi = null;
             _effectiveFinalDockingDistance = 0f; // Rev AD: reset cache
             _strafeInput = Vector3.zero;
@@ -744,7 +744,7 @@ namespace SpaceSurvivor.Ship
                 _hasFiredCollisionThisSession = true;
                 OnHardCollision?.Invoke(clamp.RadialImpactSpeed, _currentPoi);
 
-                Debug.LogWarning($"[DockingController] HARD COLLISION! " +
+                LogVWarn($"[DockingController] HARD COLLISION! " +
                                  $"radial impact={clamp.RadialImpactSpeed:F2}u/s. " +
                                  $"Componente radiale velocity azzerata; " +
                                  $"tangenziale preservata (slide).");
@@ -815,7 +815,7 @@ namespace SpaceSurvivor.Ship
                            || Mathf.Abs(axial) > maxDockingAxialRange;
             if (outOfRange)
             {
-                Debug.LogWarning($"[DockingController] Out-of-range — undock forzato. " +
+                LogVWarn($"[DockingController] Out-of-range — undock forzato. " +
                                  $"lateral={lateralErr:F1}u (max {maxDockingLateralRange:F1}), " +
                                  $"axial={axial:F1}u (max ±{maxDockingAxialRange:F1}).");
                 // AnchorSystem.RequestUndock è l'API canonica che azzera
@@ -906,14 +906,14 @@ namespace SpaceSurvivor.Ship
 
             if (propulsion.CurrentNavState != NavigationState.Docking)
             {
-                Debug.LogWarning($"[DockingController] ConfirmAnchor rifiutato — " +
+                LogVWarn($"[DockingController] ConfirmAnchor rifiutato — " +
                                  $"stato attuale {propulsion.CurrentNavState} (atteso Docking).");
                 return;
             }
 
             if (!_netIsInAnchorTolerance.Value)
             {
-                Debug.LogWarning("[DockingController] ConfirmAnchor rifiutato — " +
+                LogVWarn("[DockingController] ConfirmAnchor rifiutato — " +
                                  "non in tolleranza.");
                 return;
             }
@@ -932,7 +932,7 @@ namespace SpaceSurvivor.Ship
             }
 
             propulsion.RequestNavigationState(NavigationState.Docked);
-            Debug.Log($"[DockingController] ANCHOR CONFERMATO → DOCKED su POI " +
+            LogV($"[DockingController] ANCHOR CONFERMATO → DOCKED su POI " +
                       $"{(_currentPoi != null ? _currentPoi.Data.DisplayName : "?")}");
         }
 
@@ -970,9 +970,21 @@ namespace SpaceSurvivor.Ship
         // =========================================================================
         // DEBUG GUI (solo lettura — cursore-safe)
         // =========================================================================
+        [Header("Debug")]
+        [Tooltip("Overlay OnGUI diagnostica ancoraggio/docking (solo Editor/Development Build). Standard Rev BA — default off.")]
+        [SerializeField] private bool showDebugUI = false;
+        [Tooltip("Log diagnostici verbosi (enter/exit docking, hard collision, anchor). Standard Rev BA — default off. I problemi reali (sistemi non pronti, POI non trovato) restano sempre a log.")]
+        [SerializeField] private bool logVerbose = false;
+
+        // ===== Debug logging (Rev BA) =====
+        private void LogV(string msg) { if (logVerbose) Debug.Log(msg); }
+        private void LogVWarn(string msg) { if (logVerbose) Debug.LogWarning(msg); }
+
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
         private void OnGUI()
         {
+            if (!showDebugUI) return;
+
             GUILayout.BeginArea(new Rect(Screen.width - 260, Screen.height - 200, 250, 190));
             GUILayout.BeginVertical("box");
             GUILayout.Label($"[Docking] {(IsServer ? "SRV" : "CLT")}");

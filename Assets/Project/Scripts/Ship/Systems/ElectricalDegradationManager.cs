@@ -148,7 +148,7 @@ public class ElectricalDegradationManager : NetworkBehaviour
         netBallastFaulted.Value = true;
         ballastFaultElapsedSeconds = 0f;
         SetBallast(BallastState.Lieve, 1.12f);
-        Debug.LogWarning("[ElectricalDegradation] Guasto ballast! Degrado lieve (×1.12)");
+        LogVWarn("[ElectricalDegradation] Guasto ballast! Degrado lieve (×1.12)");
     }
 
     private void UpdateBallastTier()
@@ -172,7 +172,7 @@ public class ElectricalDegradationManager : NetworkBehaviour
         // OnDegradationChanged è fired automaticamente da OnValueChanged su netBallastMultiplier
         // Solo logghiamo se c'è un cambio di tier
         if (changed)
-            Debug.Log($"[ElectricalDegradation] Ballast → {state} ×{multiplier:0.00}");
+            LogV($"[ElectricalDegradation] Ballast → {state} ×{multiplier:0.00}");
     }
 
     // ===== PUBLIC HOOKS =====
@@ -209,7 +209,7 @@ public class ElectricalDegradationManager : NetworkBehaviour
         ballastFaultElapsedSeconds = 0f;
         faultRollTimer = 0f;
         SetBallast(BallastState.Integro, 1f);
-        Debug.Log("[ElectricalDegradation] Ballast riparato (×1.0)");
+        LogV("[ElectricalDegradation] Ballast riparato (×1.0)");
     }
 
     // dipende da: HullSystem (M2)
@@ -294,14 +294,22 @@ public class ElectricalDegradationManager : NetworkBehaviour
         netBlackoutFaultBonus.Value += blackoutFaultBonusPerEvent;
     }
 
+    // ===== Debug logging (Rev BA) =====
+    private void LogV(string msg) { if (logVerbose) Debug.Log(msg); }
+    private void LogVWarn(string msg) { if (logVerbose) Debug.LogWarning(msg); }
+
     // ===== DEBUG GUI =====
 
     [Header("Debug")]
-    [SerializeField] private bool showDebugGUI = true;
+    [Tooltip("Overlay OnGUI di diagnostica + pulsanti test (solo Editor/Development Build). Standard Rev BA — default off.")]
+    [SerializeField] private bool showDebugUI = false;
+    [Tooltip("Log diagnostici verbosi (transizioni ballast/EM). Standard Rev BA — default off.")]
+    [SerializeField] private bool logVerbose = false;
 
     private void OnGUI()
     {
-        if (!showDebugGUI) return;
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+        if (!showDebugUI) return;
 
         int y = 500;
         GUI.Label(new Rect(10, y, 500, 20),
@@ -329,5 +337,6 @@ public class ElectricalDegradationManager : NetworkBehaviour
             SetEMIntensityInternal(EMIntensity.Moderate);
         if (GUI.Button(new Rect(250, y, 110, 22), "EM: Extreme"))
             SetEMIntensityInternal(EMIntensity.Extreme);
+#endif
     }
 }

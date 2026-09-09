@@ -183,9 +183,15 @@ public class PlayerHealthSystem : NetworkBehaviour
     }
 
     // ── Debug GUI (solo per testare HP prima che esista una fonte di danno reale) ──
+    [Header("Debug")]
+    [Tooltip("Overlay OnGUI di diagnostica (solo Editor/Development Build, solo server). Standard Rev BA — default off.")]
+    [SerializeField] private bool showDebugUI = false;
+
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
     private void OnGUI()
     {
+        if (!showDebugUI) return;
+
         if (!IsServer) return;
 
         // Offset verticale per OwnerClientId, per non sovrapporre i pannelli

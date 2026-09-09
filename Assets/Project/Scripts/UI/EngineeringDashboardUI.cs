@@ -53,7 +53,7 @@ public class EngineeringDashboardUI : MonoBehaviour, IDashboardPanel
     [Tooltip("Se true, stampa log informativi di flusso (selezione EventSystem, " +
              "refresh lista luci, toggle luci, ripristini della rete di sicurezza). " +
              "I LogWarning restano sempre attivi. Lasciare OFF in produzione.")]
-    [SerializeField] private bool verboseLogging = false;
+    [SerializeField] private bool logVerbose = false;
 
     private PowerManager powerManager;
     private List<LightControlEntry> lightControls = new List<LightControlEntry>();
@@ -276,7 +276,7 @@ public class EngineeringDashboardUI : MonoBehaviour, IDashboardPanel
 
         List<ShipLight> manualLights = powerManager.GetManualLights();
 
-        if (verboseLogging)
+        if (logVerbose)
             Debug.Log($"[EngineeringDashboard] RefreshLightsList: trovate {manualLights.Count} luci Manual");
 
         foreach (var light in manualLights)
@@ -371,7 +371,7 @@ public class EngineeringDashboardUI : MonoBehaviour, IDashboardPanel
         if (initial != null)
         {
             EventSystem.current.SetSelectedGameObject(initial);
-            if (verboseLogging)
+            if (logVerbose)
                 Debug.Log($"[EngineeringDashboard] Selezione iniziale impostata: {initial.name} ({reason}).");
         }
         else
@@ -463,7 +463,7 @@ public class EngineeringDashboardUI : MonoBehaviour, IDashboardPanel
         if (candidate != null)
         {
             EventSystem.current.SetSelectedGameObject(candidate);
-            if (verboseLogging)
+            if (logVerbose)
                 Debug.Log($"[EngineeringDashboard] EnsureSelectionSafety: selezione ripristinata su {candidate.name} ({reason}).");
         }
     }
@@ -504,7 +504,7 @@ public class EngineeringDashboardUI : MonoBehaviour, IDashboardPanel
         if (firstSelectable != null && firstSelectable.interactable)
         {
             EventSystem.current.SetSelectedGameObject(firstSelectable.gameObject);
-            if (verboseLogging)
+            if (logVerbose)
                 Debug.Log($"[EngineeringDashboard] Selezione trasferita dal Restore alla prima luce ({firstEntry.name}) dopo fine blackout.");
         }
     }
@@ -516,7 +516,7 @@ public class EngineeringDashboardUI : MonoBehaviour, IDashboardPanel
         if (light != null)
         {
             light.SetManualState(isOn);
-            if (verboseLogging)
+            if (logVerbose)
                 Debug.Log($"[EngineeringDashboard] {light.gameObject.name} → {(isOn ? "ON" : "OFF")}");
         }
     }

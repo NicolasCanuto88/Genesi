@@ -76,7 +76,10 @@ namespace SpaceSurvivor.Ship
         [SerializeField] private int startingTierIndex = 0;
 
         [Header("Debug")]
-        [SerializeField] private bool showDebugGUI = true;
+        [Tooltip("Overlay OnGUI di diagnostica + pulsanti test (solo Editor/Development Build). Standard Rev BA — default off.")]
+        [SerializeField] private bool showDebugUI = false;
+        [Tooltip("Log diagnostici verbosi (lifecycle/stati/danno scafo). Standard Rev BA — default off. I problemi reali (asset mancante, indice non valido) restano sempre a log.")]
+        [SerializeField] private bool logVerbose = false;
 
         // ===== STATO PRIVATO (server-only) =====
 
@@ -110,7 +113,7 @@ namespace SpaceSurvivor.Ship
                 InitUpgrade();
 
             OnInstanceReady?.Invoke();
-            Debug.Log($"[HullSystem] Online — {netCurrentHP.Value:F0}/{netMaxHP.Value:F0} HP");
+            LogV($"[HullSystem] Online — {netCurrentHP.Value:F0}/{netMaxHP.Value:F0} HP");
         }
 
         public override void OnNetworkDespawn()
@@ -169,7 +172,7 @@ namespace SpaceSurvivor.Ship
 
             if (newHP <= 0f)
             {
-                Debug.LogError("[HullSystem] ⚠ SCAFO DISTRUTTO");
+                LogVError("[HullSystem] ⚠ SCAFO DISTRUTTO");
                 OnShipDestroyed?.Invoke();
             }
         }
@@ -181,7 +184,7 @@ namespace SpaceSurvivor.Ship
             if (!IsServer) return;
             netCurrentHP.Value = netMaxHP.Value;
             NotifyDependentSystems();
-            Debug.Log("[HullSystem] Scafo riparato al 100%.");
+            LogV("[HullSystem] Scafo riparato al 100%.");
         }
 
         public void RepairAmount(float amount)
@@ -232,7 +235,7 @@ namespace SpaceSurvivor.Ship
             netCurrentHP.Value = currentUpgrade.maxHP * oldPercent;
             NotifyDependentSystems();
 
-            Debug.Log($"[HullSystem] Upgrade a T{currentUpgrade.tier} — MaxHP: {currentUpgrade.maxHP}");
+            LogV($"[HullSystem] Upgrade a T{currentUpgrade.tier} — MaxHP: {currentUpgrade.maxHP}");
         }
 
         // ===== NOTIFICA SISTEMI DIPENDENTI =====
@@ -268,13 +271,13 @@ namespace SpaceSurvivor.Ship
                 AlarmSystem.Instance?.RaiseAlarm(
                     AlarmSystem.AlarmSource.HullCritical,
                     AlarmSystem.AlarmSeverity.Critical);
-                Debug.LogWarning($"[HullSystem] ⚠ SCAFO CRITICO: {percent * 100f:F1}%");
+                LogVWarn($"[HullSystem] ⚠ SCAFO CRITICO: {percent * 100f:F1}%");
             }
             else if (alarmActive && percent >= currentUpgrade.criticalHysteresis)
             {
                 alarmActive = false;
                 AlarmSystem.Instance?.ClearAlarm(AlarmSystem.AlarmSource.HullCritical);
-                Debug.Log($"[HullSystem] Scafo rientrato nella soglia: {percent * 100f:F1}%");
+                LogV($"[HullSystem] Scafo rientrato nella soglia: {percent * 100f:F1}%");
             }
         }
 
@@ -285,11 +288,17 @@ namespace SpaceSurvivor.Ship
             OnHullChanged?.Invoke(netCurrentHP.Value, netMaxHP.Value, HullPercent);
         }
 
+        // ===== Debug logging (Rev BA) =====
+        private void LogV(string msg) { if (logVerbose) Debug.Log(msg); }
+        private void LogVWarn(string msg) { if (logVerbose) Debug.LogWarning(msg); }
+        private void LogVError(string msg) { if (logVerbose) Debug.LogError(msg); }
+
         // ===== DEBUG GUI =====
 
         private void OnGUI()
         {
-            if (!showDebugGUI) return;
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+            if (!showDebugUI) return;
 
             int y = 340;
             GUI.Label(new Rect(10, y, 350, 20),
@@ -308,6 +317,7 @@ namespace SpaceSurvivor.Ship
                 if (GUI.Button(new Rect(220, y, 130, 22), "Repair Full"))
                     RepairFull();
             }
+#endif
         }
     }
 }

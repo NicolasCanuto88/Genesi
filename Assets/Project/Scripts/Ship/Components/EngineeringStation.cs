@@ -10,6 +10,11 @@ using System.Collections;
 [RequireComponent(typeof(BoxCollider))]
 public class EngineeringStation : MonoBehaviour, IInteractable
 {
+    [Header("Debug")]
+    [Tooltip("Log diagnostici verbosi (ingresso/uscita/transizioni postazione). Standard Rev BA — default off. I problemi reali (snap points/componenti mancanti) restano sempre a log.")]
+    [SerializeField] private bool logVerbose = false;
+    private void LogV(string msg) { if (logVerbose) Debug.Log(msg); }
+
     [Header("Dashboard")]
     [SerializeField] private EngineeringDashboardUI dashboardUI;
     [SerializeField] private Canvas dashboardCanvas; // World Space canvas
@@ -202,7 +207,7 @@ public class EngineeringStation : MonoBehaviour, IInteractable
         // VirtualCursor rimosso: navigazione via tasti direzionali/gamepad
         // gestita dall'EventSystem in Game.unity con InputSystemUIInputModule.
 
-        Debug.Log("[EngineeringStation] Entering station - Transitioning to workstation");
+        LogV("[EngineeringStation] Entering station - Transitioning to workstation");
     }
 
     private void ExitStation()
@@ -227,7 +232,7 @@ public class EngineeringStation : MonoBehaviour, IInteractable
         if (EventSystem.current != null)
             EventSystem.current.SetSelectedGameObject(null);
 
-        Debug.Log("[EngineeringStation] Exiting station - Returning to normal movement");
+        LogV("[EngineeringStation] Exiting station - Returning to normal movement");
     }
 
     public void LookAtMonitor(int index)
@@ -310,7 +315,7 @@ public class EngineeringStation : MonoBehaviour, IInteractable
                 // � identico. Il player � gi� nella rotazione finale: nessuna ambiguit� sul parent.
                 LookAtMonitor(0);
 
-                Debug.Log("[EngineeringStation] Transition complete - At workstation");
+                LogV("[EngineeringStation] Transition complete - At workstation");
             }
         }
         else
@@ -352,7 +357,7 @@ public class EngineeringStation : MonoBehaviour, IInteractable
                 Cursor.lockState = CursorLockMode.Locked;
                 Cursor.visible = false;
 
-                Debug.Log("[EngineeringStation] Exit complete - Normal movement restored");
+                LogV("[EngineeringStation] Exit complete - Normal movement restored");
             }
         }
     }

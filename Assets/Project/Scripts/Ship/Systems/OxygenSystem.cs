@@ -69,8 +69,14 @@ namespace SpaceSurvivor.Ship
         [Tooltip("O2 consumato per crew al minuto (GDD: 0.6/min)")]
         [SerializeField] private float o2ConsumptionPerCrewPerMinute = 0.6f;
 
-        [Header("Debug / Initial State")]
+        [Header("Stato iniziale")]
         [SerializeField] private float initialO2Level = 100f;
+
+        [Header("Debug")]
+        [Tooltip("Overlay OnGUI di diagnostica (solo Editor/Development Build). Standard Rev BA — default off.")]
+        [SerializeField] private bool showDebugUI = false;
+        [Tooltip("Log diagnostici verbosi (telemetria O2/rate/transizioni). Standard Rev BA — default off. I problemi reali restano sempre a log.")]
+        [SerializeField] private bool logVerbose = false;
 
         // ===== Stato server-only =====
 
@@ -183,14 +189,14 @@ namespace SpaceSurvivor.Ship
                 AlarmSystem.Instance?.RaiseAlarm(
                     AlarmSystem.AlarmSource.OxygenLow,
                     AlarmSystem.AlarmSeverity.Emergency);
-                Debug.LogWarning($"[OxygenSystem] ⚠ OXYGEN LOW: {netO2Level.Value:F1}%");
+                LogVWarn($"[OxygenSystem] ⚠ OXYGEN LOW: {netO2Level.Value:F1}%");
             }
             else if (alarmRaised && percent >= alarmClearThreshold)
             {
                 alarmRaised = false;
                 netIsAlarmActive.Value = false;
                 AlarmSystem.Instance?.ClearAlarm(AlarmSystem.AlarmSource.OxygenLow);
-                Debug.Log($"[OxygenSystem] O2 nominale: {netO2Level.Value:F1}%");
+                LogV($"[OxygenSystem] O2 nominale: {netO2Level.Value:F1}%");
             }
         }
 
@@ -202,7 +208,7 @@ namespace SpaceSurvivor.Ship
                 {
                     // Avvio countdown
                     deathCountdownRemaining = deathCountdownDuration;
-                    Debug.LogError($"[OxygenSystem] OXYGEN DEPLETED — countdown {deathCountdownDuration:F0}s");
+                    LogVError($"[OxygenSystem] OXYGEN DEPLETED — countdown {deathCountdownDuration:F0}s");
                 }
                 else
                 {
@@ -235,7 +241,7 @@ namespace SpaceSurvivor.Ship
             if (!IsServer) return;
             totalGenerationRate += ratePerSecond;
             netGenerationRate.Value = totalGenerationRate;
-            Debug.Log($"[OxygenSystem] +{ratePerSecond * 60f:F1}/min — totale: {netGenerationRate.Value * 60f:F1}/min");
+            LogV($"[OxygenSystem] +{ratePerSecond * 60f:F1}/min — totale: {netGenerationRate.Value * 60f:F1}/min");
         }
 
         /// <summary>
@@ -248,7 +254,7 @@ namespace SpaceSurvivor.Ship
             if (!IsServer) return;
             totalGenerationRate = Mathf.Max(0f, totalGenerationRate - ratePerSecond);
             netGenerationRate.Value = totalGenerationRate;
-            Debug.LogWarning($"[OxygenSystem] -{ratePerSecond * 60f:F1}/min — totale: {netGenerationRate.Value * 60f:F1}/min");
+            LogVWarn($"[OxygenSystem] -{ratePerSecond * 60f:F1}/min — totale: {netGenerationRate.Value * 60f:F1}/min");
         }
 
         /// <summary>
@@ -273,11 +279,17 @@ namespace SpaceSurvivor.Ship
             deathCountdownDuration = deathCountdown;
         }
 
+        // ===== Debug logging (Rev BA) =====
+        private void LogV(string msg) { if (logVerbose) Debug.Log(msg); }
+        private void LogVWarn(string msg) { if (logVerbose) Debug.LogWarning(msg); }
+        private void LogVError(string msg) { if (logVerbose) Debug.LogError(msg); }
+
         // ===== Debug GUI =====
 
         private void OnGUI()
         {
-            if (!Debug.isDebugBuild) return;
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+            if (!showDebugUI) return;
 
             int y = 300;
             GUI.Label(new Rect(10, y, 320, 20), $"=== OXYGEN SYSTEM [{(IsServer ? "SERVER" : "CLIENT")}] ==="); y += 20;
@@ -298,6 +310,7 @@ namespace SpaceSurvivor.Ship
                 GUI.Label(new Rect(10, y, 320, 20), $"💀 SUFFOCATION IN: {deathCountdownRemaining:F0}s");
                 GUI.color = Color.white;
             }
+#endif
         }
     }
 }

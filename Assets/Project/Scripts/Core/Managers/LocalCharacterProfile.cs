@@ -138,7 +138,7 @@ public class LocalCharacterProfile : MonoBehaviour
                 if (legacy != null && !string.IsNullOrEmpty(legacy.characterName)
                     && legacy.characterName != "Senza nome")
                 {
-                    Debug.Log("[LocalCharacterProfile] Migrazione dal formato v0.9.7.");
+                    LogV("[LocalCharacterProfile] Migrazione dal formato v0.9.7.");
                     _data = new SaveData();
                     var migrated = new CharacterData
                     {
@@ -312,9 +312,20 @@ public class LocalCharacterProfile : MonoBehaviour
     }
 
     // ── DEBUG GUI ─────────────────────────────────────────────────────────────
+    [Header("Debug")]
+    [Tooltip("Overlay OnGUI di diagnostica (solo Editor/Development Build). Standard Rev BA — default off.")]
+    [SerializeField] private bool showDebugUI = false;
+    [Tooltip("Log diagnostici verbosi (migrazione formato). Standard Rev BA — default off. I problemi reali (errori load/save, id non trovato) restano sempre a log.")]
+    [SerializeField] private bool logVerbose = false;
+
+    // ===== Debug logging (Rev BA) =====
+    private void LogV(string msg) { if (logVerbose) Debug.Log(msg); }
+
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
     private void OnGUI()
     {
+        if (!showDebugUI) return;
+
         GUILayout.BeginArea(new Rect(10, 550, 280, 90));
         GUILayout.BeginVertical("box");
         int count = _data?.characters?.Count ?? 0;

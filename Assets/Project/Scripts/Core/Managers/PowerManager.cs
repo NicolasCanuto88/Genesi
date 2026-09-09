@@ -192,7 +192,7 @@ public class PowerManager : NetworkBehaviour
                 consumer.SetPowerState(false);
                 shedAmount += demand;
 
-                Debug.LogWarning($"[PowerManager] Auto-disabled {consumer.GetSystemName()} (Priority {consumer.GetPriority()}) — {demand}W");
+                LogVWarn($"[PowerManager] Auto-disabled {consumer.GetSystemName()} (Priority {consumer.GetPriority()}) — {demand}W");
 
                 if (shedAmount >= deficitAmount) break;
             }
@@ -220,7 +220,7 @@ public class PowerManager : NetworkBehaviour
                 consumer.SetPowerState(true);
                 available -= demand;
                 if (demand > 0)
-                    Debug.Log($"[PowerManager] Restored {consumer.GetSystemName()} ({demand}W) — surplus: {available:F0}W");
+                    LogV($"[PowerManager] Restored {consumer.GetSystemName()} ({demand}W) — surplus: {available:F0}W");
             }
         }
     }
@@ -233,7 +233,7 @@ public class PowerManager : NetworkBehaviour
         if (powerPercent >= criticalPowerThreshold && !netIsInCriticalState.Value)
         {
             netIsInCriticalState.Value = true;
-            Debug.LogWarning("[PowerManager] CRITICAL POWER — " + (powerPercent * 100f).ToString("F1") + "%");
+            LogVWarn("[PowerManager] CRITICAL POWER — " + (powerPercent * 100f).ToString("F1") + "%");
         }
         else if (powerPercent < criticalPowerThreshold * 0.8f && netIsInCriticalState.Value)
         {
@@ -269,7 +269,7 @@ public class PowerManager : NetworkBehaviour
         netIsInBlackout.Value = true;
         blackoutManualResetNeeded = requireManualRecovery;
 
-        Debug.LogError("[PowerManager] BLACKOUT! Manual recovery required.");
+        LogVError("[PowerManager] BLACKOUT! Manual recovery required.");
 
         foreach (var consumer in powerConsumers)
         {
@@ -282,7 +282,7 @@ public class PowerManager : NetworkBehaviour
     {
         netIsInBlackout.Value = false;
         blackoutManualResetNeeded = false;
-        Debug.Log("[PowerManager] Power restored.");
+        LogV("[PowerManager] Power restored.");
     }
 
     // ===== RPC =====
@@ -307,20 +307,20 @@ public class PowerManager : NetworkBehaviour
 
         if (!netIsInBlackout.Value)
         {
-            Debug.LogWarning("[PowerManager] Not in blackout.");
+            LogVWarn("[PowerManager] Not in blackout.");
             return;
         }
 
         if (!blackoutManualResetNeeded)
         {
-            Debug.LogWarning("[PowerManager] No manual reset needed.");
+            LogVWarn("[PowerManager] No manual reset needed.");
             return;
         }
 
         float reservePercent = netPowerReserve.Value / maxPowerReserve;
         if (reservePercent < 0.3f)
         {
-            Debug.LogWarning($"[PowerManager] Reserve too low ({reservePercent * 100f:F0}%) — need 30%");
+            LogVWarn($"[PowerManager] Reserve too low ({reservePercent * 100f:F0}%) — need 30%");
             RestoreFailedRpc("Riserva insufficiente — attendere ricarica");
             return;
         }
@@ -328,12 +328,12 @@ public class PowerManager : NetworkBehaviour
         float consumptionPercent = netPowerConsumption.Value / MaxPowerOutput;
         if (consumptionPercent > 0.7f)
         {
-            Debug.LogWarning($"[PowerManager] Load too high ({consumptionPercent * 100f:F0}%)");
+            LogVWarn($"[PowerManager] Load too high ({consumptionPercent * 100f:F0}%)");
             RestoreFailedRpc("Carico troppo alto — spegnere sistemi non essenziali");
             return;
         }
 
-        Debug.Log("[PowerManager] ✅ Manual power restore successful!");
+        LogV("[PowerManager] ✅ Manual power restore successful!");
         blackoutManualResetNeeded = false;
         ExitBlackout();
     }
@@ -344,7 +344,7 @@ public class PowerManager : NetworkBehaviour
     [Rpc(SendTo.ClientsAndHost)]
     private void RestoreFailedRpc(string reason)
     {
-        Debug.LogWarning($"[PowerManager] Restore fallito: {reason}");
+        LogVWarn($"[PowerManager] Restore fallito: {reason}");
         // dipende da: EngineeringDashboardUI — aggiornare il pannello con il messaggio
     }
 
@@ -434,7 +434,7 @@ public class PowerManager : NetworkBehaviour
         if (!powerConsumers.Contains(consumer))
         {
             powerConsumers.Add(consumer);
-            Debug.Log($"[PowerManager] Registered: {consumer.GetSystemName()}");
+            LogV($"[PowerManager] Registered: {consumer.GetSystemName()}");
         }
     }
 
@@ -464,11 +464,23 @@ public class PowerManager : NetworkBehaviour
         netReactorEfficiency.Value = currentReactorEfficiency;
     }
 
+    [Header("Debug")]
+    [Tooltip("Overlay OnGUI di diagnostica (solo Editor/Development Build). Standard Rev BA — default off.")]
+    [SerializeField] private bool showDebugUI = false;
+    [Tooltip("Log diagnostici verbosi (eventi power/blackout/registrazioni). Standard Rev BA — default off.")]
+    [SerializeField] private bool logVerbose = false;
+
+    // ===== Debug logging (Rev BA) =====
+    private void LogV(string msg) { if (logVerbose) Debug.Log(msg); }
+    private void LogVWarn(string msg) { if (logVerbose) Debug.LogWarning(msg); }
+    private void LogVError(string msg) { if (logVerbose) Debug.LogError(msg); }
+
     // ===== Debug GUI =====
 
     private void OnGUI()
     {
-        if (!Debug.isDebugBuild) return;
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+        if (!showDebugUI) return;
 
         int y = 100;
         GUI.Label(new Rect(10, y, 300, 20), $"=== POWER SYSTEM [{(IsServer ? "SERVER" : "CLIENT")}] ==="); y += 20;
@@ -491,6 +503,7 @@ public class PowerManager : NetworkBehaviour
         }
 
         GUI.color = Color.white;
+#endif
     }
 }
 

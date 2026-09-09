@@ -487,12 +487,12 @@ namespace SpaceSurvivor.Poi
         [Tooltip("Se true, disegna i volumi del compound POI in wireframe " +
                  "attorno al visual del POI. Cruciale in debug — senza gizmo " +
                  "non c'è modo di verificare visivamente la geometria di " +
-                 "collisione. Default true.")]
-        [SerializeField] private bool drawCompoundGizmos = true;
+                 "collisione. Default off (Standard Rev BA).")]
+        [SerializeField] private bool drawDebugGizmos = false;
 
         private void OnDrawGizmos()
         {
-            if (!drawCompoundGizmos) return;
+            if (!drawDebugGizmos) return;
             if (data == null || data.CollisionVolumes == null) return;
             if (data.CollisionVolumes.Count == 0) return;
 

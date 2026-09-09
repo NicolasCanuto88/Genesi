@@ -83,7 +83,10 @@ namespace SpaceSurvivor.Ship
         [SerializeField] private int startingTierIndex = 0;
 
         [Header("Debug")]
-        [SerializeField] private bool showDebugGUI = true;
+        [Tooltip("Overlay OnGUI di diagnostica + pulsanti test (solo Editor/Development Build). Standard Rev BA — default off.")]
+        [SerializeField] private bool showDebugUI = false;
+        [Tooltip("Log diagnostici verbosi (lifecycle/stati/danno scudi). Standard Rev BA — default off. I problemi reali (asset mancante) restano sempre a log.")]
+        [SerializeField] private bool logVerbose = false;
 
         // ===== STATO PRIVATO (server-only) =====
 
@@ -131,7 +134,7 @@ namespace SpaceSurvivor.Ship
             }
 
             OnInstanceReady?.Invoke();
-            Debug.Log($"[ShieldSystem] Online — Tier {currentUpgrade?.tier ?? 0}, State: {State}");
+            LogV($"[ShieldSystem] Online — Tier {currentUpgrade?.tier ?? 0}, State: {State}");
         }
 
         public override void OnNetworkDespawn()
@@ -153,7 +156,7 @@ namespace SpaceSurvivor.Ship
             PowerManager.OnInstanceReady -= RegisterWithPowerManager;
             powerManager = PowerManager.Instance;
             powerManager.RegisterPowerConsumer(this);
-            Debug.Log("[ShieldSystem] Registered with PowerManager.");
+            LogV("[ShieldSystem] Registered with PowerManager.");
         }
 
         // ===== INIZIALIZZAZIONE UPGRADE =====
@@ -227,7 +230,7 @@ namespace SpaceSurvivor.Ship
             if (!IsServer) return;
             if (currentUpgrade == null || currentUpgrade.maxHP <= 0f)
             {
-                Debug.Log("[ShieldSystem] Nessun upgrade scudi installato.");
+                LogV("[ShieldSystem] Nessun upgrade scudi installato.");
                 return;
             }
 
@@ -249,14 +252,14 @@ namespace SpaceSurvivor.Ship
                 netSpinUpProgress.Value = 0f;
                 regenPaused = true;  // pausa regen alla riattivazione
                 regenTimer = 0f;
-                Debug.Log("[ShieldSystem] Scudi disattivati.");
+                LogV("[ShieldSystem] Scudi disattivati.");
             }
         }
 
         private IEnumerator SpinUpRoutine()
         {
             netState.Value = (int)ShieldState.Charging;
-            Debug.Log($"[ShieldSystem] Spin-up avviato ({currentUpgrade.spinUpTime}s)...");
+            LogV($"[ShieldSystem] Spin-up avviato ({currentUpgrade.spinUpTime}s)...");
 
             float elapsed = 0f;
             while (elapsed < currentUpgrade.spinUpTime)
@@ -271,7 +274,7 @@ namespace SpaceSurvivor.Ship
             regenPaused = true;
             regenTimer = 0f;
             spinUpCoroutine = null;
-            Debug.Log("[ShieldSystem] Scudi operativi.");
+            LogV("[ShieldSystem] Scudi operativi.");
         }
 
         // ===== PUBLIC API — DANNO =====
@@ -318,7 +321,7 @@ namespace SpaceSurvivor.Ship
             regenPaused = true;
             regenTimer = 0f;
 
-            Debug.Log($"[ShieldSystem] Danno ricevuto: {incomingDamage:F1} — assorbito: {absorbed:F1}, residuo: {remaining:F1}");
+            LogV($"[ShieldSystem] Danno ricevuto: {incomingDamage:F1} — assorbito: {absorbed:F1}, residuo: {remaining:F1}");
 
             // Residuo → HullSystem
             if (remaining > 0f)
@@ -330,7 +333,7 @@ namespace SpaceSurvivor.Ship
                 netState.Value = (int)ShieldState.Off;
                 netSpinUpProgress.Value = 0f;
                 OnShieldCollapse?.Invoke();
-                Debug.LogWarning("[ShieldSystem] ⚠ SCUDI COLLASSATI — HP esauriti.");
+                LogVWarn("[ShieldSystem] ⚠ SCUDI COLLASSATI — HP esauriti.");
             }
         }
 
@@ -382,7 +385,7 @@ namespace SpaceSurvivor.Ship
             netMaxHP.Value = currentUpgrade.maxHP;
             netCurrentHP.Value = currentUpgrade.maxHP * oldPercent;
 
-            Debug.Log($"[ShieldSystem] Upgrade a T{currentUpgrade.tier}");
+            LogV($"[ShieldSystem] Upgrade a T{currentUpgrade.tier}");
         }
 
         // ===== IPOWERCONSUMER =====
@@ -417,7 +420,7 @@ namespace SpaceSurvivor.Ship
                 if (spinUpCoroutine != null) { StopCoroutine(spinUpCoroutine); spinUpCoroutine = null; }
                 netState.Value = (int)ShieldState.Off;
                 netSpinUpProgress.Value = 0f;
-                Debug.LogWarning("[ShieldSystem] Power cut by PowerManager — scudi disattivati.");
+                LogVWarn("[ShieldSystem] Power cut by PowerManager — scudi disattivati.");
             }
         }
 
@@ -433,11 +436,16 @@ namespace SpaceSurvivor.Ship
             OnShieldHPChanged?.Invoke(netCurrentHP.Value, netMaxHP.Value, ShieldPercent);
         }
 
+        // ===== Debug logging (Rev BA) =====
+        private void LogV(string msg) { if (logVerbose) Debug.Log(msg); }
+        private void LogVWarn(string msg) { if (logVerbose) Debug.LogWarning(msg); }
+
         // ===== DEBUG GUI =====
 
         private void OnGUI()
         {
-            if (!showDebugGUI) return;
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+            if (!showDebugUI) return;
 
             int y = 440;
             GUI.Label(new Rect(10, y, 400, 20),
@@ -462,6 +470,7 @@ namespace SpaceSurvivor.Ship
                 if (GUI.Button(new Rect(150, y, 160, 22), "Zone: Rad.Storm"))
                     netZoneContext.Value = (int)ZoneContext.RadiationStorm;
             }
+#endif
         }
     }
 }

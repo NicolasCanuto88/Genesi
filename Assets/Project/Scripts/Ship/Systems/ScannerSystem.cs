@@ -81,7 +81,7 @@ namespace SpaceSurvivor.Ship.Systems
         [Header("Debug")]
         [Tooltip("Log dettagliati di ogni transizione ScanState. Lasciare OFF " +
                  "in produzione.")]
-        [SerializeField] private bool verboseLogging = false;
+        [SerializeField] private bool logVerbose = false;
 
         // ── NetworkVariable server-authoritative ─────────────────────────────
         //
@@ -136,7 +136,7 @@ namespace SpaceSurvivor.Ship.Systems
                 _lastScanTime.Value = 0f;
                 _timeSinceLastPassiveScan = 0f;
 
-                if (verboseLogging)
+                if (logVerbose)
                 {
                     Debug.Log($"[ScannerSystem] Server ready. Tier {CurrentTier}, " +
                               $"range {ScanRange}m, passive mode: {passiveMode}, " +
@@ -180,7 +180,7 @@ namespace SpaceSurvivor.Ship.Systems
             var ship = ShipMovement.Instance;
             if (ship == null)
             {
-                if (verboseLogging)
+                if (logVerbose)
                     Debug.LogWarning("[ScannerSystem] ShipMovement.Instance null, scan skip.");
                 return;
             }
@@ -201,7 +201,7 @@ namespace SpaceSurvivor.Ship.Systems
                     poi.SetScanState(PoiScanState.Detected);
                     newlyDetected++;
 
-                    if (verboseLogging)
+                    if (logVerbose)
                     {
                         float dist = Mathf.Sqrt(distSqr);
                         Debug.Log($"[ScannerSystem] Detected " +
@@ -213,7 +213,7 @@ namespace SpaceSurvivor.Ship.Systems
 
             _lastScanTime.Value = Time.time;
 
-            if (verboseLogging && newlyDetected > 0)
+            if (logVerbose && newlyDetected > 0)
             {
                 Debug.Log($"[ScannerSystem] Scan complete. {newlyDetected} new detections.");
             }
@@ -238,7 +238,7 @@ namespace SpaceSurvivor.Ship.Systems
         public void RequestScanRpc(RpcParams rpcParams = default)
         {
             // In 2b: no-op. Documentato ma non attivo.
-            if (verboseLogging)
+            if (logVerbose)
             {
                 ulong sender = rpcParams.Receive.SenderClientId;
                 Debug.Log($"[ScannerSystem] RequestScanRpc da client {sender} — " +

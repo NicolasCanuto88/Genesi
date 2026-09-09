@@ -35,6 +35,10 @@ namespace SpaceSurvivor.Ship
         [Header("Initial State")]
         [SerializeField] private bool startPowered = true;
 
+        [Header("Debug")]
+        [Tooltip("Log diagnostici verbosi (registrazione/connessione/stati potenza/upgrade). Standard Rev BA — default off. I problemi reali (tier non valido, downgrade impossibile) restano sempre a log.")]
+        [SerializeField] private bool logVerbose = false;
+
         // Tier correntemente attivo (risolto da allTiers)
         private LifeSupportUpgradeData upgradeData;
 
@@ -110,7 +114,7 @@ namespace SpaceSurvivor.Ship
             if (isPowered && oxygenSystem != null)
                 ActivateGeneration();
 
-            Debug.Log($"[LifeSupportConsumer] Registered with PowerManager (Tier {upgradeData?.Tier ?? 0})");
+            LogV($"[LifeSupportConsumer] Registered with PowerManager (Tier {upgradeData?.Tier ?? 0})");
         }
 
         private void InitWithOxygenSystem()
@@ -133,7 +137,7 @@ namespace SpaceSurvivor.Ship
             if (isPowered)
                 ActivateGeneration();
 
-            Debug.Log("[LifeSupportConsumer] Connected to OxygenSystem");
+            LogV("[LifeSupportConsumer] Connected to OxygenSystem");
         }
 
         // ===== IPowerConsumer =====
@@ -185,14 +189,14 @@ namespace SpaceSurvivor.Ship
         {
             if (oxygenSystem == null) return;
             ActivateGeneration();
-            Debug.Log("[LifeSupportConsumer] Power ON — O2 generation started");
+            LogV("[LifeSupportConsumer] Power ON — O2 generation started");
         }
 
         private void OnPowerLost()
         {
             if (oxygenSystem == null) return;
             DeactivateGeneration();
-            Debug.LogWarning("[LifeSupportConsumer] Power OFF — O2 generation stopped!");
+            LogVWarn("[LifeSupportConsumer] Power OFF — O2 generation stopped!");
         }
 
         private void ActivateGeneration()
@@ -262,7 +266,11 @@ namespace SpaceSurvivor.Ship
             if (isPowered && oxygenSystem != null)
                 ActivateGeneration();
 
-            Debug.Log($"[LifeSupportConsumer] Upgraded to Tier {upgradeData.Tier} — {upgradeData.OxygenGenerationPerMinute:F1}/min");
+            LogV($"[LifeSupportConsumer] Upgraded to Tier {upgradeData.Tier} — {upgradeData.OxygenGenerationPerMinute:F1}/min");
         }
+
+        // ===== Debug logging (Rev BA) =====
+        private void LogV(string msg) { if (logVerbose) Debug.Log(msg); }
+        private void LogVWarn(string msg) { if (logVerbose) Debug.LogWarning(msg); }
     }
 }

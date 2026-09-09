@@ -63,6 +63,8 @@ namespace SpaceSurvivor.Poi
 
 #if UNITY_EDITOR
         [Header("Debug (Editor only)")]
+        [Tooltip("Disegna i gizmi (pivot + freccia di approccio). Standard Rev BA — default off.")]
+        [SerializeField] private bool drawDebugGizmos = false;
         [Tooltip("Lunghezza della freccia gizmo che rappresenta la direzione " +
                  "di approccio (forward). Default 5 u logiche.")]
         [SerializeField] private float gizmoArrowLength = 5f;
@@ -73,6 +75,8 @@ namespace SpaceSurvivor.Poi
 
         private void OnDrawGizmos()
         {
+            if (!drawDebugGizmos) return;
+
             Gizmos.color = gizmoColor;
 
             // Pivot: piccola sfera sul GameObject.

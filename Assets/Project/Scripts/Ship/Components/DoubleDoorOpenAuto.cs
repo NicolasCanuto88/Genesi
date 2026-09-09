@@ -12,6 +12,14 @@ namespace creepycat.scifikitvol4
     /// </summary>
     public class DoubleDoorOpenAuto : NetworkBehaviour, IPowerConsumer
     {
+        [Header("Debug")]
+        [Tooltip("Log diagnostici verbosi (perdita/ripristino alimentazione porta). Standard Rev BA — default off.")]
+        [SerializeField] private bool logVerbose = false;
+        [Tooltip("Disegna il gizmo del trigger porta (Scene view). Standard Rev BA — default off.")]
+        [SerializeField] private bool drawDebugGizmos = false;
+        private void LogV(string msg) { if (logVerbose) Debug.Log(msg); }
+        private void LogVWarn(string msg) { if (logVerbose) Debug.LogWarning(msg); }
+
         [Header("Door Parts")]
         public Transform doorL = null;
         public Transform doorR = null;
@@ -262,7 +270,7 @@ namespace creepycat.scifikitvol4
             {
                 netOpening.Value = false;
                 PlaySoundClientRpc(SoundType.Denied);
-                Debug.LogWarning($"[Door {gameObject.name}] Power lost - closing door");
+                LogVWarn($"[Door {gameObject.name}] Power lost - closing door");
             }
         }
 
@@ -270,13 +278,15 @@ namespace creepycat.scifikitvol4
         {
             if (!IsServer) return;
             netPowered.Value = true;
-            Debug.Log($"[Door {gameObject.name}] Power restored - door re-armed");
+            LogV($"[Door {gameObject.name}] Power restored - door re-armed");
         }
 
         public string GetSystemName() => $"Door: {gameObject.name}";
 
         void OnDrawGizmos()
         {
+            if (!drawDebugGizmos) return;
+
             Collider trigger = GetComponent<Collider>();
             if (trigger != null && trigger.isTrigger)
             {

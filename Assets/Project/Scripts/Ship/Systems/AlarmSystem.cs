@@ -9,7 +9,7 @@ using System.Collections.Generic;
 ///
 /// Usa PowerManager.OnInstanceReady per gestire l'ordine di spawn NGO.
 /// Active triggers: PowerManager blackout + critical power.
-/// Placeholder hooks (Milestone 2): OxygenSystem, HullSystem.
+/// Active triggers (M3): OxygenSystem (OxygenLow) + HullSystem (HullCritical).
 /// </summary>
 public class AlarmSystem : MonoBehaviour
 {

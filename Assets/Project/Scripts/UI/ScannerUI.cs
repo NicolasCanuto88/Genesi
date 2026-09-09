@@ -71,7 +71,7 @@ namespace SpaceSurvivor.UI
         [SerializeField] private Color scannedColor = new Color(1f, 0.7f, 0.15f);
 
         [Header("Debug")]
-        [SerializeField] private bool verboseLogging = false;
+        [SerializeField] private bool logVerbose = false;
 
         // Mappa PoiInstance → entry visuale corrispondente.
         // Contiene SOLO POI attualmente Detected/Scanned. I POI Unknown
@@ -282,7 +282,7 @@ namespace SpaceSurvivor.UI
                 string displayName = poi.Data != null ? poi.Data.DisplayName : "POI";
                 entry.SetName(displayName);
 
-                if (verboseLogging)
+                if (logVerbose)
                     Debug.Log($"[ScannerUI] Entry creata per '{displayName}' " +
                               $"(state {poi.ScanState}).");
             }
@@ -306,7 +306,7 @@ namespace SpaceSurvivor.UI
             if (entry != null) Destroy(entry.gameObject);
             _entries.Remove(poi);
 
-            if (verboseLogging)
+            if (logVerbose)
                 Debug.Log($"[ScannerUI] Entry rimossa per '{poi.Data?.DisplayName ?? "POI"}'.");
         }
 

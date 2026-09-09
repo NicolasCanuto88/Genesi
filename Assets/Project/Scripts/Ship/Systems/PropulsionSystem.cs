@@ -127,6 +127,12 @@ namespace SpaceSurvivor.Ship
         [Min(0f)]
         [SerializeField] private float throttleRecoveryRate = 20f;
 
+        [Header("Debug")]
+        [Tooltip("Overlay OnGUI di diagnostica + pulsanti test (solo Editor/Development Build). Standard Rev BA — default off.")]
+        [SerializeField] private bool showDebugUI = false;
+        [Tooltip("Log diagnostici verbosi (stati nav/potenza/avaria/upgrade). Standard Rev BA — default off. I problemi reali (chiamate server-only da client) restano sempre a log.")]
+        [SerializeField] private bool logVerbose = false;
+
         // ── Network Variables ─────────────────────────────────────────────────
         private readonly NetworkVariable<float> _netHealth =
             new(100f, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Server);
@@ -583,11 +589,11 @@ namespace SpaceSurvivor.Ship
                     _netAnchoredPoiId.Value = 0ul;
 
                 SetNavStateInternal(NavigationState.Coasting);
-                Debug.LogWarning("[PropulsionSystem] Power OFF — COASTING forzato");
+                LogVWarn("[PropulsionSystem] Power OFF — COASTING forzato");
             }
             else
             {
-                Debug.Log("[PropulsionSystem] Power ON");
+                LogV("[PropulsionSystem] Power ON");
             }
         }
 
@@ -607,7 +613,7 @@ namespace SpaceSurvivor.Ship
             float targetHP = _data.maxHealth * (progressPercent / 100f);
             _netHealth.Value = Mathf.Max(_netHealth.Value, targetHP);
 
-            Debug.Log($"[PropulsionSystem] Repair {progressPercent}% → HP {_netHealth.Value:F0}/{_data.maxHealth}");
+            LogV($"[PropulsionSystem] Repair {progressPercent}% → HP {_netHealth.Value:F0}/{_data.maxHealth}");
         }
 
         // ── API Pubblica ──────────────────────────────────────────────────────
@@ -642,13 +648,13 @@ namespace SpaceSurvivor.Ship
             // Validazione
             if (newState == NavigationState.Autopilot && !_netAutopilotAvailable.Value)
             {
-                Debug.LogWarning("[PropulsionSystem] Autopilota non disponibile (AsteroidField attivo).");
+                LogVWarn("[PropulsionSystem] Autopilota non disponibile (AsteroidField attivo).");
                 return;
             }
 
             if (_ftlOverride && newState != NavigationState.Anchored)
             {
-                Debug.LogWarning("[PropulsionSystem] FTL in corso — solo ANCHORED permesso.");
+                LogVWarn("[PropulsionSystem] FTL in corso — solo ANCHORED permesso.");
                 return;
             }
 
@@ -658,7 +664,7 @@ namespace SpaceSurvivor.Ship
                 && newState != NavigationState.Coasting
                 && newState != NavigationState.Anchored)
             {
-                Debug.LogWarning("[PropulsionSystem] Sistema OFFLINE — solo COASTING/ANCHORED.");
+                LogVWarn("[PropulsionSystem] Sistema OFFLINE — solo COASTING/ANCHORED.");
                 return;
             }
 
@@ -704,7 +710,7 @@ namespace SpaceSurvivor.Ship
             if (!available && CurrentNavState == NavigationState.Autopilot)
             {
                 SetNavStateInternal(NavigationState.Coasting);
-                Debug.LogWarning("[PropulsionSystem] Autopilota disabilitato (AsteroidField) → COASTING");
+                LogVWarn("[PropulsionSystem] Autopilota disabilitato (AsteroidField) → COASTING");
             }
         }
 
@@ -729,11 +735,11 @@ namespace SpaceSurvivor.Ship
                 _netCurrentSpeed.Value = 0f;
                 _fuelAccumulator = 0f;
                 _manualThrottleInput = 0f;
-                Debug.Log("[PropulsionSystem] FTL override ON — motori spenti");
+                LogV("[PropulsionSystem] FTL override ON — motori spenti");
             }
             else
             {
-                Debug.Log("[PropulsionSystem] FTL override OFF — motori disponibili");
+                LogV("[PropulsionSystem] FTL override OFF — motori disponibili");
             }
         }
 
@@ -877,7 +883,7 @@ namespace SpaceSurvivor.Ship
                 && state != NavigationState.Coasting
                 && state != NavigationState.Autopilot)
             {
-                Debug.Log($"[PropulsionSystem] Impatto in {state} — avaria motori " +
+                LogV($"[PropulsionSystem] Impatto in {state} — avaria motori " +
                           $"non applicabile (ramp Rev T sospeso in questo stato).");
                 return;
             }
@@ -886,7 +892,7 @@ namespace SpaceSurvivor.Ship
             // _savedTargetSpeed originale e non estendere la durata.
             if (Time.time < _engineFailureUntil)
             {
-                Debug.Log($"[PropulsionSystem] Avaria già in corso (residuo " +
+                LogV($"[PropulsionSystem] Avaria già in corso (residuo " +
                           $"{_engineFailureUntil - Time.time:F2}s) — nuovo impatto ignorato.");
                 return;
             }
@@ -905,7 +911,7 @@ namespace SpaceSurvivor.Ship
                 NetworkManager.Singleton.ServerTime.Time + engineFailureDuration;
             _netEngineFailureDuration.Value = engineFailureDuration;
 
-            Debug.LogWarning($"[PropulsionSystem] Avaria motori: {engineFailureDuration:F2}s " +
+            LogVWarn($"[PropulsionSystem] Avaria motori: {engineFailureDuration:F2}s " +
                              $"(TargetSpeed salvato: {_savedTargetSpeed:F1} m/s, state: {state})");
 
             OnEnginesFailed?.Invoke(engineFailureDuration);
@@ -941,7 +947,7 @@ namespace SpaceSurvivor.Ship
             }
             else
             {
-                Debug.LogWarning("[PropulsionSystem] Carburante esaurito → COASTING");
+                LogVWarn("[PropulsionSystem] Carburante esaurito → COASTING");
                 SetNavStateInternal(NavigationState.Coasting);
                 _fuelAccumulator = 0f;
             }
@@ -1062,7 +1068,7 @@ namespace SpaceSurvivor.Ship
                 }
             }
 
-            Debug.Log($"[PropulsionSystem] NavState → {newState}" +
+            LogV($"[PropulsionSystem] NavState → {newState}" +
                       $" | Target: {_netTargetSpeed.Value:F1} m/s · Demand: {GetPowerDemand():F1}W");
         }
 
@@ -1088,13 +1094,19 @@ namespace SpaceSurvivor.Ship
             _data = newData;
             _netHealth.Value = _data.maxHealth * hpRatio;
 
-            Debug.Log($"[PropulsionSystem] Upgraded to {_data.displayName}");
+            LogV($"[PropulsionSystem] Upgraded to {_data.displayName}");
         }
+
+        // ===== Debug logging (Rev BA) =====
+        private void LogV(string msg) { if (logVerbose) Debug.Log(msg); }
+        private void LogVWarn(string msg) { if (logVerbose) Debug.LogWarning(msg); }
 
         // ── Debug GUI ─────────────────────────────────────────────────────────
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
         private void OnGUI()
         {
+            if (!showDebugUI) return;
+
             var mults = GetDegradationMults();
             GUILayout.BeginArea(new Rect(Screen.width - 260, 10, 250, 400));
             GUILayout.BeginVertical("box");

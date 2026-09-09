@@ -166,16 +166,10 @@ namespace SpaceSurvivor.Ship
         [SerializeField] private float rotationImpactVelocityCap = 8f;
 
         [Header("Debug")]
-        [Tooltip("Log dettagliato di ogni collisione risolta. Utile in playtest; " +
-                 "disattivare in build finale.")]
-        [SerializeField] private bool logCollisions = true;
-
-        [Tooltip("Log diagnostico VERBOSO — heartbeat throttled (1/sec) dello " +
-                 "stato del resolver + posizioni logiche/visuali nel log HARD " +
-                 "COLLISION. Attivare solo quando si sta indagando su " +
-                 "divergenze visual↔logica o mancata rilevazione. Off in " +
-                 "gameplay normale — introduce rumore in console.")]
-        [SerializeField] private bool debugVerbose = false;
+        [Tooltip("Overlay OnGUI di diagnostica (solo Editor/Development Build). Standard Rev BA — default off.")]
+        [SerializeField] private bool showDebugUI = false;
+        [Tooltip("Log diagnostici verbosi: collisioni risolte + heartbeat throttled (1/sec) con posizioni logiche/visuali. Standard Rev BA — default off (consolida i vecchi logVerbose + logVerbose). I problemi reali (istanza duplicata) restano sempre a log.")]
+        [SerializeField] private bool logVerbose = false;
 
         // ── Costanti fisiche (Rev AI — refactor rotation collision) ──────────
         //
@@ -231,7 +225,7 @@ namespace SpaceSurvivor.Ship
 
         /// <summary>
         /// Rev AB — frame counter per throttle del log diagnostico "Heartbeat"
-        /// ogni ~1 sec (50 fixed frames). Emesso solo se debugVerbose == true.
+        /// ogni ~1 sec (50 fixed frames). Emesso solo se logVerbose == true.
         /// </summary>
         private int _debugFrameCounter;
 
@@ -401,12 +395,12 @@ namespace SpaceSurvivor.Ship
 
             if (!IsServer) return result;
 
-            // ── DEBUG HEARTBEAT (guardato da debugVerbose) ───────────────────
+            // ── DEBUG HEARTBEAT (guardato da logVerbose) ───────────────────
             //    Log ogni ~1 sec dello stato che il resolver sta vedendo.
             //    Utile per diagnosticare divergenze visual↔logica o mancata
             //    rilevazione. Off in gameplay normale.
             _debugFrameCounter++;
-            if (debugVerbose && (_debugFrameCounter % 50 == 0))
+            if (logVerbose && (_debugFrameCounter % 50 == 0))
             {
                 int poiTotal = 0;
                 int poiWithVolumes = 0;
@@ -609,9 +603,9 @@ namespace SpaceSurvivor.Ship
 
                     OnHardCollision?.Invoke(radialInward, winner);
 
-                    if (logCollisions)
+                    if (logVerbose)
                     {
-                        if (debugVerbose)
+                        if (logVerbose)
                         {
                             // Forma estesa: posizioni logiche + visuali per
                             // diagnosticare divergenze gizmo↔calcolo.
@@ -648,7 +642,7 @@ namespace SpaceSurvivor.Ship
                         }
                     }
                 }
-                else if (logCollisions && poiId == 0ul)
+                else if (logVerbose && poiId == 0ul)
                 {
                     Debug.LogWarning("[PoiCollisionResolver] POI senza NetworkObject valido — " +
                                      "OnHardCollision skippato (latch impossibile).");
@@ -687,7 +681,7 @@ namespace SpaceSurvivor.Ship
                 {
                     _latchedPoiIds.Remove(id);
                     _translationLatchedPoiIds.Remove(id);
-                    if (logCollisions)
+                    if (logVerbose)
                     {
                         Debug.Log($"[PoiCollisionResolver] Latch rilasciato per POI={poi.Data.DisplayName} " +
                                   $"(distance {delta.magnitude:F1}u > release {releaseThreshold:F1}u).");
@@ -718,6 +712,8 @@ namespace SpaceSurvivor.Ship
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
         private void OnGUI()
         {
+            if (!showDebugUI) return;
+
             if (!IsServer) return;
 
             var propulsion = PropulsionSystem.Instance;
@@ -770,7 +766,7 @@ namespace SpaceSurvivor.Ship
 
             if (dist < DegenerateRadialDistanceEpsilon)
             {
-                if (debugVerbose)
+                if (logVerbose)
                 {
                     Debug.LogWarning($"[PoiCollisionResolver] Direzione radiale degenere " +
                                      $"(dist={dist:E2} u) — impulse skippato (POI={poi.Data.DisplayName}).");
@@ -793,7 +789,7 @@ namespace SpaceSurvivor.Ship
 
             poi.AddImpulse(impulse);
 
-            if (debugVerbose)
+            if (logVerbose)
             {
                 Debug.Log($"[PoiCollisionResolver] IMPULSO → POI={poi.Data.DisplayName}, " +
                           $"deltaV={deltaVMagnitude:F3} u/s, " +
@@ -967,7 +963,7 @@ namespace SpaceSurvivor.Ship
                 // Fix v3.1: applicato con magnitudo attenuata.
                 ApplyMomentumTransferToPoi(impactVelocityAttenuated, winner);
             }
-            else if (debugVerbose)
+            else if (logVerbose)
             {
                 Debug.Log($"[PoiCollisionResolver] Impulse rotation SKIPPATO " +
                           $"su POI={winner.Data.DisplayName} — POI già spinto " +
@@ -1011,7 +1007,7 @@ namespace SpaceSurvivor.Ship
                 {
                     _latchedPoiIds.Add(poiId);
 
-                    if (debugVerbose)
+                    if (logVerbose)
                     {
                         Debug.LogWarning($"[PoiCollisionResolver] ROTATION COLLISION → " +
                                          $"POI={winner.Data.DisplayName}, depth={winnerDepth:F3} u, " +
@@ -1021,14 +1017,14 @@ namespace SpaceSurvivor.Ship
                     }
                     OnHardCollision?.Invoke(impactVelocityRaw, winner);
                 }
-                else if (debugVerbose)
+                else if (logVerbose)
                 {
                     Debug.Log($"[PoiCollisionResolver] ROTATION COLLISION continua " +
                               $"su POI={winner.Data.DisplayName} già latched — solo " +
                               $"impulse push-out attenuato, nessuna emissione ripetuta.");
                 }
             }
-            else if (debugVerbose)
+            else if (logVerbose)
             {
                 Debug.Log($"[PoiCollisionResolver] ROTATION COLLISION (sotto soglia) → " +
                           $"POI={winner.Data.DisplayName}, depth={winnerDepth:F3} u, " +

@@ -11,6 +11,11 @@
 [RequireComponent(typeof(Light))]
 public class ShipLight : MonoBehaviour, IPowerConsumer
 {
+    [Header("Debug")]
+    [Tooltip("Log diagnostici verbosi (taglio alimentazione). Standard Rev BA — default off. Il problema reale (controllo manuale luce Automatic) resta a log.")]
+    [SerializeField] private bool logVerbose = false;
+    private void LogV(string msg) { if (logVerbose) Debug.Log(msg); }
+
     [Header("Light Configuration")]
     [SerializeField] private LightMode lightMode = LightMode.Automatic;
     [SerializeField] private float powerConsumption = 50f;
@@ -282,7 +287,7 @@ public class ShipLight : MonoBehaviour, IPowerConsumer
     public void SetPowerState(bool isOn)
     {
         isPowered = isOn;
-        if (!isOn) Debug.Log($"[ShipLight {gameObject.name}] Power cut by PowerManager");
+        if (!isOn) LogV($"[ShipLight {gameObject.name}] Power cut by PowerManager");
     }
 
     public string GetSystemName() => $"Light_{gameObject.name}";

@@ -74,8 +74,8 @@ namespace SpaceSurvivor.Collision
         [Header("Debug (Editor only)")]
         [Tooltip("Se true, disegna i gizmi anche quando il GameObject non è " +
                  "selezionato (wireframe sempre visibile). Utile per navigare la " +
-                 "scena e vedere l'ingombro della Nave. Default true.")]
-        [SerializeField] private bool alwaysShowGizmos = true;
+                 "scena e vedere l'ingombro della Nave. Default off (Standard Rev BA).")]
+        [SerializeField] private bool drawDebugGizmos = false;
 
         [Tooltip("Colore dei volumi OBB. Default azzurro (coerente col " +
                  "BoxCollider nativo Unity).")]
@@ -86,13 +86,13 @@ namespace SpaceSurvivor.Collision
 
         private void OnDrawGizmos()
         {
-            if (!alwaysShowGizmos) return;
+            if (!drawDebugGizmos) return;
             DrawGizmosInternal(filled: false);
         }
 
         private void OnDrawGizmosSelected()
         {
-            // Selected: disegno filled anche se alwaysShowGizmos era off,
+            // Selected: disegno filled anche se drawDebugGizmos era off,
             // così la selezione è comunque evidente.
             DrawGizmosInternal(filled: true);
         }

@@ -59,7 +59,7 @@ public class CameraShaker : MonoBehaviour
     [SerializeField] private float rotationShakeDegrees = 2.0f;
 
     [Header("Debug")]
-    [SerializeField] private bool logShakes = false;
+    [SerializeField] private bool logVerbose = false;
 
     private bool _isShaking = false;
     private float _shakeStartTime;
@@ -135,7 +135,7 @@ public class CameraShaker : MonoBehaviour
 
         _isShaking = true;
 
-        if (logShakes)
+        if (logVerbose)
         {
             Debug.Log($"[CameraShaker] Trigger {ImpactThresholdTable.DebugLabel(severity)} " +
                       $"amp={_shakeAmplitude:F3}u dur={_shakeDuration:F2}s freq={_shakeFrequency:F0}Hz");
@@ -159,7 +159,7 @@ public class CameraShaker : MonoBehaviour
         if (transform.parent != _shakeStartParent)
         {
             _isShaking = false;
-            if (logShakes)
+            if (logVerbose)
                 Debug.Log("[CameraShaker] Shake abortito: parent cambiato mid-shake.");
             return;
         }
@@ -214,7 +214,7 @@ public class CameraShaker : MonoBehaviour
         if (isFinalFrame)
         {
             _isShaking = false;
-            if (logShakes)
+            if (logVerbose)
                 Debug.Log("[CameraShaker] Shake completato, residuo annullato via delta.");
         }
     }

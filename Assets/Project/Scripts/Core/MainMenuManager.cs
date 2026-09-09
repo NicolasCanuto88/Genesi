@@ -25,6 +25,11 @@ using TMPro;
 /// </summary>
 public class MainMenuManager : MonoBehaviour
 {
+    [Header("Debug")]
+    [Tooltip("Log diagnostici verbosi (relay pronto, debug skip). Standard Rev BA — default off.")]
+    [SerializeField] private bool logVerbose = false;
+    private void LogV(string msg) { if (logVerbose) Debug.Log(msg); }
+
     private const string GAME_SCENE_NAME = "Game";
 
     // ── CANVAS ────────────────────────────────────────────────────────────────
@@ -604,7 +609,7 @@ public class MainMenuManager : MonoBehaviour
 
     private void OnRelayReady()
     {
-        Debug.Log("[MainMenuManager] Relay pronto — partite cross-internet disponibili.");
+        LogV("[MainMenuManager] Relay pronto — partite cross-internet disponibili.");
     }
 
     // ── CURSORE ───────────────────────────────────────────────────────────────
@@ -643,7 +648,7 @@ public class MainMenuManager : MonoBehaviour
         if (menuCanvas != null) menuCanvas.gameObject.SetActive(false);
         if (EventSystem.current != null) EventSystem.current.SetSelectedGameObject(null);
         NetworkManager.Singleton.StartHost();
-        Debug.Log("[MainMenuManager] debugSkipMenu — host locale avviato.");
+        LogV("[MainMenuManager] debugSkipMenu — host locale avviato.");
     }
 #endif
 }

@@ -26,7 +26,8 @@ public class InteractionSystem : MonoBehaviour
 
     // Debug
     [Header("Debug")]
-    [SerializeField] private bool showDebugRay = true;
+    [Tooltip("Disegna il raggio di interazione con Debug.DrawRay (Scene view). Standard Rev BA — default off.")]
+    [SerializeField] private bool showDebugRay = false;
 
     private void Awake()
     {

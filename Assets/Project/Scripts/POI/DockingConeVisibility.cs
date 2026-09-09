@@ -67,7 +67,7 @@ namespace SpaceSurvivor.Poi
 
         [Tooltip("Se true, logga i cambi di stato (visibile↔invisibile) in " +
                  "Console per debug del D5. Disattivare in playtest normale.")]
-        [SerializeField] private bool debugLogStateChanges = false;
+        [SerializeField] private bool logVerbose = false;
 
         // ── Riferimenti cachati ──────────────────────────────────────────────
 
@@ -166,7 +166,7 @@ namespace SpaceSurvivor.Poi
                 meshRenderer.enabled = shouldBeVisible;
                 lastVisibleState = shouldBeVisible;
 
-                if (debugLogStateChanges)
+                if (logVerbose)
                 {
                     float dist = Mathf.Sqrt(sqrDistance);
                     Debug.Log(

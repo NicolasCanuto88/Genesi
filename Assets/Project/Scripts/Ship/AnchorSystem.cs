@@ -311,7 +311,7 @@ namespace SpaceSurvivor.Ship
         {
             if (_netAnchorabilityState.Value != AnchorabilityState.Anchorable)
             {
-                Debug.LogWarning($"[AnchorSystem] Ingresso Docking rifiutato — " +
+                LogVWarn($"[AnchorSystem] Ingresso Docking rifiutato — " +
                                  $"AnchorabilityState = {_netAnchorabilityState.Value}");
                 return;
             }
@@ -319,7 +319,7 @@ namespace SpaceSurvivor.Ship
             ulong poiId = _netCurrentAnchorableId.Value;
             if (poiId == 0ul)
             {
-                Debug.LogWarning("[AnchorSystem] Ingresso Docking rifiutato — " +
+                LogVWarn("[AnchorSystem] Ingresso Docking rifiutato — " +
                                  "CurrentAnchorableId = 0.");
                 return;
             }
@@ -334,7 +334,7 @@ namespace SpaceSurvivor.Ship
             propulsion.SetAnchoredPoiId(poiId);
             propulsion.RequestNavigationState(NavigationState.Docking);
 
-            Debug.Log($"[AnchorSystem] Docking avviato — POI NetworkObjectId {poiId}");
+            LogV($"[AnchorSystem] Docking avviato — POI NetworkObjectId {poiId}");
         }
 
         /// <summary>
@@ -363,7 +363,7 @@ namespace SpaceSurvivor.Ship
             var navState = propulsion.CurrentNavState;
             if (navState != NavigationState.Docking && navState != NavigationState.Docked)
             {
-                Debug.LogWarning($"[AnchorSystem] Undock rifiutato — stato attuale {navState} " +
+                LogVWarn($"[AnchorSystem] Undock rifiutato — stato attuale {navState} " +
                                  "(atteso Docking o Docked).");
                 return;
             }
@@ -393,7 +393,7 @@ namespace SpaceSurvivor.Ship
 
             propulsion.RequestNavigationState(target);
 
-            Debug.Log($"[AnchorSystem] Undock completato — {target}");
+            LogV($"[AnchorSystem] Undock completato — {target}");
         }
 
         /// <summary>
@@ -410,9 +410,21 @@ namespace SpaceSurvivor.Ship
         }
 
         // ── Debug GUI (solo lettura — cursore-safe) ──────────────────────────
+        [Header("Debug")]
+        [Tooltip("Overlay OnGUI diagnostica ancoraggio (solo Editor/Development Build). Standard Rev BA — default off.")]
+        [SerializeField] private bool showDebugUI = false;
+        [Tooltip("Log diagnostici verbosi (docking avviato/undock completato). Standard Rev BA — default off. I problemi reali (PropulsionSystem null) restano sempre a log.")]
+        [SerializeField] private bool logVerbose = false;
+
+        // ===== Debug logging (Rev BA) =====
+        private void LogV(string msg) { if (logVerbose) Debug.Log(msg); }
+        private void LogVWarn(string msg) { if (logVerbose) Debug.LogWarning(msg); }
+
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
         private void OnGUI()
         {
+            if (!showDebugUI) return;
+
             GUILayout.BeginArea(new Rect(10, 10, 300, 100));
             GUILayout.BeginVertical("box");
             GUILayout.Label($"[Anchor] {(IsServer ? "SRV" : "CLT")}");

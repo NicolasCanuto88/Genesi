@@ -124,7 +124,7 @@ namespace SpaceSurvivor.Ship
 
             if (netFleetCredits.Value < amount)
             {
-                Debug.LogWarning("[EconomyManager] Fondi Fleet Account insufficienti per il trasferimento.");
+                LogVWarn("[EconomyManager] Fondi Fleet Account insufficienti per il trasferimento.");
                 return;
             }
 
@@ -132,7 +132,7 @@ namespace SpaceSurvivor.Ship
 
             ReceiveFleetPaymentRpc(amount, RpcTarget.Single(targetClientId, RpcTargetUse.Temp));
 
-            Debug.Log($"[EconomyManager] Host ha trasferito {amount} cr al client {targetClientId}.");
+            LogV($"[EconomyManager] Host ha trasferito {amount} cr al client {targetClientId}.");
         }
 
         /// <summary>
@@ -155,9 +155,21 @@ namespace SpaceSurvivor.Ship
         }
 
         // ── Debug GUI (solo per testare la UI prima che Missioni/Vendite esistano) ──
+        [Header("Debug")]
+        [Tooltip("Overlay OnGUI di diagnostica (solo Editor/Development Build, solo server). Standard Rev BA — default off.")]
+        [SerializeField] private bool showDebugUI = false;
+        [Tooltip("Log diagnostici verbosi (trasferimenti riusciti/fondi insufficienti). Standard Rev BA — default off. I problemi reali (chiamate client, null) restano sempre a log.")]
+        [SerializeField] private bool logVerbose = false;
+
+        // ===== Debug logging (Rev BA) =====
+        private void LogV(string msg) { if (logVerbose) Debug.Log(msg); }
+        private void LogVWarn(string msg) { if (logVerbose) Debug.LogWarning(msg); }
+
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
         private void OnGUI()
         {
+            if (!showDebugUI) return;
+
             if (!IsServer) return;
 
             GUILayout.BeginArea(new Rect(280, 200, 240, 100));

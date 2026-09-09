@@ -137,7 +137,7 @@ namespace SpaceSurvivor.Poi
         [Header("Debug")]
         [Tooltip("Log dettagliati dei roll (successo/fallimento, motivo di " +
                  "skip). Lasciare OFF in produzione.")]
-        [SerializeField] private bool verboseLogging = false;
+        [SerializeField] private bool logVerbose = false;
 
         // Timer per il prossimo check.
         private float _timeUntilNextCheck;
@@ -157,7 +157,7 @@ namespace SpaceSurvivor.Poi
 
             _timeUntilNextCheck = checkIntervalSeconds;
 
-            if (verboseLogging)
+            if (logVerbose)
             {
                 Debug.Log($"[PoiSpawner] Server active. Check every " +
                           $"{checkIntervalSeconds}s, prob {spawnProbability:P0}, " +
@@ -184,7 +184,7 @@ namespace SpaceSurvivor.Poi
             // Filtro 1: la nave sta viaggiando?
             if (!IsShipTraveling(out string skipReason))
             {
-                if (verboseLogging)
+                if (logVerbose)
                     Debug.Log($"[PoiSpawner] Roll skipped: {skipReason}");
                 return;
             }
@@ -192,7 +192,7 @@ namespace SpaceSurvivor.Poi
             // Filtro 2: cap raggiunto?
             if (PoiRegistry.Count >= maxActivePoi)
             {
-                if (verboseLogging)
+                if (logVerbose)
                     Debug.Log($"[PoiSpawner] Roll skipped: cap raggiunto " +
                               $"({PoiRegistry.Count}/{maxActivePoi}).");
                 return;
@@ -201,7 +201,7 @@ namespace SpaceSurvivor.Poi
             // Filtro 3: nessuna categoria configurata?
             if (spawnableTypes.Count == 0)
             {
-                if (verboseLogging)
+                if (logVerbose)
                     Debug.LogWarning("[PoiSpawner] Roll skipped: spawnableTypes vuoto.");
                 return;
             }
@@ -210,7 +210,7 @@ namespace SpaceSurvivor.Poi
             float roll = Random.value; // [0, 1]
             if (roll > spawnProbability)
             {
-                if (verboseLogging)
+                if (logVerbose)
                     Debug.Log($"[PoiSpawner] Roll failed: {roll:F2} > {spawnProbability:F2}.");
                 return;
             }
@@ -378,7 +378,7 @@ namespace SpaceSurvivor.Poi
 
             poi.InitializeLogicalPose(logicalPos, logicalRot);
 
-            if (verboseLogging)
+            if (logVerbose)
             {
                 Debug.Log($"[PoiSpawner] Spawn {data.DisplayName} @ " +
                           $"logicalPos=({logicalPos.x:F0}, {logicalPos.y:F0}, {logicalPos.z:F0}) " +

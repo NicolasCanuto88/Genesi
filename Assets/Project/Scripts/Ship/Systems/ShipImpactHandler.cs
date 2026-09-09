@@ -145,16 +145,12 @@ namespace SpaceSurvivor.Ship
         [SerializeField] private float hullDamagePerImpactSquared = 1.0f;
 
         [Header("Debug")]
-        [Tooltip("Log dettagliato di ogni impatto (calcolo formula danno + " +
-                 "risultato). Utile in playtest per tuning; disattivare in " +
-                 "build finale.")]
-        [SerializeField] private bool logImpacts = true;
-
-        [Tooltip("Log dettagliato del trasferimento di momento al POI colpito " +
-                 "(direzione radiale + deltaV applicato). Utile in playtest " +
-                 "3.2.b per verificare feel dell'urto e bilanciamento di " +
-                 "PoiData.Mass; disattivare in build finale.")]
-        [SerializeField] private bool logImpulses = true;
+        [Tooltip("Log diagnostici verbosi degli impatti: calcolo formula danno, " +
+                 "sottoscrizioni ai publisher, feedback client. Standard Rev BA — " +
+                 "default off, attivare in Inspector solo per debug. I warning/error " +
+                 "di problemi reali (Hull/Propulsion/POI null) restano SEMPRE attivi, " +
+                 "indipendenti da questo flag.")]
+        [SerializeField] private bool logVerbose = false;
 
         // ── Stato server ──────────────────────────────────────────────────────
         private bool _subscribedToDocking = false;
@@ -209,14 +205,14 @@ namespace SpaceSurvivor.Ship
             {
                 DockingController.Instance.OnHardCollision += HandleHardCollision;
                 _subscribedToDocking = true;
-                if (logImpacts)
+                if (logVerbose)
                     Debug.Log("[ShipImpactHandler] Subscribed to DockingController.OnHardCollision.");
             }
             else
             {
                 // DockingController non ancora spawnato: aspetta OnInstanceReady.
                 DockingController.OnInstanceReady += HandleDockingInstanceReady;
-                if (logImpacts)
+                if (logVerbose)
                     Debug.Log("[ShipImpactHandler] DockingController non pronto, in attesa di OnInstanceReady.");
             }
         }
@@ -249,13 +245,13 @@ namespace SpaceSurvivor.Ship
             {
                 PoiCollisionResolver.Instance.OnHardCollision += HandleHardCollision;
                 _subscribedToResolver = true;
-                if (logImpacts)
+                if (logVerbose)
                     Debug.Log("[ShipImpactHandler] Subscribed to PoiCollisionResolver.OnHardCollision.");
             }
             else
             {
                 PoiCollisionResolver.OnInstanceReady += HandleResolverInstanceReady;
-                if (logImpacts)
+                if (logVerbose)
                     Debug.Log("[ShipImpactHandler] PoiCollisionResolver non pronto, in attesa di OnInstanceReady.");
             }
         }
@@ -305,7 +301,7 @@ namespace SpaceSurvivor.Ship
 
             if (impactVelocity < threshold)
             {
-                if (logImpacts)
+                if (logVerbose)
                 {
                     Debug.Log($"[ShipImpactHandler] Impatto sotto soglia — no damage/impulse. " +
                               $"v={impactVelocity:F2} u/s, soglia={threshold:F2} u/s, " +
@@ -322,7 +318,7 @@ namespace SpaceSurvivor.Ship
 
             if (damage <= 0f)
             {
-                if (logImpacts)
+                if (logVerbose)
                 {
                     Debug.Log($"[ShipImpactHandler] Damage calcolato = 0 " +
                               $"(k={hullDamagePerImpactSquared:F3}, mult={multiplier:F2}) — skip.");
@@ -347,7 +343,7 @@ namespace SpaceSurvivor.Ship
             {
                 hull.TakeDamage(damage);
 
-                if (logImpacts)
+                if (logVerbose)
                 {
                     Debug.LogWarning($"[ShipImpactHandler] IMPATTO → -{damage:F1} HP " +
                                      $"(v={impactVelocity:F2} u/s, k={hullDamagePerImpactSquared:F3}, " +
@@ -427,7 +423,7 @@ namespace SpaceSurvivor.Ship
             // Audio one-shot sulla nave locale (singleton per client).
             ImpactAudioController.Instance?.PlayImpact(severity);
 
-            if (logImpacts)
+            if (logVerbose)
             {
                 Debug.Log($"[ShipImpactHandler] Client-side feedback: " +
                           $"{ImpactThresholdTable.DebugLabel(severity)} (v={impactVelocity:F2} u/s)");
@@ -444,10 +440,8 @@ namespace SpaceSurvivor.Ship
         // sono state spostate insieme (vedi PoiCollisionResolver.cs sezione
         // "Costanti fisiche").
         //
-        // Il campo SerializeField logImpulses (Header "Trasferimento momento")
-        // resta orfano — può essere rimosso dall'Inspector, oppure ripurposed
-        // per debug futuro (es. log di impulse ricevuti come subscriber di
-        // OnDamageInflicted). Lasciato in place per non complicare Rev AI:
-        // Nicolas può rimuoverlo dallo Scene se preferisce.
+        // Rev BA: il campo orfano logImpulses è stato RIMOSSO (dichiarato ma
+        // mai letto dopo lo spostamento dell'impulse al resolver in Rev AI).
+        // Il logging verboso residuo di questo handler passa da logVerbose.
     }
 }

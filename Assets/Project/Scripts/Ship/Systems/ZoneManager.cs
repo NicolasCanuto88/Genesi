@@ -149,7 +149,7 @@ namespace SpaceSurvivor.Ship.Systems
 
             OnZoneChanged?.Invoke(CurrentZone, ActiveEvent);
 
-            Debug.Log($"[ZoneManager] Zona:{CurrentZone} Evento:{ActiveEvent} → EM:{em} Ctx:{ctx}");
+            LogV($"[ZoneManager] Zona:{CurrentZone} Evento:{ActiveEvent} → EM:{em} Ctx:{ctx}");
         }
 
         // ── Autopilota (AGGIUNTO) ─────────────────────────────────────────
@@ -206,9 +206,20 @@ namespace SpaceSurvivor.Ship.Systems
         }
 
         // ── Debug GUI ─────────────────────────────────────────────────────
+        [Header("Debug")]
+        [Tooltip("Overlay OnGUI di diagnostica (solo Editor/Development Build). Standard Rev BA — default off.")]
+        [SerializeField] private bool showDebugUI = false;
+        [Tooltip("Log diagnostici verbosi (transizioni zona/evento → EM/Context). Standard Rev BA — default off. I problemi reali (dipendenze non trovate) restano sempre a log.")]
+        [SerializeField] private bool logVerbose = false;
+
+        // ===== Debug logging (Rev BA) =====
+        private void LogV(string msg) { if (logVerbose) Debug.Log(msg); }
+
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
         private void OnGUI()
         {
+            if (!showDebugUI) return;
+
             var em = ResolveEMIntensity(CurrentZone, ActiveEvent);
             var ctx = ResolveZoneContext(ActiveEvent);
 

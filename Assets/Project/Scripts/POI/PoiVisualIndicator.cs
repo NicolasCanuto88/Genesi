@@ -76,7 +76,7 @@ namespace SpaceSurvivor.Poi
         [SerializeField] private bool alsoUpdateBaseColor = false;
 
         [Header("Debug")]
-        [SerializeField] private bool verboseLogging = false;
+        [SerializeField] private bool logVerbose = false;
 
         // Shader property IDs — cachati per performance.
         private static readonly int EmissionColorId = Shader.PropertyToID("_EmissionColor");
@@ -141,7 +141,7 @@ namespace SpaceSurvivor.Poi
         {
             ApplyStateColor(next);
 
-            if (verboseLogging)
+            if (logVerbose)
             {
                 Debug.Log($"[PoiVisualIndicator] {name}: {previous} → {next}");
             }

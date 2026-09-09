@@ -68,7 +68,7 @@ public class EngineFailureBannerController : MonoBehaviour
     [SerializeField] private float pulseFrequencyHz = 1.0f;
 
     [Header("Debug")]
-    [SerializeField] private bool logStateChanges = false;
+    [SerializeField] private bool logVerbose = false;
 
     // ── Runtime state ─────────────────────────────────────────────────────────
     private enum BannerState { Hidden, FadingIn, Showing, FadingOut }
@@ -109,7 +109,7 @@ public class EngineFailureBannerController : MonoBehaviour
     {
         _state = BannerState.FadingIn;
         _stateStartTime = Time.time;
-        if (logStateChanges) Debug.Log("[EngineFailureBanner] Show → FadingIn");
+        if (logVerbose) Debug.Log("[EngineFailureBanner] Show → FadingIn");
     }
 
     private void Hide()
@@ -117,7 +117,7 @@ public class EngineFailureBannerController : MonoBehaviour
         _state = BannerState.FadingOut;
         _stateStartTime = Time.time;
         _fadeOutStartAlpha = canvasGroup.alpha;
-        if (logStateChanges) Debug.Log("[EngineFailureBanner] Hide → FadingOut");
+        if (logVerbose) Debug.Log("[EngineFailureBanner] Hide → FadingOut");
     }
 
     private void UpdateVisual(PropulsionSystem propulsion)
@@ -137,7 +137,7 @@ public class EngineFailureBannerController : MonoBehaviour
                     canvasGroup.alpha = 1f;
                     _state = BannerState.Showing;
                     _stateStartTime = now;
-                    if (logStateChanges) Debug.Log("[EngineFailureBanner] FadingIn → Showing");
+                    if (logVerbose) Debug.Log("[EngineFailureBanner] FadingIn → Showing");
                 }
                 else
                 {
@@ -159,7 +159,7 @@ public class EngineFailureBannerController : MonoBehaviour
                     _state = BannerState.Hidden;
                     // HOTFIX: NON disattivare il GameObject — Update deve
                     // continuare per rilevare futuri Show().
-                    if (logStateChanges) Debug.Log("[EngineFailureBanner] FadingOut → Hidden");
+                    if (logVerbose) Debug.Log("[EngineFailureBanner] FadingOut → Hidden");
                 }
                 else
                 {

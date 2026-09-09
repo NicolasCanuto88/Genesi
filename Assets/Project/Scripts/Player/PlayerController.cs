@@ -284,14 +284,20 @@ public class PlayerController : MonoBehaviour
         // - PlayerController.Start() (initial lock)
     }
 
+    [Header("Debug")]
+    [Tooltip("Overlay OnGUI di diagnostica (solo Editor/Development Build). Standard Rev BA — default off.")]
+    [SerializeField] private bool showDebugUI = false;
+
     // Debug
     private void OnGUI()
     {
-        if (!Debug.isDebugBuild) return;
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+        if (!showDebugUI) return;
 
         GUI.Label(new Rect(10, 10, 300, 20), $"Stamina: {currentStamina:F1}/{maxStamina}");
         GUI.Label(new Rect(10, 30, 300, 20), $"Speed: {currentVelocity.magnitude:F2} m/s");
         GUI.Label(new Rect(10, 50, 300, 20), $"Sprinting: {IsSprinting}");
         GUI.Label(new Rect(10, 70, 300, 20), $"Crouching: {IsCrouching}");
+#endif
     }
 }

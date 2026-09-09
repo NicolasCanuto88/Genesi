@@ -111,10 +111,10 @@ namespace SpaceSurvivor.Ship
         [SerializeField] private bool applyRotation = true;
 
         [Header("Debug")]
-        [Tooltip("Se true, stampa un log al primo bind con ShipMovement.Instance " +
-                 "e mostra un OnGUI con posizione/stato correnti. Lasciare OFF " +
-                 "in produzione.")]
-        [SerializeField] private bool verboseLogging = false;
+        [Tooltip("Overlay OnGUI con posizione/stato correnti (solo Editor/Development Build). Standard Rev BA — default off.")]
+        [SerializeField] private bool showDebugUI = false;
+        [Tooltip("Log al primo bind con ShipMovement.Instance. Standard Rev BA — default off.")]
+        [SerializeField] private bool logVerbose = false;
 
         // ── Stato interno ────────────────────────────────────────────────────
         // P_logical costante nello "spazio logico". Inizializzata via uno di
@@ -213,7 +213,7 @@ namespace SpaceSurvivor.Ship
 
             _initialized = true;
 
-            if (verboseLogging)
+            if (logVerbose)
             {
                 Debug.Log($"[ExternalWorldFollower] {name}: bind SCENE-PLACED. " +
                           $"P_logical=({_pointLogicalPosition.x:F1}, {_pointLogicalPosition.y:F1}, {_pointLogicalPosition.z:F1}) · " +
@@ -257,7 +257,7 @@ namespace SpaceSurvivor.Ship
             _pointLogicalRotation = logicalRotation;
             _initialized = true;
 
-            if (verboseLogging)
+            if (logVerbose)
             {
                 Debug.Log($"[ExternalWorldFollower] {name}: bind DYNAMIC OVERRIDE. " +
                           $"P_logical=({_pointLogicalPosition.x:F1}, {_pointLogicalPosition.y:F1}, {_pointLogicalPosition.z:F1})");
@@ -300,7 +300,7 @@ namespace SpaceSurvivor.Ship
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
         private void OnGUI()
         {
-            if (!verboseLogging) return;
+            if (!showDebugUI) return;
             if (!_initialized || ShipMovement.Instance == null) return;
 
             var ship = ShipMovement.Instance;

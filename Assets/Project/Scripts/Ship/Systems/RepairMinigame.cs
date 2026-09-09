@@ -598,9 +598,15 @@ namespace SpaceSurvivor.Ship
         };
 
         // ── Debug GUI ─────────────────────────────────────────────────────────
+        [Header("Debug")]
+        [Tooltip("Overlay OnGUI di diagnostica (solo Editor/Development Build). Standard Rev BA — default off.")]
+        [SerializeField] private bool showDebugUI = false;
+
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
         private void OnGUI()
         {
+            if (!showDebugUI) return;
+
             if (!_isActive) return;
 
             GUILayout.BeginArea(new Rect(Screen.width - 220, 10, 210, 140));

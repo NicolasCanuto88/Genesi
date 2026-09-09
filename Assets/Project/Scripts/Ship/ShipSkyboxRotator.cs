@@ -60,10 +60,10 @@ namespace SpaceSurvivor.Ship
         [SerializeField] private bool applyRotation = true;
 
         [Header("Debug")]
-        [Tooltip("Se true, stampa un log al primo bind con ShipMovement.Instance " +
-                 "e mostra un OnGUI con la rotazione corrente. Lasciare OFF in " +
-                 "produzione.")]
-        [SerializeField] private bool verboseLogging = false;
+        [Tooltip("Overlay OnGUI con la rotazione corrente (solo Editor/Development Build). Standard Rev BA — default off.")]
+        [SerializeField] private bool showDebugUI = false;
+        [Tooltip("Log al primo bind con ShipMovement.Instance. Standard Rev BA — default off.")]
+        [SerializeField] private bool logVerbose = false;
 
         // Property ID cached per performance (evita string lookup ogni frame).
         // Deve corrispondere ESATTAMENTE al nome della variabile nello shader
@@ -111,7 +111,7 @@ namespace SpaceSurvivor.Ship
             ShipMovement.OnInstanceReady -= HandleInstanceReady;
             _initialized = true;
 
-            if (verboseLogging)
+            if (logVerbose)
             {
                 string mode = applyRotation ? "attiva" : "congelata (test)";
                 Debug.Log($"[ShipSkyboxRotator] bind OK con " +
@@ -145,7 +145,7 @@ namespace SpaceSurvivor.Ship
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
         private void OnGUI()
         {
-            if (!verboseLogging) return;
+            if (!showDebugUI) return;
             if (!_initialized || ShipMovement.Instance == null) return;
 
             var ship = ShipMovement.Instance;
