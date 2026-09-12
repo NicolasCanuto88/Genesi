@@ -21,7 +21,7 @@ MonoBehaviour:
     m_Value: 0.04
   intensity:
     m_OverrideState: 1
-    m_Value: 0.09
+    m_Value: 0.2
   scatter:
     m_OverrideState: 1
     m_Value: 0.866
@@ -65,6 +65,9 @@ MonoBehaviour:
   components:
   - {fileID: -4605864208570962916}
   - {fileID: 7008384768990082471}
+  - {fileID: 0}
+  - {fileID: 0}
+  - {fileID: 0}
 --- !u!114 &7008384768990082471
 MonoBehaviour:
   m_ObjectHideFlags: 3
