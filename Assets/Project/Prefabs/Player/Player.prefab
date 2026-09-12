@@ -644,7 +644,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::CameraShaker
   rotationShakeDegrees: 2
-  logShakes: 0
+  logVerbose: 0
 --- !u!1 &1318188886572801012
 GameObject:
   m_ObjectHideFlags: 0
@@ -3103,6 +3103,7 @@ GameObject:
   - component: {fileID: 5240493078305390057}
   - component: {fileID: 3162303209327314879}
   - component: {fileID: 5451365132181139867}
+  - component: {fileID: 6133072977209085837}
   m_Layer: 0
   m_Name: Player
   m_TagString: Player
@@ -3305,6 +3306,7 @@ MonoBehaviour:
   gravity: 20
   terminalVelocity: -50
   cameraTransform: {fileID: 8790591149620919640}
+  showDebugUI: 0
 --- !u!114 &409763803724793407
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -3414,6 +3416,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::PlayerHealthSystem
   ShowTopMostFoldoutHeaderGroup: 1
   maxHP: 100
+  showDebugUI: 1
 --- !u!114 &3162303209327314879
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -3473,6 +3476,25 @@ MonoBehaviour:
   SwitchTransformSpaceWhenParented: 0
   Interpolate: 1
   SlerpPosition: 0
+--- !u!114 &6133072977209085837
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 6942183193722732773}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 9a9dcf076ee792245bbe60baba0b681a, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::PlayerStatusEffects
+  ShowTopMostFoldoutHeaderGroup: 1
+  statusCatalog:
+  - {fileID: 11400000, guid: fb9cb05832e2c3a498ac58d9000509d0, type: 2}
+  - {fileID: 11400000, guid: 46e3f168496c8b64db9b41c781d8a764, type: 2}
+  - {fileID: 11400000, guid: 70313401d1bb5a14aaee197c3e5b1993, type: 2}
+  showDebugUI: 1
+  logVerbose: 0
 --- !u!1 &7011612708961063772
 GameObject:
   m_ObjectHideFlags: 0
