@@ -1,8 +1,10 @@
 using System;
+using System.Collections;
 using System.Threading.Tasks;
 using Unity.Netcode;
 using UnityEngine;
 using UnityEngine.EventSystems;
+using UnityEngine.InputSystem;
 using UnityEngine.SceneManagement;
 using UnityEngine.UI;
 using TMPro;
@@ -162,6 +164,13 @@ public class MainMenuManager : MonoBehaviour
     [Header("Riferimenti")]
     [SerializeField] private RelayManager relayManager;
 
+    // ── NAVIGAZIONE CONTROLLER ────────────────────────────────────────────────
+
+    [Header("Navigazione Controller / Tastiera")]
+    [Tooltip("Imposta automaticamente il focus sull'elemento primario di ogni pannello " +
+             "e gestisce il tasto Indietro (B / Esc). Disattivalo per tornare al comportamento solo-mouse.")]
+    [SerializeField] private bool enableControllerNav = true;
+
     // ── STATE MACHINE ─────────────────────────────────────────────────────────
 
     private enum Stato { CharacterCreation, MainMenu, CharacterSelect, SessionType, LobbyHost, Join }
@@ -281,6 +290,142 @@ public class MainMenuManager : MonoBehaviour
             case Stato.SessionType: MostraSessionType(); break;
             case Stato.LobbyHost: MostraLobbyHost(); break;
             case Stato.Join: MostraJoin(); break;
+        }
+
+        if (enableControllerNav) FocusPrimarioPannello();
+    }
+
+    // ── NAVIGAZIONE CONTROLLER / TASTIERA ─────────────────────────────────────
+    // L'input è già cablato dall'InputSystemUIInputModule (DefaultInputActions:
+    // Navigate/Submit/Cancel su gamepad + tastiera). Qui manca solo: dare un
+    // focus iniziale a ogni pannello (senza, col controller nulla è selezionato
+    // e lo stick non muove niente), gestire "Indietro" via Cancel, e ripristinare
+    // il focus se va perso pur restando in un pannello.
+
+    private GameObject _lastSelected;
+    private Coroutine _focusRoutine;
+
+    /// <summary>Selettore primario per lo stato corrente (rispetta interactable).</summary>
+    private Selectable PrimarioPerStato()
+    {
+        switch (_stato)
+        {
+            case Stato.CharacterCreation:
+                return creationNameInput != null ? (Selectable)creationNameInput : creationBtnPilota;
+            case Stato.MainMenu:
+                if (mainBtnNuovaPartita != null && mainBtnNuovaPartita.interactable) return mainBtnNuovaPartita;
+                if (mainBtnUnisciti != null && mainBtnUnisciti.interactable) return mainBtnUnisciti;
+                return mainBtnCambiaPersonaggio;
+            case Stato.CharacterSelect:
+                // Prima entry della lista se esiste, altrimenti "+ Nuovo personaggio".
+                if (selectListContainer != null && selectListContainer.childCount > 0)
+                {
+                    var first = selectListContainer.GetChild(0).GetComponent<Selectable>();
+                    if (first != null) return first;
+                }
+                return selectBtnNuovoPersonaggio != null ? selectBtnNuovoPersonaggio : selectBtnConferma;
+            case Stato.SessionType:
+                return sessionBtnAperta != null ? sessionBtnAperta : sessionBtnSuInvito;
+            case Stato.LobbyHost:
+                return lobbyBtnInizia != null ? lobbyBtnInizia : lobbyBtnAnnulla;
+            case Stato.Join:
+                return joinCodeInput != null ? (Selectable)joinCodeInput : joinBtnConferma;
+        }
+        return null;
+    }
+
+    /// <summary>
+    /// Imposta il focus sull'elemento primario del pannello, differito di un frame:
+    /// un GameObject appena riattivato via SetActive non accetta la selezione nello
+    /// stesso frame, e la lista personaggi viene popolata in modo asincrono.
+    /// </summary>
+    private void FocusPrimarioPannello()
+    {
+        if (!isActiveAndEnabled) return;
+        if (_focusRoutine != null) StopCoroutine(_focusRoutine);
+        _focusRoutine = StartCoroutine(FocusPrimarioNextFrame());
+    }
+
+    private IEnumerator FocusPrimarioNextFrame()
+    {
+        yield return null; // attende che SetActive/layout siano applicati
+        var target = PrimarioPerStato();
+        SelezionaSelectable(target);
+        _focusRoutine = null;
+    }
+
+    private void SelezionaSelectable(Selectable s)
+    {
+        if (EventSystem.current == null) return;
+        var go = (s != null && s.isActiveAndEnabled && s.interactable) ? s.gameObject : null;
+        EventSystem.current.SetSelectedGameObject(null);
+        EventSystem.current.SetSelectedGameObject(go);
+        _lastSelected = go;
+    }
+
+    /// <summary>Gestisce Cancel (B / Esc) mappandolo al "Indietro" del pannello corrente.</summary>
+    private void HandleCancel()
+    {
+        switch (_stato)
+        {
+            case Stato.CharacterCreation:
+                if (creationBtnIndietro != null && creationBtnIndietro.gameObject.activeInHierarchy)
+                    OnCreationIndietro();
+                break;
+            case Stato.CharacterSelect: TransitionTo(Stato.MainMenu); break;
+            case Stato.SessionType: TransitionTo(Stato.MainMenu); break;
+            case Stato.LobbyHost: OnAnnullaHost(); break;
+            case Stato.Join: TransitionTo(Stato.MainMenu); break;
+            // MainMenu: nessun "indietro" (è la radice del menu).
+        }
+    }
+
+    private bool CancelPremuto()
+    {
+        bool gamepad = Gamepad.current != null && Gamepad.current.buttonEast.wasPressedThisFrame;
+        bool tastiera = Keyboard.current != null && Keyboard.current.escapeKey.wasPressedThisFrame;
+        return gamepad || tastiera;
+    }
+
+    private bool NavigazionePremuta()
+    {
+        var gp = Gamepad.current;
+        bool gpMove = gp != null && (
+            gp.leftStick.up.wasPressedThisFrame || gp.leftStick.down.wasPressedThisFrame ||
+            gp.leftStick.left.wasPressedThisFrame || gp.leftStick.right.wasPressedThisFrame ||
+            gp.dpad.up.wasPressedThisFrame || gp.dpad.down.wasPressedThisFrame ||
+            gp.dpad.left.wasPressedThisFrame || gp.dpad.right.wasPressedThisFrame ||
+            gp.buttonSouth.wasPressedThisFrame);
+        var kb = Keyboard.current;
+        bool kbMove = kb != null && (
+            kb.upArrowKey.wasPressedThisFrame || kb.downArrowKey.wasPressedThisFrame ||
+            kb.leftArrowKey.wasPressedThisFrame || kb.rightArrowKey.wasPressedThisFrame ||
+            kb.tabKey.wasPressedThisFrame);
+        return gpMove || kbMove;
+    }
+
+    /// <summary>
+    /// Chiamato ogni frame da Update: gestisce Cancel e ripristina il focus se
+    /// perso (es. dopo un click col mouse) non appena si usa la navigazione.
+    /// </summary>
+    private void HandleControllerNav()
+    {
+        if (CancelPremuto()) { HandleCancel(); return; }
+
+        var current = EventSystem.current != null ? EventSystem.current.currentSelectedGameObject : null;
+        if (current != null && current.activeInHierarchy)
+        {
+            _lastSelected = current; // memorizza l'ultimo focus valido
+            return;
+        }
+
+        // Focus perso: riprendilo solo se l'utente sta usando stick/dpad/tastiera,
+        // così durante l'uso a mouse non "rubiamo" il cursore.
+        if (NavigazionePremuta())
+        {
+            var restore = (_lastSelected != null && _lastSelected.activeInHierarchy)
+                ? _lastSelected.GetComponent<Selectable>() : null;
+            SelezionaSelectable(restore != null ? restore : PrimarioPerStato());
         }
     }
 
@@ -623,6 +768,8 @@ public class MainMenuManager : MonoBehaviour
                 Cursor.lockState = CursorLockMode.None;
                 Cursor.visible = true;
             }
+
+            if (enableControllerNav) HandleControllerNav();
         }
 
 #if UNITY_EDITOR || DEVELOPMENT_BUILD

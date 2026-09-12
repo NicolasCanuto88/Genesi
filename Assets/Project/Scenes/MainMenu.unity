@@ -1351,7 +1351,7 @@ RectTransform:
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0, y: 1}
   m_AnchorMax: {x: 0, y: 1}
-  m_AnchoredPosition: {x: 396.25, y: -75}
+  m_AnchoredPosition: {x: 396.25, y: -65}
   m_SizeDelta: {x: 732.5, y: 50}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!114 &131674590
@@ -1841,7 +1841,7 @@ MonoBehaviour:
   m_Padding:
     m_Left: 30
     m_Right: 30
-    m_Top: 0
+    m_Top: -10
     m_Bottom: 0
   m_ChildAlignment: 0
   m_Spacing: 0
@@ -4615,7 +4615,7 @@ MonoBehaviour:
   m_Padding:
     m_Left: 30
     m_Right: 30
-    m_Top: 0
+    m_Top: -10
     m_Bottom: 0
   m_ChildAlignment: 0
   m_Spacing: 0
@@ -6304,7 +6304,7 @@ RectTransform:
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0, y: 1}
   m_AnchorMax: {x: 0, y: 1}
-  m_AnchoredPosition: {x: 396.25, y: -25}
+  m_AnchoredPosition: {x: 396.25, y: -15}
   m_SizeDelta: {x: 732.5, y: 50}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!114 &719003019
@@ -8531,6 +8531,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 7734a6aa7649560449955ad08ba5af03, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::LocalCharacterProfile
+  showDebugUI: 0
+  logVerbose: 0
 --- !u!4 &949557998
 Transform:
   m_ObjectHideFlags: 0
@@ -11343,6 +11345,7 @@ GameObject:
   - component: {fileID: 1465079072}
   - component: {fileID: 1465079074}
   - component: {fileID: 1465079073}
+  - component: {fileID: 1465079075}
   m_Layer: 5
   m_Name: MainMenuCanvas
   m_TagString: Untagged
@@ -11439,6 +11442,26 @@ MonoBehaviour:
   m_DefaultSpriteDPI: 96
   m_DynamicPixelsPerUnit: 1
   m_PresetInfoIsWorld: 0
+--- !u!114 &1465079075
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1465079070}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 67e5f2069093c8240874ff7f7ba56abf, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::MenuSelectionHighlight
+  accentColor: {r: 0, g: 0.784, b: 0.937, a: 1}
+  fillAlpha: 0.1
+  borderThickness: 2
+  leftBarWidth: 4
+  padding: 6
+  followSpeed: 18
+  pulse: 1
+  pulseSpeed: 3.5
 --- !u!1 &1472281440
 GameObject:
   m_ObjectHideFlags: 0
@@ -11623,7 +11646,7 @@ RectTransform:
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0, y: 1}
   m_AnchorMax: {x: 0, y: 1}
-  m_AnchoredPosition: {x: 396.25, y: -25}
+  m_AnchoredPosition: {x: 396.25, y: -15}
   m_SizeDelta: {x: 732.5, y: 50}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!114 &1489292921
@@ -12936,6 +12959,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: b33750a2bba7a434ab3eec709ca9f08c, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::MainMenuManager
+  logVerbose: 0
   menuCanvas: {fileID: 1465079072}
   characterCreationPanel: {fileID: 1389757707}
   mainMenuPanel: {fileID: 7061924370354306087}
@@ -12981,6 +13005,7 @@ MonoBehaviour:
   colorRuoloNormale: {r: 0.12, g: 0.14, b: 0.18, a: 1}
   colorRuoloSelezionato: {r: 0.18, g: 0.72, b: 0.36, a: 1}
   relayManager: {fileID: 1099407844}
+  enableControllerNav: 1
   debugSkipMenu: 0
 --- !u!4 &1729529192
 Transform:
@@ -13473,7 +13498,7 @@ RectTransform:
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0, y: 1}
   m_AnchorMax: {x: 0, y: 1}
-  m_AnchoredPosition: {x: 396.25, y: -75}
+  m_AnchoredPosition: {x: 396.25, y: -65}
   m_SizeDelta: {x: 732.5, y: 50}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!114 &1787593529
@@ -18088,6 +18113,7 @@ GameObject:
   - component: {fileID: 8840772272608610474}
   - component: {fileID: 352080690960470904}
   - component: {fileID: 932793980404450670}
+  - component: {fileID: 8840772272608610475}
   m_Layer: 5
   m_Name: NewGame
   m_TagString: Untagged
@@ -19755,6 +19781,7 @@ GameObject:
   - component: {fileID: 202116029445847147}
   - component: {fileID: 6083361438262162853}
   - component: {fileID: 6498864834705913027}
+  - component: {fileID: 6869337841557716471}
   m_Layer: 5
   m_Name: LoadGame
   m_TagString: Untagged
@@ -20022,6 +20049,7 @@ GameObject:
   - component: {fileID: 315454556809676109}
   - component: {fileID: 6218827657197218952}
   - component: {fileID: 2605033371584190276}
+  - component: {fileID: 6395464364864490073}
   m_Layer: 5
   m_Name: Options
   m_TagString: Untagged
@@ -20029,6 +20057,23 @@ GameObject:
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
   m_IsActive: 1
+--- !u!114 &6395464364864490073
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 6395464364864490072}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: db1f11f4c000afe419c356ba622d8f5a, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::MenuButtonAccent
+  accentChildName: LeftAccentBar
+  accentColor: {r: 0, g: 0.784, b: 0.937, a: 1}
+  fadeSpeed: 14
+  brightenLabel: 1
+  labelActiveColor: {r: 1, g: 1, b: 1, a: 1}
 --- !u!222 &6446455870950940409
 CanvasRenderer:
   m_ObjectHideFlags: 0
@@ -20213,6 +20258,23 @@ RectTransform:
   m_AnchoredPosition: {x: 640, y: -497.00003}
   m_SizeDelta: {x: 619.99976, y: 30}
   m_Pivot: {x: 0.5, y: 0.5}
+--- !u!114 &6869337841557716471
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 5597710119385098459}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: db1f11f4c000afe419c356ba622d8f5a, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::MenuButtonAccent
+  accentChildName: LeftAccentBar
+  accentColor: {r: 0, g: 0.784, b: 0.937, a: 1}
+  fadeSpeed: 14
+  brightenLabel: 1
+  labelActiveColor: {r: 1, g: 1, b: 1, a: 1}
 --- !u!1 &6878831613524111617
 GameObject:
   m_ObjectHideFlags: 0
@@ -20527,6 +20589,7 @@ GameObject:
   - component: {fileID: 3829013935833820206}
   - component: {fileID: 9054962811410681806}
   - component: {fileID: 2092106119210349329}
+  - component: {fileID: 9054962811410681807}
   m_Layer: 5
   m_Name: Credits
   m_TagString: Untagged
@@ -20780,6 +20843,7 @@ GameObject:
   - component: {fileID: 8834421379138219926}
   - component: {fileID: 7448155876048960238}
   - component: {fileID: 1969198292576577254}
+  - component: {fileID: 8834421379138219927}
   m_Layer: 5
   m_Name: Join
   m_TagString: Untagged
@@ -21042,9 +21106,9 @@ MonoBehaviour:
     m_Top: 0
     m_Bottom: 0
   m_ChildAlignment: 4
-  m_Spacing: 0
+  m_Spacing: 10
   m_ChildForceExpandWidth: 1
-  m_ChildForceExpandHeight: 1
+  m_ChildForceExpandHeight: 0
   m_ChildControlWidth: 0
   m_ChildControlHeight: 0
   m_ChildScaleWidth: 0
@@ -21058,6 +21122,23 @@ CanvasRenderer:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 8196169390837471230}
   m_CullTransparentMesh: 1
+--- !u!114 &8834421379138219927
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 8196169390837471230}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: db1f11f4c000afe419c356ba622d8f5a, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::MenuButtonAccent
+  accentChildName: LeftAccentBar
+  accentColor: {r: 0, g: 0.784, b: 0.937, a: 1}
+  fadeSpeed: 14
+  brightenLabel: 1
+  labelActiveColor: {r: 1, g: 1, b: 1, a: 1}
 --- !u!222 &8840772272608610474
 CanvasRenderer:
   m_ObjectHideFlags: 0
@@ -21066,6 +21147,23 @@ CanvasRenderer:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1442670941686319760}
   m_CullTransparentMesh: 1
+--- !u!114 &8840772272608610475
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1442670941686319760}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: db1f11f4c000afe419c356ba622d8f5a, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::MenuButtonAccent
+  accentChildName: LeftAccentBar
+  accentColor: {r: 0, g: 0.784, b: 0.937, a: 1}
+  fadeSpeed: 14
+  brightenLabel: 1
+  labelActiveColor: {r: 1, g: 1, b: 1, a: 1}
 --- !u!222 &8849184291339224719
 CanvasRenderer:
   m_ObjectHideFlags: 0
@@ -21104,6 +21202,23 @@ MonoBehaviour:
   m_FillOrigin: 0
   m_UseSpriteMesh: 0
   m_PixelsPerUnitMultiplier: 1
+--- !u!114 &9054962811410681807
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 7866877417334879787}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: db1f11f4c000afe419c356ba622d8f5a, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::MenuButtonAccent
+  accentChildName: LeftAccentBar
+  accentColor: {r: 0, g: 0.784, b: 0.937, a: 1}
+  fadeSpeed: 14
+  brightenLabel: 1
+  labelActiveColor: {r: 1, g: 1, b: 1, a: 1}
 --- !u!224 &9139595011583168388
 RectTransform:
   m_ObjectHideFlags: 0

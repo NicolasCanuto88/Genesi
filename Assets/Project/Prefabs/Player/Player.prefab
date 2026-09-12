@@ -3105,6 +3105,7 @@ GameObject:
   - component: {fileID: 8034489539291105577}
   - component: {fileID: 5451365132181139867}
   - component: {fileID: 3162303209327314879}
+  - component: {fileID: 5265995207139125114}
   m_Layer: 0
   m_Name: Player
   m_TagString: Player
@@ -3516,6 +3517,23 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::PlayerNetworkOwnership
   ShowTopMostFoldoutHeaderGroup: 1
+--- !u!114 &5265995207139125114
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 6942183193722732773}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 21739bd1b92ad9c4eb6e9bc57e870184, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::PlayerOxygen
+  ShowTopMostFoldoutHeaderGroup: 1
+  config: {fileID: 11400000, guid: a30de7f44da574b4da2ffc9bd47bb0dd, type: 2}
+  showDebugUI: 0
+  logVerbose: 0
+  debugForceConsume: 0
 --- !u!1 &7011612708961063772
 GameObject:
   m_ObjectHideFlags: 0

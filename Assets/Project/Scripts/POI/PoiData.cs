@@ -60,7 +60,7 @@ namespace SpaceSurvivor.Poi
     /// </summary>
     [CreateAssetMenu(
         fileName = "PoiData_Wreck",
-        menuName = "Space Survivor/POI Data",
+        menuName = "SpaceSurvivor/POI Data",
         order = 100)]
     public class PoiData : ScriptableObject
     {
