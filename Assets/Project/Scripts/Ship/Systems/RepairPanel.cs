@@ -7,7 +7,7 @@ namespace SpaceSurvivor.Ship
 {
     /// <summary>
     /// RepairPanel — Milestone 2
-    /// Pannello fisico interagibile nella nave che apre il RepairMinigame.
+    /// Pannello fisico interagibile nella nave che apre il RepairMinigameEngineering.
     ///
     /// RESPONSABILITÀ:
     ///   - IInteractable: rilevato da InteractionSystem via raycast
@@ -16,7 +16,7 @@ namespace SpaceSurvivor.Ship
     ///       2. il minigame non è già in corso
     ///       3. i materiali per TUTTE le soglie (50+75+100, sommati) sono
     ///          disponibili — HasMaterialsForFullRepair() (gate cumulativo)
-    ///   - Interact() → disabilita PlayerController + apre RepairMinigame
+    ///   - Interact() → disabilita PlayerController + apre RepairMinigameEngineering
     ///   - Cancel → chiude minigame e ripristina il player
     ///   - ApplyRepairThresholdRpc() → RPC server-side che consuma materiali
     ///     e applica la riparazione con SOGLIE RELATIVE ALLA SESSIONE.
@@ -57,7 +57,7 @@ namespace SpaceSurvivor.Ship
     ///   2. Aggiungi NetworkObject component (⚠ obbligatorio — RepairPanel è NetworkBehaviour)
     ///   3. Aggiungi Collider (per raycast InteractionSystem)
     ///   4. Assegna il sistema IRepairable target (es. PropulsionSystem)
-    ///   5. Assegna il RepairMinigame (figlio di questo GameObject)
+    ///   5. Assegna il RepairMinigameEngineering (figlio di questo GameObject)
     ///   6. Assegna PlayerInput reference (stessa dell'EngineeringStation)
     ///   7. Registra il prefab / GameObject nella lista NetworkPrefabs del NetworkManager
     /// </summary>
@@ -68,8 +68,8 @@ namespace SpaceSurvivor.Ship
         [SerializeField] private MonoBehaviour repairableTarget;
 
         [Header("Minigame")]
-        [Tooltip("Il RepairMinigame su questo pannello (di solito figlio di questo GameObject).")]
-        [SerializeField] private RepairMinigame repairMinigame;
+        [Tooltip("Il RepairMinigameEngineering su questo pannello (di solito figlio di questo GameObject).")]
+        [SerializeField] private RepairMinigameEngineering repairMinigame;
 
         [Header("Input")]
         [Tooltip("Stessa referenza PlayerInput usata nelle altre stazioni.")]
@@ -104,7 +104,7 @@ namespace SpaceSurvivor.Ship
                 Debug.LogWarning($"[RepairPanel] {name}: repairableTarget non implementa IRepairable.");
 
             if (repairMinigame == null)
-                Debug.LogWarning($"[RepairPanel] {name}: RepairMinigame non assegnato.");
+                Debug.LogWarning($"[RepairPanel] {name}: RepairMinigameEngineering non assegnato.");
         }
 
         private void Update()
@@ -211,7 +211,7 @@ namespace SpaceSurvivor.Ship
         // ── RPC Server-Side — soglie relative alla sessione ───────────────────
 
         /// <summary>
-        /// Chiamato da RepairMinigame quando il giocatore supera una soglia
+        /// Chiamato da RepairMinigameEngineering quando il giocatore supera una soglia
         /// (progressPct = 50, 75 o 100 — valore RAW del minigame).
         /// Eseguito SEMPRE sul server, indipendentemente da quale client ha giocato.
         ///
