@@ -41,6 +41,23 @@ namespace SpaceSurvivor.Ship
     ///   causano solo TakeDamage(x). Il "perché" è responsabilità del
     ///   sistema chiamante (qui: ShipImpactHandler per gli impatti).
     ///
+    ///   Rev BF — Fase 2a (Danni Differenziati), STAGE A: la pipeline danno
+    ///   da impatto è UNIFICATA con AsteroidSpawner. L'applicazione non va più
+    ///   a hull.TakeDamage() diretta: passa per ShieldSystem.AbsorbDamage()
+    ///   quando uno scudo è montato (scudo-first), e il residuo raggiunge lo
+    ///   scafo via HullSystem.NotifyDamagePassthrough(). Effetti:
+    ///     - Scudo On       → assorbe absorptionPercent, residuo → hull.
+    ///     - Scudo Off/absent→ AbsorbDamageInternal inoltra l'INTERO importo a
+    ///                         NotifyDamagePassthrough → stesso choke
+    ///                         HullSystem.ApplyDamageInternal della vecchia
+    ///                         TakeDamage(x). NON-REGRESSIONE a scudi spenti.
+    ///     - Nessuno scudo montato (ShieldSystem.Instance null) → hull.TakeDamage
+    ///                         diretto (fallback, comportamento pre-Rev BF).
+    ///   STAGE A non introduce ancora la SELEZIONE del subsystem: tutto il
+    ///   residuo post-scudo va allo scafo (hull-floor = 100%). La selezione
+    ///   pesata (SO) di un subsystem sopra soglia arriva in STAGE B, dentro
+    ///   la stessa Rev BF, come secondo commit + checkpoint di playtest.
+    ///
     /// FORMULA DANNO (Blocco 3.2.a — δ soglia + quadratica):
     ///     if (impactVelocity &lt; ConfirmMaxVelocity)  damage = 0;
     ///     else                                       damage =
@@ -329,25 +346,50 @@ namespace SpaceSurvivor.Ship
                 return;
             }
 
-            var hull = HullSystem.Instance;
-            if (hull == null)
+            // ── Applicazione danno: instradamento differenziato (Rev BF — Stage B) ─
+            // Severità classificata UNA volta (riusata sotto per il feedback).
+            ImpactSeverity severity = ImpactThresholdTable.Classify(impactVelocity);
+
+            // Il router applica: scudo-first → hull-floor → selezione subsystem.
+            // damage è garantito > 0 (early-return sopra). Il router gira
+            // server-side (siamo in contesto IsServer) come i sink.
+            if (ShipDamageRouter.Instance != null)
             {
-                Debug.LogWarning($"[ShipImpactHandler] HullSystem.Instance null — impatto perso! " +
-                                 $"damage={damage:F1} HP, v={impactVelocity:F2} u/s, POI={poi.Data.DisplayName}");
-                // Il danno è perso, ma tentiamo comunque il trasferimento di
-                // momento: la reazione fisica del POI non dipende dallo stato
-                // dello scafo (potresti sbattere una nave morta contro un
-                // relitto — dovrebbe comunque spostarsi).
-            }
-            else
-            {
-                hull.TakeDamage(damage);
+                ShipDamageRouter.Instance.RouteImpactDamage(damage, severity);
 
                 if (logVerbose)
                 {
-                    Debug.LogWarning($"[ShipImpactHandler] IMPATTO → -{damage:F1} HP " +
+                    Debug.LogWarning($"[ShipImpactHandler] IMPATTO → router ({severity}, in ingresso {damage:F1} HP) " +
                                      $"(v={impactVelocity:F2} u/s, k={hullDamagePerImpactSquared:F3}, " +
                                      $"mult={multiplier:F2}, POI={poi.Data.DisplayName})");
+                }
+            }
+            else
+            {
+                // ── Fallback Stage A: scudo-first → hull (router non in scena) ──
+                // Degradazione con grazia: la pipeline unificata resta valida anche
+                // senza ShipDamageRouter (nessuna selezione subsystem, ma non-regressione).
+                var shield = ShieldSystem.Instance;
+                var hull = HullSystem.Instance;
+
+                if (shield != null)
+                {
+                    // Scudo Off → inoltra l'intero importo a NotifyDamagePassthrough
+                    //             = stesso choke ApplyDamageInternal (non-regressione).
+                    shield.AbsorbDamage(damage);
+                }
+                else if (hull != null)
+                {
+                    // Nessuno scudo montato → scafo diretto (pre-Rev BF).
+                    hull.TakeDamage(damage);
+                }
+                else
+                {
+                    Debug.LogWarning($"[ShipImpactHandler] Né router, né ShieldSystem, né HullSystem — impatto perso! " +
+                                     $"damage={damage:F1} HP, v={impactVelocity:F2} u/s, POI={poi.Data.DisplayName}");
+                    // Il danno è perso, ma il trasferimento di momento (già emesso
+                    // dal resolver PRIMA di OnHardCollision) resta valido: la reazione
+                    // fisica del POI non dipende dallo stato dei sistemi nave.
                 }
             }
 
@@ -363,6 +405,11 @@ namespace SpaceSurvivor.Ship
             // spostato all'authority collision (resolver).
 
             // ── Notifica consumer di feedback teatrale (Blocco 3.2.d) ─────────
+            // Rev BF Stage A — SCELTA DELIBERATA: l'evento porta il danno d'impatto
+            // PRE-scudo (magnitudo dell'urto), non il residuo post-assorbimento.
+            // Il feedback teatrale scala con quanto forte è stato l'urto (lo
+            // "senti" anche se lo scudo lo assorbe), non col danno netto allo
+            // scafo. Nessuna modifica rispetto a pre-Rev BF.
             OnDamageInflicted?.Invoke(damage, impactVelocity, poi);
 
             // ── Feedback teatrale client-side (Blocco 3.2.d parte 2 — Rev AE) ─
@@ -371,7 +418,8 @@ namespace SpaceSurvivor.Ship
             // legge direttamente le NetworkVariable di PropulsionSystem
             // aggiornate dal TriggerEngineFailure sotto. Separazione pulita:
             // impulsivi via RPC, stato persistente via NV.
-            ImpactSeverity severity = ImpactThresholdTable.Classify(impactVelocity);
+            // Rev BF Stage B: 'severity' è già classificata sopra (instradamento) —
+            // riusata qui, nessuna riclassificazione.
             PlayImpactFeedbackClientRpc(severity, impactVelocity);
 
             // ── Avaria motori post-impatto (Blocco 3.2.d — Rev AC) ────────────

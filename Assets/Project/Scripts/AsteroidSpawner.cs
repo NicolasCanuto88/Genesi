@@ -67,6 +67,13 @@ namespace SpaceSurvivor.Ship
         [SerializeField] private float minDamage = 15f;
         [SerializeField] private float maxDamage = 45f;
 
+        [Tooltip("Rev BF Stage B — Severità con cui gli impatti asteroide entrano nel " +
+                 "ShipDamageRouter (determina hull-floor + pesi selezione subsystem via " +
+                 "DamageDistributionTable). Gli asteroidi sono un hazard senza velocità " +
+                 "d'impatto, quindi la severità è un parametro di design, non derivata. " +
+                 "Default Medium.")]
+        [SerializeField] private ImpactSeverity hazardSeverity = ImpactSeverity.Medium;
+
         private Coroutine _riskRoutine;
 
         // =========================================================================
@@ -144,9 +151,9 @@ namespace SpaceSurvivor.Ship
 
                 float chance = ps.CurrentNavState switch
                 {
-                    NavigationState.Manual    => manualImpactChance,
+                    NavigationState.Manual => manualImpactChance,
                     NavigationState.Autopilot => autopilotImpactChance,
-                    _                          => 0f // Coasting/Anchored: nessun rischio
+                    _ => 0f // Coasting/Anchored: nessun rischio
                 };
 
                 if (chance <= 0f) continue;
@@ -159,12 +166,24 @@ namespace SpaceSurvivor.Ship
 
         private void ApplyImpactDamage(float damage)
         {
-            if (ShieldSystem.Instance != null)
+            // Rev BF Stage B — instradamento differenziato via ShipDamageRouter
+            // (scudo-first → hull-floor → selezione subsystem). Fallback con grazia
+            // allo Stage A (scudo-first → hull) se il router non è in scena.
+            // ApplyImpactDamage gira già server-side (AsteroidSpawner è server-only).
+            if (ShipDamageRouter.Instance != null)
+            {
+                ShipDamageRouter.Instance.RouteImpactDamage(damage, hazardSeverity);
+            }
+            else if (ShieldSystem.Instance != null)
+            {
                 ShieldSystem.Instance.AbsorbDamage(damage);
+            }
             else
+            {
                 HullSystem.Instance?.TakeDamage(damage);
+            }
 
-            Debug.LogWarning($"[AsteroidSpawner] Impatto asteroide — {damage:F0} danno in ingresso.");
+            Debug.LogWarning($"[AsteroidSpawner] Impatto asteroide — {damage:F0} danno in ingresso ({hazardSeverity}).");
         }
     }
 }

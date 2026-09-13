@@ -297,15 +297,55 @@ namespace SpaceSurvivor.Ship
         [Rpc(SendTo.Server)]
         private void AbsorbDamageRpc(float damage) => AbsorbDamageInternal(damage);
 
+        // Rev BF Stage B — refactor wrapper-safe: la logica di assorbimento pura
+        // è estratta in AbsorbAndComputeResidual (decrementa HP scudo, gestisce
+        // regen/collasso, RITORNA il residuo). AbsorbDamageInternal resta il
+        // wrapper storico che inoltra il residuo allo scafo → CONTRATTO INVARIATO
+        // per i chiamanti esistenti (AbsorbDamage/AsteroidSpawner/EncounterSystem).
+        // Il nuovo AbsorbAndReturnResidual espone il residuo a ShipDamageRouter,
+        // che lo instrada (hull-floor + selezione subsystem) senza passare da qui.
         private void AbsorbDamageInternal(float incomingDamage)
         {
             if (!IsServer) return;
 
+            float residual = AbsorbAndComputeResidual(incomingDamage);
+
+            // Contratto storico invariato: il residuo va allo scafo.
+            if (residual > 0f)
+                HullSystem.NotifyDamagePassthrough(residual);
+        }
+
+        /// <summary>
+        /// Rev BF Stage B — entry-point per ShipDamageRouter. Applica l'assorbimento
+        /// dello scudo (perdita HP + eventuale collasso) e RESTITUISCE il residuo,
+        /// SENZA inoltrarlo allo scafo: l'instradamento del residuo (hull-floor +
+        /// selezione subsystem) è responsabilità del router. Server-only.
+        /// </summary>
+        public float AbsorbAndReturnResidual(float incomingDamage)
+        {
+            if (!IsServer)
+            {
+                Debug.LogError("[ShieldSystem] AbsorbAndReturnResidual chiamato su client — " +
+                               "ignoro, ritorno il danno intero (fail-safe: non perdere danno).");
+                return incomingDamage;
+            }
+            if (incomingDamage <= 0f) return 0f;
+
+            return AbsorbAndComputeResidual(incomingDamage);
+        }
+
+        /// <summary>
+        /// Rev BF Stage B — logica di assorbimento PURA: decrementa gli HP scudo,
+        /// gestisce pausa regen e collasso, e RITORNA il residuo (danno non
+        /// assorbito). NON inoltra ad alcun sink: il chiamante decide dove va il
+        /// residuo. Precondizione: IsServer (garantito dai due chiamanti interni).
+        /// </summary>
+        private float AbsorbAndComputeResidual(float incomingDamage)
+        {
             if (!IsOperational)
             {
-                // Scudi non operativi — tutto il danno va allo scafo
-                HullSystem.NotifyDamagePassthrough(incomingDamage);
-                return;
+                // Scudi non operativi — nessun assorbimento, tutto è residuo.
+                return incomingDamage;
             }
 
             // Calcola danno assorbito
@@ -323,10 +363,6 @@ namespace SpaceSurvivor.Ship
 
             LogV($"[ShieldSystem] Danno ricevuto: {incomingDamage:F1} — assorbito: {absorbed:F1}, residuo: {remaining:F1}");
 
-            // Residuo → HullSystem
-            if (remaining > 0f)
-                HullSystem.NotifyDamagePassthrough(remaining);
-
             // Collasso scudi
             if (netCurrentHP.Value <= 0f)
             {
@@ -335,6 +371,8 @@ namespace SpaceSurvivor.Ship
                 OnShieldCollapse?.Invoke();
                 LogVWarn("[ShieldSystem] ⚠ SCUDI COLLASSATI — HP esauriti.");
             }
+
+            return remaining;
         }
 
         // ===== PUBLIC API — ZONA =====
