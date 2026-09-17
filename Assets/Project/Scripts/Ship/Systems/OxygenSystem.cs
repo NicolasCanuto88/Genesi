@@ -216,6 +216,28 @@ namespace SpaceSurvivor.Ship
         private void HandleO2LevelChanged(float _, float newVal) => OnO2LevelChanged?.Invoke(newVal);
         private void HandleAlarmChanged(bool _, bool newVal) => OnAlarmStateChanged?.Invoke(newVal);
 
+        // ===== API esterna (Rev BG) =====
+
+        /// <summary>
+        /// [Rev BG - Stage B] Trasferimento diretto di O2 al tank nave, server-only.
+        /// Usato dal WreckOxygenPump in Harvest (delta > 0: il residuo del relitto
+        /// entra nel tank nave). Il livello resta clampato 0-100.
+        ///
+        /// Ritorna il delta EFFETTIVAMENTE applicato (in modulo puo essere minore di
+        /// |delta| se il tank satura a 100 o si svuota a 0), cosi il chiamante puo
+        /// scalare la sorgente esattamente di quanto e stato accettato — nessun O2
+        /// creato o distrutto (l'invariante "tre pool non intercomunicano se non via
+        /// trasferimento esplicito" resta rispettata: qui il trasferimento e esplicito).
+        /// </summary>
+        public float TransferShipOxygen(float delta)
+        {
+            if (!IsServer) return 0f;
+            float before = netO2Level.Value;
+            float after = Mathf.Clamp(before + delta, 0f, 100f);
+            netO2Level.Value = after;
+            return after - before;
+        }
+
         // ===== Update (solo server) =====
 
         private void Update()

@@ -177,6 +177,6 @@ public class EngineFailureBannerController : MonoBehaviour
         if (label == null || propulsion == null) return;
 
         int percent = Mathf.RoundToInt(propulsion.EngineFailureRatio * 100f);
-        label.text = $"MOTORI OFFLINE — Ripristino: {percent}%";
+        label.text = $"ENGINES OFFLINE — RESTORING: {percent}%";
     }
 }

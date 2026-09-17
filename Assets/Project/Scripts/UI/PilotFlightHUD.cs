@@ -203,13 +203,13 @@ public class PilotFlightHUD : MonoBehaviour, IDashboardPanel
              "Modificabile in inspector per test di gameplay / rebind futuri.")]
     [SerializeField]
     private string anchorPromptAnchorable =
-        "▲ ANCORAGGIO DISPONIBILE — premi [T/X] per iniziare";
+        "▲ ANCHOR AVAILABLE — press [T/X] to begin";
 
     [Tooltip("Testo mostrato quando AnchorabilityState == InRangeTooFast. " +
              "Modificabile in inspector per tuning UX.")]
     [SerializeField]
     private string anchorPromptTooFast =
-        "▼ TROPPO VELOCE — rallenta per poter attraccare";
+        "▼ TOO FAST — slow down to dock";
 
     [Tooltip("Rev AI (QAI-2a, fix geometria post-playtest) — Testo mostrato " +
              "quando AnchorabilityState == Misaligned: nave in range e sotto " +
@@ -219,14 +219,14 @@ public class PilotFlightHUD : MonoBehaviour, IDashboardPanel
              "una posizione di attracco valida.")]
     [SerializeField]
     private string anchorPromptMisaligned =
-        "▲ ALLINEA LA NAVE — pancia o dorso verso il relitto";
+        "▲ ALIGN SHIP — belly or back toward the wreck";
 
     [Tooltip("Prefisso label docking status. Modificabile in inspector.")]
-    [SerializeField] private string dockingStatusPrefix = "ATTRACCATA A: ";
+    [SerializeField] private string dockingStatusPrefix = "DOCKED TO: ";
 
     [Tooltip("Fallback per il nome del POI se non risolvibile lato client " +
              "(SpawnManager non ha ancora l'oggetto, o PoiInstance senza Data).")]
-    [SerializeField] private string dockingStatusUnknownPoiName = "POI SCONOSCIUTO";
+    [SerializeField] private string dockingStatusUnknownPoiName = "UNKNOWN POI";
 
     // =========================================================================
     // COLORI DI STATO
@@ -350,24 +350,24 @@ public class PilotFlightHUD : MonoBehaviour, IDashboardPanel
         // Priorità: stato FTL sovrascrive la navigazione standard
         if (ftl != null && ftl.CurrentState == FTLState.Charging)
         {
-            navText = "FTL — CARICA IN CORSO";
+            navText = "FTL — CHARGING";
             navColor = colorFTL;
         }
         else if (ftl != null && ftl.CurrentState == FTLState.Jumping)
         {
-            navText = "FTL — SALTO IN CORSO";
+            navText = "FTL — JUMPING";
             navColor = Color.white;
         }
         else if (ps != null)
         {
             (navText, navColor) = ps.CurrentNavState switch
             {
-                NavigationState.Anchored => ("ANCORATA", colorAnchored),
-                NavigationState.Coasting => ("INERZIA", colorCoasting),
-                NavigationState.Autopilot => ("AUTOPILOTA", colorAutopilot),
-                NavigationState.Manual => ("MANUALE", colorManual),
-                NavigationState.Docking => ("ATTRACCO IN CORSO", colorDocking),
-                NavigationState.Docked => ("ATTRACCATA", colorDocked),
+                NavigationState.Anchored => ("ANCHORED", colorAnchored),
+                NavigationState.Coasting => ("COASTING", colorCoasting),
+                NavigationState.Autopilot => ("AUTOPILOT", colorAutopilot),
+                NavigationState.Manual => ("MANUAL", colorManual),
+                NavigationState.Docking => ("DOCKING", colorDocking),
+                NavigationState.Docked => ("DOCKED", colorDocked),
                 _ => ("---", Color.white)
             };
         }
@@ -420,7 +420,7 @@ public class PilotFlightHUD : MonoBehaviour, IDashboardPanel
 
         if (ps == null)
         {
-            SetText(labelSpeedCurrent, "VEL: ---");
+            SetText(labelSpeedCurrent, "SPEED: ---");
             if (barSpeed != null) barSpeed.SetValue(0f);
             return;
         }
@@ -435,17 +435,17 @@ public class PilotFlightHUD : MonoBehaviour, IDashboardPanel
         Color color;
         if (Mathf.Abs(diff) < 0.5f)
         {
-            text = $"VEL: {current:F1}  (max {maxCap:F0})  m/s";
+            text = System.FormattableString.Invariant($"SPEED: {current:F1}  (max {maxCap:F0})  m/s");
             color = colorSpeedStable;
         }
         else if (diff > 0f)
         {
-            text = $"VEL: {current:F1} → {target:F1}  (max {maxCap:F0})  m/s";
+            text = System.FormattableString.Invariant($"SPEED: {current:F1} → {target:F1}  (max {maxCap:F0})  m/s");
             color = colorSpeedAccelerating;
         }
         else
         {
-            text = $"VEL: {current:F1} ← {target:F1}  (max {maxCap:F0})  m/s";
+            text = System.FormattableString.Invariant($"SPEED: {current:F1} ← {target:F1}  (max {maxCap:F0})  m/s");
             color = colorSpeedDecelerating;
         }
 
@@ -512,9 +512,9 @@ public class PilotFlightHUD : MonoBehaviour, IDashboardPanel
         // Label stato + colore
         string ftlText = ftl.CurrentState switch
         {
-            FTLState.Ready => "FTL: PRONTO",
-            FTLState.Charging => $"FTL: CARICA  {ftl.ChargeProgress * 100f:F0}%",
-            FTLState.Jumping => "FTL: SALTO IN CORSO",
+            FTLState.Ready => "FTL: READY",
+            FTLState.Charging => System.FormattableString.Invariant($"FTL: CHARGING  {ftl.ChargeProgress * 100f:F0}%"),
+            FTLState.Jumping => "FTL: JUMPING",
             FTLState.Cooldown => "FTL: COOLDOWN",
             FTLState.Lockout => "FTL: LOCKOUT",
             _ => "FTL: ---"
@@ -545,7 +545,7 @@ public class PilotFlightHUD : MonoBehaviour, IDashboardPanel
 
         if (sh == null)
         {
-            SetText(labelShieldStatus, "SCUDI: N/A");
+            SetText(labelShieldStatus, "SHIELDS: N/A");
             SetText(labelShieldHP, "");
             if (barShieldHP != null) barShieldHP.SetValue(0f);
             return;
@@ -553,10 +553,10 @@ public class PilotFlightHUD : MonoBehaviour, IDashboardPanel
 
         (string stateText, Color stateColor) = sh.State switch
         {
-            ShieldSystem.ShieldState.On => ("SCUDI: ATTIVI", colorOn),
-            ShieldSystem.ShieldState.Charging => ("SCUDI: SPIN-UP", colorFTL),
-            ShieldSystem.ShieldState.Off => ("SCUDI: INATTIVI", colorOff),
-            _ => ("SCUDI: ---", Color.white)
+            ShieldSystem.ShieldState.On => ("SHIELDS: ONLINE", colorOn),
+            ShieldSystem.ShieldState.Charging => ("SHIELDS: SPIN-UP", colorFTL),
+            ShieldSystem.ShieldState.Off => ("SHIELDS: OFFLINE", colorOff),
+            _ => ("SHIELDS: ---", Color.white)
         };
 
         if (labelShieldStatus != null)
@@ -721,19 +721,19 @@ public class PilotFlightHUD : MonoBehaviour, IDashboardPanel
 
     private static string ZoneTypeLabel(ZoneType zone) => zone switch
     {
-        ZoneType.Inner => "SISTEMA INTERNO",
-        ZoneType.Frontier => "FRONTIERA",
-        ZoneType.DeepVoid => "VUOTO PROFONDO",
+        ZoneType.Inner => "INNER SYSTEM",
+        ZoneType.Frontier => "FRONTIER",
+        ZoneType.DeepVoid => "DEEP VOID",
         _ => "---"
     };
 
     private static string ZoneEventLabel(ZoneEvent evt) => evt switch
     {
-        ZoneEvent.None => "— ROTTA LIBERA —",
-        ZoneEvent.RadiationStorm => "☢  TEMPESTA RADIAZIONI",
-        ZoneEvent.AsteroidField => "☄  CAMPO DI METEORITI",
-        ZoneEvent.SolarStorm => "☀  TEMPESTA SOLARE",
-        ZoneEvent.EMAnomaly => "⚡  ANOMALIA EM",
+        ZoneEvent.None => "— CLEAR ROUTE —",
+        ZoneEvent.RadiationStorm => "☢  RADIATION STORM",
+        ZoneEvent.AsteroidField => "☄  METEOR FIELD",
+        ZoneEvent.SolarStorm => "☀  SOLAR STORM",
+        ZoneEvent.EMAnomaly => "⚡  EM ANOMALY",
         _ => ""
     };
 }

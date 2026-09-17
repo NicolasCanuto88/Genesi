@@ -1,9 +1,7 @@
 using UnityEngine;
 using UnityEngine.UI;
-using UnityEngine.EventSystems;
 using TMPro;
 using System.Collections.Generic;
-using System.Collections;
 
 /// <summary>
 /// Engineering Dashboard UI — Power management interface.
@@ -93,7 +91,7 @@ public class EngineeringDashboardUI : MonoBehaviour, IDashboardPanel
         // è già stata popolata correttamente da Open, e ripopolarla qui
         // significherebbe distruggere le luci appena istanziate + ricrearle,
         // sprecando lavoro e producendo un lampeggio visivo. La rete di
-        // sicurezza in Update (EnsureSelectionSafety) recuperava la
+        // sicurezza in Update (DashboardSelection.EnsureSafety) recuperava la
         // selezione ma il doppio Refresh restava rumore sotto il tappeto.
         if (powerManager != null) return;
 
@@ -107,7 +105,7 @@ public class EngineeringDashboardUI : MonoBehaviour, IDashboardPanel
         if (isOpen)
         {
             RefreshLightsList();
-            SetInitialSelection();
+            DashboardSelection.SetInitial(this, ChooseInitialSelection, logVerbose);
         }
     }
 
@@ -133,7 +131,7 @@ public class EngineeringDashboardUI : MonoBehaviour, IDashboardPanel
         // Va fatto DOPO RefreshLightsList (le luci devono esistere per essere
         // selezionabili) e DOPO UpdateUI (che decide se il BlackoutPanel è
         // attivo o meno). Vedi commento su SetInitialSelection.
-        SetInitialSelection();
+        DashboardSelection.SetInitial(this, ChooseInitialSelection, logVerbose);
     }
 
     public void Close()
@@ -196,29 +194,16 @@ public class EngineeringDashboardUI : MonoBehaviour, IDashboardPanel
         }
 
         // — Pannello blackout —
+        // La transizione della selezione quando il blackout finisce (dal pulsante
+        // Restore, che si disattiva, alla prima luce) e ora coperta dalla rete di
+        // sicurezza condivisa: DashboardSelection.EnsureSafety in Update() rileva la
+        // selezione non piu valida e la ripristina sul candidato di
+        // ChooseInitialSelection (che, senza blackout, e la prima luce).
         if (blackoutPanel != null)
         {
             bool shouldShowBlackout =
                 powerManager.IsInBlackout && powerManager.IsBlackoutManualResetNeeded;
-            bool wasShowingBlackout = blackoutPanel.activeSelf;
-
-            // IMPORTANTE: la selezione EventSystem deve essere ispezionata
-            // PRIMA di disattivare il BlackoutPanel. Se la disattivassimo
-            // prima, Unity nello stesso frame azzererebbe automaticamente
-            // currentSelectedGameObject (perché il GameObject selezionato
-            // — restorePowerButton — sarebbe appena diventato inattivo),
-            // e il controllo "era sul Restore?" fallirebbe sempre.
-            // Sintomo: dopo aver premuto Restore la navigazione a tasti
-            // muore, nessuna voce viene evidenziata.
-            bool selectionWasOnRestore = wasShowingBlackout && !shouldShowBlackout
-                && EventSystem.current != null
-                && restorePowerButton != null
-                && EventSystem.current.currentSelectedGameObject == restorePowerButton.gameObject;
-
             blackoutPanel.SetActive(shouldShowBlackout);
-
-            if (selectionWasOnRestore)
-                RestoreSelectionAfterBlackoutEnds();
         }
 
         // — Pulsante restore —
@@ -307,206 +292,36 @@ public class EngineeringDashboardUI : MonoBehaviour, IDashboardPanel
         }
     }
 
-    // ── Selezione iniziale (navigazione a tasti direzionali) ─────────────────
+    // ── Selezione iniziale (pattern condiviso DashboardSelection) ─────────────
 
-    /// <summary>
-    /// Sceglie il primo Selectable su cui posizionare la selezione EventSystem
-    /// all'apertura del pannello. In blackout: il pulsante Restore, punto
-    /// naturale di partenza in situazione di emergenza. Altrimenti: la prima
-    /// luce della lista. Se non c'è né l'uno né l'altra (caso estremo:
-    /// nessuna luce Manual e nessun blackout), non tocca la selezione — Unity
-    /// gestisce il caso "nessun Selected" senza errori.
-    /// </summary>
-    /// <summary>
-    /// Sceglie il primo Selectable su cui posizionare la selezione EventSystem
-    /// all'apertura del pannello. In blackout: il pulsante Restore, punto
-    /// naturale di partenza in situazione di emergenza. Altrimenti: la prima
-    /// luce della lista.
-    ///
-    /// Perché una coroutine e non l'assegnazione diretta: i prefab delle luci
-    /// vengono Instantiate() nello stesso frame in cui viene chiamato Open(),
-    /// e Unity può non aver ancora finalizzato l'inizializzazione dei
-    /// componenti Selectable/Toggle nello stesso frame. Rimandare al frame
-    /// successivo (yield return null) garantisce che i Selectable siano
-    /// operativi e possano ricevere la selezione — è il pattern standard per
-    /// "seleziona qualcosa che ho appena istanziato".
-    ///
-    /// Anche se questo primo tentativo fallisce per qualche motivo (Selectable
-    /// non ancora interactable, EventSystem in stato transitorio dopo il
-    /// SetActive del pannello parent), la rete di sicurezza in Update()
-    /// riprova ad ogni frame finché il pannello è visibile — vedi
-    /// EnsureSelectionSafety(). L'invariante è "quando il Monitor 1 è
-    /// visibile, c'è sempre qualcosa selezionato".
-    /// </summary>
-    private void SetInitialSelection()
-    {
-        // Guardia contro chiamate quando il GameObject è disattivato: succede
-        // quando MonitorSwitcher.Start() esegue ShowMonitor(defaultMonitorIndex,
-        // instant: true) al caricamento della scena, ma EngineeringStation.Awake
-        // ha nel frattempo disattivato il pannello (dashboardUI.gameObject.
-        // SetActive(false)). StartCoroutine su MonoBehaviour disattivato produce
-        // l'errore "Coroutine couldn't be started because the game object is
-        // inactive!". Non è un problema funzionale — quando l'utente entra
-        // davvero in station, il pannello viene riattivato, Open() viene
-        // richiamata, e la coroutine parte correttamente da lì. Ma senza questa
-        // guardia si registra un errore rosso in Console al caricamento scena.
-        if (!isActiveAndEnabled) return;
-
-        StartCoroutine(SetInitialSelectionNextFrame());
-    }
-
-    private IEnumerator SetInitialSelectionNextFrame()
-    {
-        yield return null;
-
-        if (EventSystem.current == null)
-        {
-            Debug.LogWarning("[EngineeringDashboard] SetInitialSelection: EventSystem.current è null. " +
-                             "Verifica di aver aggiunto un EventSystem con InputSystemUIInputModule in Game.unity.");
-            yield break;
-        }
-
-        GameObject initial = ChooseInitialSelection(out string reason);
-
-        if (initial != null)
-        {
-            EventSystem.current.SetSelectedGameObject(initial);
-            if (logVerbose)
-                Debug.Log($"[EngineeringDashboard] Selezione iniziale impostata: {initial.name} ({reason}).");
-        }
-        else
-        {
-            Debug.LogWarning($"[EngineeringDashboard] SetInitialSelection: nessun candidato disponibile ({reason}).");
-        }
-    }
-
-    /// <summary>
-    /// Restituisce il GameObject candidato per la selezione iniziale, o null
-    /// se non ce n'è uno valido in questo momento. Metodo puro — non tocca
-    /// nulla. Usato sia da SetInitialSelectionNextFrame che da
-    /// EnsureSelectionSafety.
-    /// </summary>
-    private GameObject ChooseInitialSelection(out string reason)
-    {
-        if (blackoutPanel != null && blackoutPanel.activeInHierarchy
-            && restorePowerButton != null && restorePowerButton.interactable)
-        {
-            reason = "blackout attivo → restorePowerButton";
-            return restorePowerButton.gameObject;
-        }
-
-        if (lightsListParent != null && lightsListParent.childCount > 0)
-        {
-            for (int i = 0; i < lightsListParent.childCount; i++)
-            {
-                var entry = lightsListParent.GetChild(i);
-                var sel = entry.GetComponentInChildren<Selectable>();
-                if (sel != null && sel.interactable && sel.gameObject.activeInHierarchy)
-                {
-                    reason = $"nessun blackout → prima luce interactable ({entry.name})";
-                    return sel.gameObject;
-                }
-            }
-            reason = "lista luci presente ma nessuna con Selectable interactable";
-            return null;
-        }
-
-        reason = $"blackoutPanel={(blackoutPanel != null ? blackoutPanel.activeInHierarchy.ToString() : "null")}, lightsListParent childCount={(lightsListParent != null ? lightsListParent.childCount.ToString() : "null")}";
-        return null;
-    }
-
-    /// <summary>
-    /// Rete di sicurezza per la selezione EventSystem: chiamata ogni frame
-    /// dall'Update() finché isOpen. Se il pannello è visibile ma non c'è
-    /// alcun Selectable selezionato (o quello che era selezionato è ormai
-    /// inattivo/non-interactable), riporta la selezione su un candidato
-    /// valido. Copre tutti i casi in cui il primo tentativo di
-    /// SetInitialSelection fallisce per timing/state, e più in generale
-    /// tutti i casi in cui la selezione va persa (blackout che scompare,
-    /// cambio monitor e ritorno, luci ricreate).
-    ///
-    /// L'approccio è "riparativo" invece di "prescrittivo": non serve
-    /// enumerare tutti i casi in cui la selezione può andare persa —
-    /// basta rilevare l'assenza e ripristinare. Costo: un
-    /// EventSystem.currentSelectedGameObject e al più un GetComponentInChildren
-    /// per frame quando isOpen, trascurabile.
-    /// </summary>
-    private void EnsureSelectionSafety()
-    {
-        if (!isOpen) return;
-        if (EventSystem.current == null) return;
-
-        // Il pannello è effettivamente visibile? Se il CanvasGroup padre ha
-        // alpha=0 (siamo su un altro monitor), non toccare — l'utente sta
-        // interagendo con quel monitor, la selezione non ci riguarda.
-        var cg = GetComponentInParent<CanvasGroup>();
-        if (cg != null && (cg.alpha < 0.5f || !cg.interactable)) return;
-
-        var currentSel = EventSystem.current.currentSelectedGameObject;
-
-        // Se c'è già una selezione valida (attiva e interactable) sul nostro
-        // pannello, non toccare.
-        if (currentSel != null && currentSel.activeInHierarchy)
-        {
-            var currentSelectable = currentSel.GetComponent<Selectable>();
-            if (currentSelectable != null && currentSelectable.interactable)
-            {
-                // Verifica che sia sotto il nostro pannello — se è altrove
-                // (Restore appena disattivato, es), la sostituiamo.
-                if (currentSel.transform.IsChildOf(this.transform))
-                    return;
-            }
-        }
-
-        // Nessuna selezione valida: ripristina
-        GameObject candidate = ChooseInitialSelection(out string reason);
-        if (candidate != null)
-        {
-            EventSystem.current.SetSelectedGameObject(candidate);
-            if (logVerbose)
-                Debug.Log($"[EngineeringDashboard] EnsureSelectionSafety: selezione ripristinata su {candidate.name} ({reason}).");
-        }
-    }
+    // La meccanica (coroutine next-frame, rete di sicurezza, guardie CanvasGroup)
+    // vive in DashboardSelection; qui resta solo la SCELTA del candidato.
 
     private void Update()
     {
-        EnsureSelectionSafety();
+        if (isOpen) DashboardSelection.EnsureSafety(this, ChooseInitialSelection, logVerbose);
     }
 
     /// <summary>
-    /// Chiamato da UpdateUI SOLO dopo aver verificato che la selezione era
-    /// sul restorePowerButton al momento in cui il BlackoutPanel è passato
-    /// da attivo a non attivo. La verifica DEVE essere fatta dal chiamante
-    /// prima di disattivare il pannello, altrimenti Unity avrà già azzerato
-    /// currentSelectedGameObject e il controllo sarebbe stato inefficace.
-    ///
-    /// Rimanda la selezione di un frame (stesso pattern di
-    /// SetInitialSelection): dopo un SetActive(false) sul pannello parent,
-    /// EventSystem può essere in uno stato transitorio per il resto del
-    /// frame, e riassegnare la selezione nello stesso frame a volte viene
-    /// ignorato silenziosamente. Un yield return null lo risolve.
+    /// Candidato per la selezione: in blackout il pulsante Restore, altrimenti la
+    /// prima luce interactable. Se nessuno dei due, null.
     /// </summary>
-    private void RestoreSelectionAfterBlackoutEnds()
+    private GameObject ChooseInitialSelection()
     {
-        StartCoroutine(RestoreSelectionAfterBlackoutEndsNextFrame());
-    }
+        if (blackoutPanel != null && blackoutPanel.activeInHierarchy
+            && restorePowerButton != null && restorePowerButton.interactable)
+            return restorePowerButton.gameObject;
 
-    private IEnumerator RestoreSelectionAfterBlackoutEndsNextFrame()
-    {
-        yield return null;
-
-        if (EventSystem.current == null) yield break;
-        if (lightsListParent == null || lightsListParent.childCount == 0) yield break;
-
-        var firstEntry = lightsListParent.GetChild(0);
-        var firstSelectable = firstEntry.GetComponentInChildren<Selectable>();
-
-        if (firstSelectable != null && firstSelectable.interactable)
+        if (lightsListParent != null)
         {
-            EventSystem.current.SetSelectedGameObject(firstSelectable.gameObject);
-            if (logVerbose)
-                Debug.Log($"[EngineeringDashboard] Selezione trasferita dal Restore alla prima luce ({firstEntry.name}) dopo fine blackout.");
+            for (int i = 0; i < lightsListParent.childCount; i++)
+            {
+                var sel = lightsListParent.GetChild(i).GetComponentInChildren<Selectable>();
+                if (sel != null && sel.interactable && sel.gameObject.activeInHierarchy)
+                    return sel.gameObject;
+            }
         }
+        return null;
     }
 
     // ── Handler pulsanti ─────────────────────────────────────────────────────

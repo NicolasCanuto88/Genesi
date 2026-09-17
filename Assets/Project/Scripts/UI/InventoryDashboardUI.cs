@@ -115,12 +115,28 @@ public class InventoryDashboardUI : MonoBehaviour, IDashboardPanel
             ConnectInventory();
 
         RefreshAll();
+
+        // Rev BG - Stage A: selezione iniziale (cyan). Sezione di sola lettura: il
+        // candidato cade sul button Home dell'hub (unico Selectable navigabile).
+        DashboardSelection.SetInitial(this, ChooseInitialSelection);
     }
 
     public void Close()
     {
         _isOpen = false;
     }
+
+    // ── Selezione EventSystem (cyan) — pattern condiviso DashboardSelection ──
+
+    private void Update()
+    {
+        if (_isOpen) DashboardSelection.EnsureSafety(this, ChooseInitialSelection);
+    }
+
+    // Sola lettura: candidato = primo Selectable interactable. Con l'hub, il button
+    // Home. Lasciare gli Slider NON-interactable (sono display) per non catturarli.
+    private GameObject ChooseInitialSelection()
+        => DashboardSelection.FirstInteractableSelectable(transform);
 
     // ── Aggiornamento ─────────────────────────────────────────────────────────
 

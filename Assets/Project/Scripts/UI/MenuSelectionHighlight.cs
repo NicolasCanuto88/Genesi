@@ -45,6 +45,13 @@ public class MenuSelectionHighlight : MonoBehaviour
     [SerializeField] private bool pulse = true;
     [SerializeField] private float pulseSpeed = 3.5f;
 
+    [Tooltip("Se true, il frame è SEMPRE visibile sull'elemento selezionato, anche " +
+             "senza input di navigazione e anche col mouse. Attivarlo sugli schermi di " +
+             "bordo (dashboard ingegnere/hub) dove si naviga solo a frecce/controller e " +
+             "l'evidenziazione deve esserci fin dall'avvio. Lasciarlo OFF sul menu " +
+             "principale (dove col mouse il frame va nascosto).")]
+    [SerializeField] private bool alwaysShow = false;
+
     private RectTransform _root;      // contenitore che si muove/ridimensiona
     private RectTransform _fill;
     private Image _fillImg;
@@ -82,6 +89,12 @@ public class MenuSelectionHighlight : MonoBehaviour
         // Sopra i contenuti dei pannelli (fill traslucido + bordo sottile, non
         // copre il testo). Un fill basso lascia leggibile il bottone sottostante.
         _root.SetAsLastSibling();
+        // Se il canvas host ha un LayoutGroup (es. l'HubPanel ha un
+        // VerticalLayoutGroup), altrimenti comprimerebbe/incastrerebbe questo
+        // frame nel layout in alto a sinistra: ignoreLayout lo lascia libero di
+        // posizionarsi via anchoredPosition sull'elemento selezionato.
+        var rootLe = _root.gameObject.AddComponent<LayoutElement>();
+        rootLe.ignoreLayout = true;
 
         _fill = NewRect("Fill", _root);
         Stretch(_fill);
@@ -165,7 +178,7 @@ public class MenuSelectionHighlight : MonoBehaviour
 
         var sel = EventSystem.current != null ? EventSystem.current.currentSelectedGameObject : null;
 
-        bool valid = _controllerMode && sel != null && sel.activeInHierarchy && sel.GetComponent<Selectable>() != null;
+        bool valid = (alwaysShow || _controllerMode) && sel != null && sel.activeInHierarchy && sel.GetComponent<Selectable>() != null;
         if (!valid)
         {
             SetVisible(false);

@@ -196,6 +196,15 @@ namespace SpaceSurvivor.Poi
         [Min(0f)]
         [SerializeField] private float impactDamageMultiplier = 1f;
 
+        // ── Relitto — O2 residuo (Rev BG - Stage B) ──────────────────────────
+        [Header("Relitto - O2 residuo")]
+        [Tooltip("[Rev BG] Riserva di O2 residuo recuperabile dal relitto tramite il " +
+                 "pump (Harvest -> tank nave). Stessa scala del tank nave (0-100). Ha " +
+                 "senso solo per POI di tipo WreckAbandoned; per gli altri lascia 0. " +
+                 "Default 40 = ~40 punti recuperabili nel tank nave.")]
+        [Min(0f)]
+        [SerializeField] private float wreckO2ReserveInitial = 40f;
+
         // ── Accessors pubblici ───────────────────────────────────────────────
         public PoiType Type => type;
         public string DisplayName => displayName;
@@ -236,6 +245,10 @@ namespace SpaceSurvivor.Poi
 
         public float Mass => mass;
         public float ImpactDamageMultiplier => impactDamageMultiplier;
+
+        /// <summary>[Rev BG] O2 residuo iniziale recuperabile dal relitto (scala 0-100
+        /// del tank nave). Consumato dal WreckOxygenPump in modalita Harvest.</summary>
+        public float WreckO2ReserveInitial => wreckO2ReserveInitial;
 
         // ── Validation ───────────────────────────────────────────────────────
         private void OnValidate()

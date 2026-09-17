@@ -123,6 +123,9 @@ public class ShipSystemsDashboardUI : MonoBehaviour, IDashboardPanel
 
     private float cachedHullPercent = 1f;
 
+    // Rev BG - Stage A: stato aperto, per la rete di sicurezza selezione in Update.
+    private bool isOpen;
+
     // ── Lifecycle ─────────────────────────────────────────────────────────────
 
     private void Start()
@@ -269,6 +272,8 @@ public class ShipSystemsDashboardUI : MonoBehaviour, IDashboardPanel
 
     public void Open()
     {
+        isOpen = true;
+
         if (oxygenSystem == null && SpaceSurvivor.Ship.OxygenSystem.Instance != null)
             oxygenSystem = SpaceSurvivor.Ship.OxygenSystem.Instance;
 
@@ -292,10 +297,14 @@ public class ShipSystemsDashboardUI : MonoBehaviour, IDashboardPanel
 
         UpdateUI();
         InvokeRepeating(nameof(UpdateUI), 0f, 0.2f);
+
+        // Rev BG - Stage A: selezione iniziale per navigazione a tasti + cyan.
+        DashboardSelection.SetInitial(this, ChooseInitialSelection);
     }
 
     public void Close()
     {
+        isOpen = false;
         CancelInvoke(nameof(UpdateUI));
 
         if (_repairStatusRoutine != null)
@@ -308,7 +317,20 @@ public class ShipSystemsDashboardUI : MonoBehaviour, IDashboardPanel
             repairStatusMessageText.text = "";
     }
 
-    // ── Update (polling per O2, Reactor e Sezione B; resto via eventi) ────────
+    // ── Selezione EventSystem (cyan) — pattern condiviso DashboardSelection ──
+
+    private void Update()
+    {
+        if (isOpen) DashboardSelection.EnsureSafety(this, ChooseInitialSelection);
+    }
+
+    // Sezione di stato + repair: nessuna scelta di dominio particolare, cade sul
+    // primo Selectable disponibile (button AVVIA repair, e il Home quando l'hub
+    // sara in posa - Stage A blocco 2.2).
+    private GameObject ChooseInitialSelection()
+        => DashboardSelection.FirstInteractableSelectable(transform);
+
+    // ── Update dati (polling per O2, Reactor e Sezione B; resto via eventi) ────
 
     private void UpdateUI()
     {
