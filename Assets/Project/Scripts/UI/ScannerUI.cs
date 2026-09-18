@@ -1,6 +1,8 @@
 using System.Collections.Generic;
+using System.Text;
 using TMPro;
 using UnityEngine;
+using UnityEngine.EventSystems;
 using SpaceSurvivor.Poi;
 using SpaceSurvivor.Ship;
 using SpaceSurvivor.Ship.Systems;
@@ -8,92 +10,81 @@ using SpaceSurvivor.Ship.Systems;
 namespace SpaceSurvivor.UI
 {
     /// <summary>
-    /// ScannerUI — Milestone 3, Blocco 3, Sottofase 2b.
+    /// ScannerUI — Milestone 3, Blocco 3 · Rev BH (Fase 2b, D29).
     ///
-    /// HUD sempre visibile (Screen Space Overlay, angolo alto-destra) che
-    /// mostra la lista dei POI rilevati dallo ScannerSystem. Aggiorna
-    /// distanza in tempo reale, ordina per distanza crescente.
+    /// Pannello della POSTAZIONE Scanner (monitor World Space), mostrato solo
+    /// mentre il giocatore è seduto alla ScannerStation. Adempie la promessa
+    /// registrata nella versione stub (HUD screen-space) di migrare a postazione
+    /// fisica "Sensors" (GDD §9.2). Implementa IDashboardPanel: la stazione
+    /// chiama Open()/Close() per gestire refresh e selezione.
     ///
-    /// PROMESSA REGISTRATA (Sottofase 2b):
-    ///   Questa è una versione "stub funzionale" per verificare end-to-end
-    ///   il pipeline PoiSpawner → PoiInstance → ScannerSystem → UI. La
-    ///   versione definitiva sarà una postazione fisica "Sensors" sul
-    ///   Livello 3 della nave (Sala Osservazione, GDD §9.2), con
-    ///   interazione via 'E' come le altre postazioni. Migrazione prevista
-    ///   per Blocco 4-5, insieme all'implementazione del Livello 3.
+    /// CONTENUTO (modello ibrido D29):
+    ///   - Lista contatti: ogni POI Detected/Scanned è una riga selezionabile
+    ///     (ScannerUIEntry) con nome + distanza, colorata Detected (cyan) /
+    ///     Scanned (ambra). Ordinata per distanza crescente.
+    ///   - Selezione (frecce/controller, cyan via DashboardSelection) → mostra il
+    ///     DETTAGLIO per-tier del POI selezionato.
+    ///   - Attivazione (click / Submit) di una riga → SCAN ATTIVO su quel POI via
+    ///     ScannerSystem.RequestScanRpc: alza RevealedInfoTier fino al tier nave.
     ///
-    /// PATTERN DI ISCRIZIONE:
-    ///   Si iscrive agli eventi statici lifecycle di PoiInstance
-    ///   (OnAnyPoiSpawned/Despawned) per tracciare POI in vita. Alla
-    ///   iscrizione iniziale (OnEnable), scansiona la scena per POI già
-    ///   spawnati prima che la UI si attivasse.
-    ///
-    ///   Ogni PoiInstance tracciato si iscrive individualmente per
-    ///   OnScanStateChanged per aggiornare visibilità/colore della sua
-    ///   entry.
-    ///
-    /// ESCLUSIONE DA MainMenu:
-    ///   Questa UI è pensata per Game.unity. In MainMenu non ci sono POI
-    ///   e ShipMovement.Instance è null. Le guardie difensive nel calcolo
-    ///   della distanza evitano crash — ma la scelta più pulita è NON
-    ///   piazzare il Canvas in MainMenu.unity, solo in Game.unity.
+    /// DETTAGLIO PER-TIER (letto da PoiInstance.RevealedInfoTier + Data + reserve):
+    ///   T1 (sempre, se Detected): tipo · massa · distanza
+    ///   T2: composizione (PoiData.Composition) · O₂ sì/no (WreckOxygenReserve)
+    ///   T3: quantità O₂ (WreckOxygenReserve.Residual, live) · nemici sì/no (STUB)
+    ///   T4: blueprint · sistemi · layout (STUB — validazione al Combat, M4.7)
     ///
     /// DIPENDE DA:
-    ///   - PoiInstance (eventi statici + property LogicalPosition, Data,
-    ///     ScanState)
-    ///   - ShipMovement.Instance (per LogicalPosition della nave)
-    ///   - ScannerSystem.Instance (per header: tier e range correnti)
+    ///   - PoiInstance (eventi statici + ScanState/RevealedInfoTier/Data/LogicalPosition)
+    ///   - WreckOxygenReserve (per l'O₂; opzionale, GetComponent sul POI)
+    ///   - ShipMovement.Instance (distanza) · ScannerSystem.Instance (tier/range/scan)
     /// </summary>
-    public class ScannerUI : MonoBehaviour
+    public class ScannerUI : MonoBehaviour, IDashboardPanel
     {
         [Header("Header UI")]
         [Tooltip("Text dell'header (es. 'SCANNER · T1 · 2000m').")]
         [SerializeField] private TMP_Text headerText;
 
-        [Tooltip("Text visualizzato quando nessun POI è Detected " +
-                 "(es. 'NESSUN CONTATTO'). Nascosto quando la lista non è " +
-                 "vuota.")]
+        [Tooltip("Text quando nessun POI è Detected (es. 'NESSUN CONTATTO').")]
         [SerializeField] private TMP_Text emptyStateText;
 
-        [Header("Lista entries")]
-        [Tooltip("Prefab della singola riga (ScannerUIEntry).")]
+        [Header("Lista contatti")]
+        [Tooltip("Prefab della singola riga (ScannerUIEntry, con Button).")]
         [SerializeField] private ScannerUIEntry entryPrefab;
 
-        [Tooltip("Parent Transform delle entries istanziate. Tipicamente un " +
-                 "GameObject con VerticalLayoutGroup + ContentSizeFitter.")]
+        [Tooltip("Parent delle righe istanziate (VerticalLayoutGroup + ContentSizeFitter).")]
         [SerializeField] private Transform entriesContainer;
 
+        [Header("Dettaglio POI selezionato")]
+        [Tooltip("Text multi-riga che mostra il dettaglio per-tier del POI selezionato.")]
+        [SerializeField] private TMP_Text detailText;
+
         [Header("Palette (coerente con PoiVisualIndicator)")]
-        [Tooltip("Colore del testo per POI Detected. Default cyan #00C8EF.")]
+        [Tooltip("Colore riga per POI Detected. Default cyan #00C8EF.")]
         [SerializeField] private Color detectedColor = new Color(0f, 0.784f, 0.937f);
 
-        [Tooltip("Colore del testo per POI Scanned. Default ambra.")]
+        [Tooltip("Colore riga per POI Scanned. Default ambra.")]
         [SerializeField] private Color scannedColor = new Color(1f, 0.7f, 0.15f);
 
         [Header("Debug")]
         [SerializeField] private bool logVerbose = false;
 
-        // Mappa PoiInstance → entry visuale corrispondente.
-        // Contiene SOLO POI attualmente Detected/Scanned. I POI Unknown
-        // sono tracciati (iscrizioni attive) ma non hanno entry finché
-        // non passano a Detected.
+        // POI Detected/Scanned → riga. I POI Unknown sono tracciati ma senza riga.
         private readonly Dictionary<PoiInstance, ScannerUIEntry> _entries
             = new Dictionary<PoiInstance, ScannerUIEntry>();
 
-        // Set di POI tracciati (iscritti a OnScanStateChanged), Unknown
-        // compresi.
+        // POI tracciati (iscritti a OnScanStateChanged), Unknown compresi.
         private readonly HashSet<PoiInstance> _tracked = new HashSet<PoiInstance>();
 
-        // ── Lifecycle Unity ──────────────────────────────────────────────────
+        private bool isOpen = false;
+        private readonly StringBuilder _sb = new StringBuilder(256);
+
+        // ── Iscrizioni POI (attive quando il GameObject è attivo) ─────────────
 
         private void OnEnable()
         {
             PoiInstance.OnAnyPoiSpawned += HandlePoiSpawned;
             PoiInstance.OnAnyPoiDespawned += HandlePoiDespawned;
 
-            // Scansione iniziale — copre POI già spawnati prima che questa
-            // UI si sia attivata (es. UI in Game.unity mentre POI erano
-            // già presenti dalla sessione precedente, o timing di scene load).
 #if UNITY_2023_1_OR_NEWER
             var existing = FindObjectsByType<PoiInstance>(FindObjectsSortMode.None);
 #else
@@ -112,7 +103,6 @@ namespace SpaceSurvivor.UI
             PoiInstance.OnAnyPoiSpawned -= HandlePoiSpawned;
             PoiInstance.OnAnyPoiDespawned -= HandlePoiDespawned;
 
-            // Dis-iscrivi tutti i POI tracciati
             foreach (var poi in _tracked)
             {
                 if (poi != null)
@@ -120,38 +110,56 @@ namespace SpaceSurvivor.UI
             }
             _tracked.Clear();
 
-            // Distruggi tutte le entry esistenti
             foreach (var kv in _entries)
             {
                 if (kv.Value != null)
+                {
+                    kv.Value.OnActivated -= RequestActiveScan;
                     Destroy(kv.Value.gameObject);
+                }
             }
             _entries.Clear();
         }
 
+        // ── IDashboardPanel (chiamato da ScannerStation) ──────────────────────
+
+        public void Open()
+        {
+            isOpen = true;
+            UpdateUI();
+            InvokeRepeating(nameof(UpdateUI), 0f, 0.1f);
+            DashboardSelection.SetInitial(this, ChooseInitialSelection, logVerbose);
+        }
+
+        public void Close()
+        {
+            isOpen = false;
+            CancelInvoke(nameof(UpdateUI));
+        }
+
         private void Update()
+        {
+            if (isOpen) DashboardSelection.EnsureSafety(this, ChooseInitialSelection, logVerbose);
+        }
+
+        // ── Refresh (10Hz mentre aperto) ──────────────────────────────────────
+
+        private void UpdateUI()
         {
             UpdateHeader();
             UpdateDistances();
+            UpdateDetail();
         }
-
-        // ── Header ───────────────────────────────────────────────────────────
 
         private void UpdateHeader()
         {
             if (headerText == null) return;
 
             var scanner = ScannerSystem.Instance;
-            if (scanner == null)
-            {
-                headerText.text = "SCANNER · —";
-                return;
-            }
-
-            headerText.text = $"SCANNER · T{scanner.CurrentTier} · {scanner.ScanRange:F0}m";
+            headerText.text = scanner == null
+                ? "SCANNER · —"
+                : $"SCANNER · T{scanner.CurrentTier} · {scanner.ScanRange:F0}m";
         }
-
-        // ── Distanze ─────────────────────────────────────────────────────────
 
         private void UpdateDistances()
         {
@@ -160,7 +168,6 @@ namespace SpaceSurvivor.UI
 
             Vector3 shipPos = ship.LogicalPosition;
 
-            // Aggiorna distanza in ogni entry esistente.
             foreach (var kv in _entries)
             {
                 if (kv.Key == null || kv.Value == null) continue;
@@ -168,16 +175,11 @@ namespace SpaceSurvivor.UI
                 kv.Value.SetDistance(dist);
             }
 
-            // Riordina le entry per distanza crescente. Facciamo l'ordinamento
-            // reimpostando siblingIndex — economico per liste piccole
-            // (maxActivePoi=5), da ottimizzare solo se la lista cresce
-            // sensibilmente.
             SortEntriesByDistance(shipPos);
         }
 
         private void SortEntriesByDistance(Vector3 shipPos)
         {
-            // Estrae le entry attive in una lista ordinata.
             var sorted = new List<KeyValuePair<PoiInstance, ScannerUIEntry>>(_entries);
             sorted.Sort((a, b) =>
             {
@@ -194,7 +196,123 @@ namespace SpaceSurvivor.UI
             }
         }
 
-        // ── Lifecycle POI (eventi statici) ───────────────────────────────────
+        // ── Dettaglio per-tier del POI selezionato ────────────────────────────
+
+        private void UpdateDetail()
+        {
+            if (detailText == null) return;
+
+            PoiInstance poi = ResolveSelectedPoi();
+            if (poi == null || poi.Data == null)
+            {
+                detailText.text = "Seleziona un contatto.";
+                return;
+            }
+
+            var ship = ShipMovement.Instance;
+            float dist = ship != null
+                ? Vector3.Distance(poi.LogicalPosition, ship.LogicalPosition)
+                : 0f;
+
+            int tier = poi.RevealedInfoTier;
+            int shipTier = ScannerSystem.Instance != null ? ScannerSystem.Instance.CurrentTier : 1;
+            var reserve = poi.GetComponent<WreckOxygenReserve>();
+
+            _sb.Clear();
+            _sb.AppendLine($"<b>{poi.Data.DisplayName}</b>");
+
+            // T1 — sempre disponibile se rilevato (tipo/massa/distanza).
+            _sb.AppendLine($"Tipo: {poi.Data.Type}");
+            _sb.AppendLine($"Massa: {poi.Data.Mass:F0}");
+            _sb.AppendLine(dist < 1000f ? $"Distanza: {dist:F0} m" : $"Distanza: {dist / 1000f:F1} km");
+
+            // T2 — composizione + O₂ sì/no.
+            if (tier >= 2)
+            {
+                string comp = string.IsNullOrWhiteSpace(poi.Data.Composition)
+                    ? "Sconosciuta" : poi.Data.Composition;
+                bool hasO2 = reserve != null && reserve.InitialResidual > 0f;
+                _sb.AppendLine($"Composizione: {comp}");
+                _sb.AppendLine($"O₂: {(hasO2 ? "sì" : "no")}");
+            }
+
+            // T3 — quantità O₂ (live) + nemici sì/no (STUB).
+            if (tier >= 3)
+            {
+                string o2Qty = reserve != null ? $"{reserve.Residual:F0}" : "—";
+                _sb.AppendLine($"O₂ residuo: {o2Qty}");
+                _sb.AppendLine($"Nemici: {(poi.Data.StubHasEnemies ? "sì" : "no")} <size=70%>(stub)</size>");
+            }
+
+            // T4 — blueprint + sistemi + layout (STUB).
+            if (tier >= 4)
+            {
+                _sb.AppendLine($"Blueprint: {StubOrDash(poi.Data.StubBlueprintInfo)} <size=70%>(stub)</size>");
+                _sb.AppendLine($"Sistemi: {StubOrDash(poi.Data.StubShipSystemsInfo)} <size=70%>(stub)</size>");
+                _sb.AppendLine($"Layout: {StubOrDash(poi.Data.StubLayoutInfo)} <size=70%>(stub)</size>");
+            }
+
+            // Hint se il tier rivelato non copre ancora T2+.
+            if (tier < 2)
+            {
+                _sb.AppendLine($"<size=80%><i>Scan attivo per T2+ (tier nave T{shipTier}).</i></size>");
+            }
+
+            detailText.text = _sb.ToString();
+        }
+
+        private static string StubOrDash(string s) =>
+            string.IsNullOrWhiteSpace(s) ? "—" : s;
+
+        /// <summary>Risolve il POI attualmente selezionato dall'EventSystem
+        /// mappando la selezione alla riga corrispondente.</summary>
+        private PoiInstance ResolveSelectedPoi()
+        {
+            if (EventSystem.current == null) return null;
+            var sel = EventSystem.current.currentSelectedGameObject;
+            if (sel == null) return null;
+
+            foreach (var kv in _entries)
+            {
+                if (kv.Value == null) continue;
+                if (sel == kv.Value.gameObject || sel.transform.IsChildOf(kv.Value.transform))
+                    return kv.Key;
+            }
+            return null;
+        }
+
+        // ── Scan attivo (attivazione riga) ────────────────────────────────────
+
+        private void RequestActiveScan(PoiInstance poi)
+        {
+            if (poi == null || poi.NetworkObject == null) return;
+            var scanner = ScannerSystem.Instance;
+            if (scanner == null) return;
+
+            scanner.RequestScanRpc(poi.NetworkObject.NetworkObjectId);
+            if (logVerbose)
+                Debug.Log($"[ScannerUI] Richiesto scan attivo su " +
+                          $"'{poi.Data?.DisplayName ?? "POI"}'.");
+        }
+
+        // ── Selezione iniziale (pattern DashboardSelection) ───────────────────
+
+        private GameObject ChooseInitialSelection()
+        {
+            // Prima riga (per sibling index = più vicina, dopo il sort).
+            ScannerUIEntry first = null;
+            int bestSibling = int.MaxValue;
+            foreach (var kv in _entries)
+            {
+                if (kv.Value == null || kv.Value.Button == null) continue;
+                if (!kv.Value.Button.interactable) continue;
+                int sib = kv.Value.transform.GetSiblingIndex();
+                if (sib < bestSibling) { bestSibling = sib; first = kv.Value; }
+            }
+            return first != null ? first.Button.gameObject : null;
+        }
+
+        // ── Lifecycle POI (eventi statici) ────────────────────────────────────
 
         private void HandlePoiSpawned(PoiInstance poi)
         {
@@ -204,8 +322,6 @@ namespace SpaceSurvivor.UI
             _tracked.Add(poi);
             poi.OnScanStateChanged += HandlePoiScanStateChanged;
 
-            // Sincronizza stato iniziale — se il POI è già Detected/Scanned
-            // al momento dell'iscrizione, crea subito la entry.
             HandlePoiScanStateChanged(PoiScanState.Unknown, poi.ScanState, poi);
         }
 
@@ -219,22 +335,14 @@ namespace SpaceSurvivor.UI
             RemoveEntry(poi);
         }
 
-        // ── Cambio di ScanState ──────────────────────────────────────────────
+        // ── Cambio di ScanState ───────────────────────────────────────────────
 
-        // Wrapper per accettare il senderPoi come contesto (l'evento
-        // per-instance non passa il sender — lo colleghiamo via closure).
         private void HandlePoiScanStateChanged(PoiScanState previous, PoiScanState next)
         {
-            // Non usato — vedi variante a 3 argomenti sotto. Questo è il
-            // dispatch base richiesto dalla signature dell'evento; lo
-            // ridirigo passando null come sender così l'iteratore delle
-            // entry non fa nulla. Il vero dispatch avviene tramite la
-            // closure creata in HandlePoiSpawned. Ma per sicurezza,
-            // aggiorniamo tutte le entry potenzialmente influenzate.
             foreach (var poi in _tracked)
             {
                 if (poi == null) continue;
-                if (poi.ScanState == next && !_entries.ContainsKey(poi) && next != PoiScanState.Unknown)
+                if (poi.ScanState != PoiScanState.Unknown && !_entries.ContainsKey(poi))
                 {
                     CreateOrUpdateEntry(poi);
                 }
@@ -244,31 +352,25 @@ namespace SpaceSurvivor.UI
                 }
                 else if (_entries.ContainsKey(poi))
                 {
-                    // Aggiorna colore (Detected → Scanned e viceversa)
                     UpdateEntryColor(poi);
                 }
             }
             UpdateEmptyStateVisibility();
         }
 
-        // Variante che riceve esplicitamente il PoiInstance sender —
-        // chiamata da HandlePoiSpawned per la sync iniziale.
         private void HandlePoiScanStateChanged(PoiScanState previous, PoiScanState next, PoiInstance sender)
         {
             if (sender == null) return;
 
             if (next == PoiScanState.Unknown)
-            {
                 RemoveEntry(sender);
-            }
             else
-            {
                 CreateOrUpdateEntry(sender);
-            }
+
             UpdateEmptyStateVisibility();
         }
 
-        // ── Gestione entry ───────────────────────────────────────────────────
+        // ── Gestione righe ────────────────────────────────────────────────────
 
         private void CreateOrUpdateEntry(PoiInstance poi)
         {
@@ -279,12 +381,14 @@ namespace SpaceSurvivor.UI
                 entry = Instantiate(entryPrefab, entriesContainer);
                 _entries[poi] = entry;
 
+                entry.Bind(poi);
+                entry.OnActivated += RequestActiveScan;
+
                 string displayName = poi.Data != null ? poi.Data.DisplayName : "POI";
                 entry.SetName(displayName);
 
                 if (logVerbose)
-                    Debug.Log($"[ScannerUI] Entry creata per '{displayName}' " +
-                              $"(state {poi.ScanState}).");
+                    Debug.Log($"[ScannerUI] Riga creata per '{displayName}' (state {poi.ScanState}).");
             }
 
             UpdateEntryColor(poi);
@@ -303,11 +407,15 @@ namespace SpaceSurvivor.UI
         {
             if (!_entries.TryGetValue(poi, out var entry)) return;
 
-            if (entry != null) Destroy(entry.gameObject);
+            if (entry != null)
+            {
+                entry.OnActivated -= RequestActiveScan;
+                Destroy(entry.gameObject);
+            }
             _entries.Remove(poi);
 
             if (logVerbose)
-                Debug.Log($"[ScannerUI] Entry rimossa per '{poi.Data?.DisplayName ?? "POI"}'.");
+                Debug.Log($"[ScannerUI] Riga rimossa per '{poi.Data?.DisplayName ?? "POI"}'.");
         }
 
         private void UpdateEmptyStateVisibility()

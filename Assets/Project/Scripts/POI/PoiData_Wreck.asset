@@ -31,3 +31,9 @@ MonoBehaviour:
   warningRadius: 100
   mass: 5
   impactDamageMultiplier: 1
+  wreckO2ReserveInitial: 40
+  composition: Lega di titanio, scafo militare
+  stubHasEnemies: 0
+  stubBlueprintInfo: Blueprint di Prova
+  stubShipSystemsInfo: Stub Ship di Prova
+  stubLayoutInfo: Layout di Prova

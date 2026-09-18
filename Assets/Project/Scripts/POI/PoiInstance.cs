@@ -16,7 +16,7 @@ namespace SpaceSurvivor.Poi
     ///
     /// RESPONSABILITÀ:
     ///   1. NetworkVariable server-authoritative: LogicalPosition,
-    ///      LogicalRotation, LogicalVelocity, ScanState
+    ///      LogicalRotation, LogicalVelocity, ScanState, RevealedInfoTier
     ///   2. Referenziare un PoiData (parametri statici)
     ///   3. Sincronizzare il proprio PoiVisual via SetLogicalOverride
     ///   4. Auto-registrarsi nel PoiRegistry server-side
@@ -141,6 +141,24 @@ namespace SpaceSurvivor.Poi
                 NetworkVariableReadPermission.Everyone,
                 NetworkVariableWritePermission.Server);
 
+        // ── Info-per-Tier (Rev BH — Fase 2b, D29) ────────────────────────────
+        //
+        // Profondità di informazione rivelata dallo SCAN ATTIVO su questo POI
+        // (0 = nessuno scan attivo; 1..4 = info rivelate fino a quel tier).
+        // Asse ORTOGONALE a ScanState:
+        //   - ScanState (Unknown→Detected) = rilevamento passivo T1 sempre-attivo
+        //     (tipo/massa/distanza visibili appena Detected).
+        //   - RevealedInfoTier = profondità sbloccata dallo scan attivo (T2+).
+        // Monotòna crescente (SetRevealedInfoTier non abbassa mai il valore) →
+        // una volta rivelata, l'informazione statica PERSISTE (spec D29 Q4).
+        // Server-write, letta da tutti = condivisione crew-wide gratuita
+        // (spec D29 Q4 sharing), sullo stesso canale già usato per ScanState.
+        private readonly NetworkVariable<byte> _revealedInfoTier =
+            new NetworkVariable<byte>(
+                0,
+                NetworkVariableReadPermission.Everyone,
+                NetworkVariableWritePermission.Server);
+
         // ── Cache DockingAnchor (Rev AB) ─────────────────────────────────────
 
         /// <summary>
@@ -176,6 +194,12 @@ namespace SpaceSurvivor.Poi
         public Quaternion LogicalRotation => _logicalRotation.Value;
         public Vector3 LogicalVelocity => _logicalVelocity.Value;
         public PoiScanState ScanState => _scanState.Value;
+
+        /// <summary>[Rev BH — D29] Massimo tier di info rivelato dallo scan
+        /// attivo (0 = nessuno; 1..4). La ScannerUI decide cosa mostrare
+        /// combinando ScanState (T1 passivo se Detected) e questo valore
+        /// (T2+ attivo). Vedi campo _revealedInfoTier.</summary>
+        public int RevealedInfoTier => _revealedInfoTier.Value;
 
         /// <summary>
         /// Rev AB (Blocco 3.2.d D5) — Proxy alla lista di volumi compound
@@ -246,6 +270,11 @@ namespace SpaceSurvivor.Poi
         // ── Eventi pubblici (per-instance) ───────────────────────────────────
         public event Action<PoiScanState, PoiScanState> OnScanStateChanged;
 
+        /// <summary>[Rev BH — D29] Emesso quando lo scan attivo alza il tier di
+        /// info rivelato (prev, next). La ScannerUI vi si iscrive per aggiornare
+        /// il dettaglio mostrato senza polling.</summary>
+        public event Action<byte, byte> OnRevealedInfoTierChanged;
+
         // ── Eventi statici (lifecycle globale) ───────────────────────────────
         public static event Action<PoiInstance> OnAnyPoiSpawned;
         public static event Action<PoiInstance> OnAnyPoiDespawned;
@@ -262,6 +291,7 @@ namespace SpaceSurvivor.Poi
             _logicalPosition.OnValueChanged += HandleLogicalPositionChanged;
             _logicalRotation.OnValueChanged += HandleLogicalRotationChanged;
             _scanState.OnValueChanged += HandleScanStateChanged;
+            _revealedInfoTier.OnValueChanged += HandleRevealedInfoTierChanged;
 
             // Cache DockingAnchor (Rev AB). GetComponentInChildren scandisce
             // tutto il sottoalbero del root — trova l'anchor sia se figlio
@@ -282,6 +312,7 @@ namespace SpaceSurvivor.Poi
             _logicalPosition.OnValueChanged -= HandleLogicalPositionChanged;
             _logicalRotation.OnValueChanged -= HandleLogicalRotationChanged;
             _scanState.OnValueChanged -= HandleScanStateChanged;
+            _revealedInfoTier.OnValueChanged -= HandleRevealedInfoTierChanged;
 
             if (IsServer)
             {
@@ -386,6 +417,27 @@ namespace SpaceSurvivor.Poi
         }
 
         /// <summary>
+        /// [Rev BH — Fase 2b, D29] Alza il tier di info rivelato dallo scan
+        /// attivo. Server-only. MONOTÒNA: non abbassa mai il valore corrente
+        /// (uno scan a tier inferiore non "dimentica" info già rivelate).
+        /// Clampata a [0,4]. Consumer: ScannerSystem.RequestScanRpc.
+        /// </summary>
+        public void SetRevealedInfoTier(int tier)
+        {
+            if (!IsServer)
+            {
+                Debug.LogError("[PoiInstance] SetRevealedInfoTier called on client — ignored.");
+                return;
+            }
+
+            byte clamped = (byte)Mathf.Clamp(tier, 0, 4);
+            if (clamped > _revealedInfoTier.Value)
+            {
+                _revealedInfoTier.Value = clamped;
+            }
+        }
+
+        /// <summary>
         /// Aggiunge un impulso alla velocità logica del POI. Server-only.
         /// Consumer: ShipImpactHandler (Blocco 3.2.b.2).
         /// </summary>
@@ -446,6 +498,11 @@ namespace SpaceSurvivor.Poi
         private void HandleScanStateChanged(PoiScanState previous, PoiScanState next)
         {
             OnScanStateChanged?.Invoke(previous, next);
+        }
+
+        private void HandleRevealedInfoTierChanged(byte previous, byte next)
+        {
+            OnRevealedInfoTierChanged?.Invoke(previous, next);
         }
 
         // ── Applicazione al visual ───────────────────────────────────────────

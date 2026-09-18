@@ -49,6 +49,18 @@ namespace SpaceSurvivor.Poi
         public static int Count => _byNetworkId.Count;
 
         /// <summary>
+        /// [Rev BH — Fase 2b, D29] Risolve un PoiInstance dal suo
+        /// NetworkObjectId. Server-only (il registry è popolato solo lato
+        /// server). Usato da ScannerSystem.RequestScanRpc per risolvere il
+        /// bersaglio dello scan attivo richiesto da un client.
+        /// Ritorna false se l'id non è registrato (POI despawnato o mai esistito).
+        /// </summary>
+        public static bool TryGet(ulong networkObjectId, out PoiInstance poi)
+        {
+            return _byNetworkId.TryGetValue(networkObjectId, out poi);
+        }
+
+        /// <summary>
         /// Registra un PoiInstance. Chiamato da PoiInstance.OnNetworkSpawn
         /// se IsServer. Idempotente: chiamate multiple sullo stesso oggetto
         /// non fanno danno.

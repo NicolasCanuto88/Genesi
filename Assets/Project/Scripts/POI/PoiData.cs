@@ -205,6 +205,48 @@ namespace SpaceSurvivor.Poi
         [Min(0f)]
         [SerializeField] private float wreckO2ReserveInitial = 40f;
 
+        // ── Scanner Info-per-Tier (Rev BH — Fase 2b, D29) ────────────────────
+        //
+        // Dati statici (per-archetipo) rivelati dallo scan attivo secondo il
+        // tier dello scanner. Mappa spec D29:
+        //   T1 = tipo/massa/distanza  → già coperti da Type/Mass + geometria scan
+        //   T2 = composizione (QUI, reale) + O2 sì/no (da WreckOxygenReserve)
+        //   T3 = quantità O2 (da WreckOxygenReserve.Residual, live) + nemici sì/no (STUB)
+        //   T4 = blueprint + sistemi relitto + layout (STUB)
+        // I campi marcati STUB sono placeholder di design fino al Combat (M4.7):
+        // "nemici" diventerà un conteggio LIVE per-istanza (spec D29 Q4: info
+        // combat dinamica, non statica); blueprint/sistemi/layout si legheranno
+        // a contenuto di relitto reale quando esisterà.
+        [Header("Scanner Info-per-Tier (Rev BH - D29)")]
+        [Tooltip("[T2 - reale] Composizione materiale del POI mostrata dallo scan " +
+                 "attivo T2 (es. \"Lega di titanio, scafo militare\"). Stringa libera, " +
+                 "localizzabile in futuro come DisplayName. Vuota = \"Sconosciuta\".")]
+        [TextArea(1, 3)]
+        [SerializeField] private string composition = "";
+
+        [Tooltip("[T3 - STUB] Presenza nemici rivelata dallo scan attivo T3 " +
+                 "(sì/no). PLACEHOLDER di design: al Combat (M4.7) sarà sostituito " +
+                 "da un conteggio nemici LIVE per-istanza (spec D29 Q4: info " +
+                 "combat dinamica, live-only, decade). In 2b serve solo a validare " +
+                 "la riga UI T3.")]
+        [SerializeField] private bool stubHasEnemies = false;
+
+        [Tooltip("[T4 - STUB] Blueprint sbloccato dallo scan attivo T4 (Oracle). " +
+                 "Assorbe il vecchio Fold Drive Blueprint (D29 Q1-b). PLACEHOLDER " +
+                 "di design fino a contenuto relitto reale.")]
+        [TextArea(1, 3)]
+        [SerializeField] private string stubBlueprintInfo = "";
+
+        [Tooltip("[T4 - STUB] Sistemi attivi del relitto rivelati dallo scan T4. " +
+                 "PLACEHOLDER di design fino a contenuto relitto reale.")]
+        [TextArea(1, 3)]
+        [SerializeField] private string stubShipSystemsInfo = "";
+
+        [Tooltip("[T4 - STUB] Layout interno del relitto rivelato dallo scan T4. " +
+                 "PLACEHOLDER di design fino a boarding/EVA reale.")]
+        [TextArea(1, 3)]
+        [SerializeField] private string stubLayoutInfo = "";
+
         // ── Accessors pubblici ───────────────────────────────────────────────
         public PoiType Type => type;
         public string DisplayName => displayName;
@@ -249,6 +291,18 @@ namespace SpaceSurvivor.Poi
         /// <summary>[Rev BG] O2 residuo iniziale recuperabile dal relitto (scala 0-100
         /// del tank nave). Consumato dal WreckOxygenPump in modalita Harvest.</summary>
         public float WreckO2ReserveInitial => wreckO2ReserveInitial;
+
+        // ── Accessors Scanner Info-per-Tier (Rev BH — D29) ───────────────────
+        /// <summary>[T2 reale] Composizione materiale mostrata dallo scan T2.</summary>
+        public string Composition => composition;
+        /// <summary>[T3 STUB] Presenza nemici (placeholder → conteggio live a Combat M4.7).</summary>
+        public bool StubHasEnemies => stubHasEnemies;
+        /// <summary>[T4 STUB] Blueprint (assorbe Fold Drive Blueprint, D29 Q1-b).</summary>
+        public string StubBlueprintInfo => stubBlueprintInfo;
+        /// <summary>[T4 STUB] Sistemi attivi del relitto.</summary>
+        public string StubShipSystemsInfo => stubShipSystemsInfo;
+        /// <summary>[T4 STUB] Layout interno del relitto.</summary>
+        public string StubLayoutInfo => stubLayoutInfo;
 
         // ── Validation ───────────────────────────────────────────────────────
         private void OnValidate()

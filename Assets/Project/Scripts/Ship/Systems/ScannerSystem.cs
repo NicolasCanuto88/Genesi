@@ -27,16 +27,29 @@ namespace SpaceSurvivor.Ship.Systems
     ///   allontanano — decisione volontaria, si può cambiare in futuro se
     ///   il gameplay lo richiede).
     ///
-    /// TRAIETTORIA DI EVOLUZIONE (registrata come debito di design):
-    ///   Blocco 3 Fase 3 / Blocco 4 → transizione da passivo automatico ad
-    ///   attivo on-demand. La UI Scanner (Punto 5, prossimo) esporrà un
-    ///   pulsante "Scan!" che chiamerà RequestScanRpc(). In quel momento:
-    ///     - passiveMode diventerà false
-    ///     - RequestScanRpc introdurrà cooldown (LastScanTime già presente)
-    ///     - modificatori ruolo (bonus Scanner, malus altri) applicati
-    ///       consultando il ruolo del SenderClientId
-    ///   L'API PerformScan() e le NetworkVariable resteranno invariate —
-    ///   solo il TRIGGER cambia. Nessun refactor strutturale.
+    /// MODELLO IBRIDO (Rev BH — Fase 2b, D29 Q2-c IMPLEMENTATO):
+    ///   Lo Scanner è ora ibrido passivo+attivo:
+    ///     - PASSIVO (T1, sempre attivo): PerformScan() automatico rileva i POI
+    ///       in range → Unknown→Detected. Info T1 (tipo/massa/distanza) visibili
+    ///       appena Detected. passiveMode resta TRUE (non si spegne più).
+    ///     - ATTIVO (T2+, on-demand): RequestScanRpc(targetPoiId) esegue uno
+    ///       scan mirato su un POI già Detected → Detected→Scanned e alza il suo
+    ///       RevealedInfoTier fino al tier effettivo (tier nave + bonus ruolo).
+    ///       Cooldown-gated via _lastScanTime. Reveal IMMEDIATO (Q2-a).
+    ///   L'informazione rivelata vive su PoiInstance (ScanState + RevealedInfoTier,
+    ///   NetworkVariable per-POI lette da tutti) → condivisa crew-wide gratis
+    ///   (D29 Q4 sharing). Info statiche persistono (RevealedInfoTier monotòno);
+    ///   info combat dinamiche (nemici/HP, T3+) saranno live-only al Combat (M4.7).
+    ///
+    ///   STUB in 2b (dipendenze non ancora esistenti):
+    ///     - Bonus/malus di RUOLO: non esiste un registro networked
+    ///       OwnerClientId→ruolo (il ruolo è una stringa su profilo di menu).
+    ///       GetRoleTierBonus/GetRoleCooldownMultiplier ritornano valori neutri.
+    ///       dipende da: sistema ruolo networked per-player.
+    ///     - Tier nave: hardcoded (debugStartTier) fino al sistema di upgrade
+    ///       nave (Blocco 5). Alzarlo in Inspector per testare il reveal T2/T3.
+    ///     - Info T3 nemici / T4 blueprint-sistemi-layout: campi STUB su PoiData
+    ///       (validazione piena al Combat, M4.7).
     ///
     /// PROGRESSIONE TIER (GDD §3, Scanner T1-T4):
     ///   currentTier è NetworkVariable ma in 2b è hardcoded a 1 al boot.
@@ -64,11 +77,11 @@ namespace SpaceSurvivor.Ship.Systems
         public static ScannerSystem Instance { get; private set; }
         public static event System.Action OnInstanceReady;
 
-        [Header("Modalità (2b: passivo)")]
+        [Header("Modalità passiva (T1, sempre attiva)")]
         [Tooltip("Se true, il server esegue PerformScan() automaticamente ogni " +
-                 "scanIntervalSeconds. In 2b: sempre true. In Blocco 3 Fase 3 " +
-                 "questo verrà messo a false e la scan sarà attivata dalla UI " +
-                 "via RequestScanRpc.")]
+                 "scanIntervalSeconds (rilevamento passivo T1: Unknown→Detected). " +
+                 "Rev BH: nel modello ibrido D29 resta TRUE — il passivo NON si " +
+                 "spegne più. Lo scan ATTIVO (T2+) è additivo, via RequestScanRpc.")]
         [SerializeField] private bool passiveMode = true;
 
         [Header("Cadenza scan passiva")]
@@ -77,6 +90,21 @@ namespace SpaceSurvivor.Ship.Systems
                  "~50m in 0.5s a velocità di crociera).")]
         [Min(0.05f)]
         [SerializeField] private float scanIntervalSeconds = 0.5f;
+
+        [Header("Scan attivo (T2+, Rev BH — D29)")]
+        [Tooltip("Cooldown minimo (secondi) tra due scan ATTIVI riusciti. " +
+                 "Riferito al tempo server. Il bonus di ruolo Scanner (quando " +
+                 "esisterà) lo ridurrà via moltiplicatore. Default 2s.")]
+        [Min(0f)]
+        [SerializeField] private float scanCooldownSeconds = 2f;
+
+        [Header("Debug tier (TEMP fino a Blocco 5 upgrade nave)")]
+        [Tooltip("Tier scanner nave impostato al boot dal server. In 2b il " +
+                 "sistema di upgrade nave non esiste ancora: alzare qui (2/3/4) " +
+                 "per testare il reveal T2/T3/T4 in playtest. Da rimuovere quando " +
+                 "il tier arriverà dal Fleet Account / upgrade nave (Blocco 5).")]
+        [Range(1, 4)]
+        [SerializeField] private int debugStartTier = 1;
 
         [Header("Debug")]
         [Tooltip("Log dettagliati di ogni transizione ScanState. Lasciare OFF " +
@@ -93,9 +121,9 @@ namespace SpaceSurvivor.Ship.Systems
                 NetworkVariableReadPermission.Everyone,
                 NetworkVariableWritePermission.Server);
 
-        // Ultima esecuzione di scan (Time.time server). Dormiente in 2b —
-        // servirà come base del cooldown in Blocco 3 Fase 3 quando la scan
-        // diventerà attiva.
+        // Time.time (server) dell'ultimo scan ATTIVO riuscito. Base del cooldown
+        // dello scan attivo (Rev BH). NON più scritto dal passivo (che gira ogni
+        // 0.5s e azzererebbe di continuo il cooldown).
         private readonly NetworkVariable<float> _lastScanTime =
             new NetworkVariable<float>(0f,
                 NetworkVariableReadPermission.Everyone,
@@ -128,11 +156,10 @@ namespace SpaceSurvivor.Ship.Systems
 
             if (IsServer)
             {
-                // 2b: tier hardcoded a 1. Il fatto che sia scritto qui e non
-                // dal default della NetVar è intenzionale — quando il sistema
-                // di upgrade nave arriverà (Blocco 5), quello sarà il posto
-                // giusto per settare il tier corretto letto dal Fleet Account.
-                _currentTier.Value = 1;
+                // Rev BH: tier dal campo debug (TEMP). Quando il sistema di
+                // upgrade nave arriverà (Blocco 5), qui si leggerà il tier dal
+                // Fleet Account. Clamp difensivo su [1,4].
+                _currentTier.Value = Mathf.Clamp(debugStartTier, 1, 4);
                 _lastScanTime.Value = 0f;
                 _timeSinceLastPassiveScan = 0f;
 
@@ -211,40 +238,142 @@ namespace SpaceSurvivor.Ship.Systems
                 }
             }
 
-            _lastScanTime.Value = Time.time;
+            // Rev BH: NON scriviamo _lastScanTime qui — è il timestamp del
+            // cooldown dello scan ATTIVO. Il passivo non ha cooldown.
 
             if (logVerbose && newlyDetected > 0)
             {
-                Debug.Log($"[ScannerSystem] Scan complete. {newlyDetected} new detections.");
+                Debug.Log($"[ScannerSystem] Scan passivo complete. {newlyDetected} new detections.");
             }
         }
 
         // ── API per UI (attivo — dormiente in 2b) ────────────────────────────
 
         /// <summary>
-        /// [Blocco 3 Fase 3+] Richiesta di scan attivo dalla UI. Chiamabile
-        /// da qualunque client. Il server valuterà:
-        ///   - cooldown rispetto a LastScanTime
-        ///   - ruolo del SenderClientId per applicare bonus/malus
-        ///   - eventuale gate di setup (es. player deve essere davanti alla
-        ///     consolle Scanner, se decidiamo di legarlo a una postazione)
-        /// e in caso positivo chiamerà PerformScan().
+        /// [Rev BH — Fase 2b, D29] Richiesta di SCAN ATTIVO su un POI specifico.
+        /// Chiamabile da QUALUNQUE client (no esclusiva di ruolo — D29 principio
+        /// invariante; il ruolo dà bonus/malus, non l'accesso). Server-side:
+        ///   1. cooldown (scanCooldownSeconds × moltiplicatore ruolo)
+        ///   2. risoluzione bersaglio via PoiRegistry.TryGet
+        ///   3. gate: bersaglio già Detected (passivo) + entro ScanRange
+        /// In caso positivo: Detected→Scanned e RevealedInfoTier alzato al tier
+        /// effettivo (tier nave + bonus ruolo), reveal IMMEDIATO (Q2-a).
         ///
-        /// In 2b: la scan è passiva, questa RPC non è necessaria. È presente
-        /// come stub per fissare la firma corretta ora — quando la UI userà
-        /// questo entry point, non dovremo cambiarne signature.
+        /// targetPoiId = NetworkObjectId del PoiInstance bersaglio (lo passa la
+        /// ScannerUI dal POI selezionato).
         /// </summary>
         [Rpc(SendTo.Server)]
-        public void RequestScanRpc(RpcParams rpcParams = default)
+        public void RequestScanRpc(ulong targetPoiId, RpcParams rpcParams = default)
         {
-            // In 2b: no-op. Documentato ma non attivo.
-            if (logVerbose)
-            {
-                ulong sender = rpcParams.Receive.SenderClientId;
-                Debug.Log($"[ScannerSystem] RequestScanRpc da client {sender} — " +
-                          $"ignorato in 2b (passive mode).");
-            }
+            if (!IsServer) return;
+            TryActiveScan(targetPoiId, rpcParams.Receive.SenderClientId);
         }
+
+        /// <summary>
+        /// [Rev BH] Logica dello scan attivo, server-only. Estratta da
+        /// RequestScanRpc così che il self-test editor possa invocarla senza
+        /// fabbricare RpcParams. requesterClientId serve solo agli hook di ruolo.
+        /// </summary>
+        private void TryActiveScan(ulong targetPoiId, ulong requesterClientId)
+        {
+            if (!IsServer) return;
+
+            // 1. Cooldown (con moltiplicatore ruolo — stub neutro in 2b).
+            float now = Time.time;
+            float effectiveCooldown = scanCooldownSeconds * GetRoleCooldownMultiplier(requesterClientId);
+            if (now - _lastScanTime.Value < effectiveCooldown)
+            {
+                if (logVerbose)
+                    Debug.Log($"[ScannerSystem] Scan attivo da client {requesterClientId} " +
+                              $"rifiutato: cooldown ({now - _lastScanTime.Value:F2}s < " +
+                              $"{effectiveCooldown:F2}s).");
+                return;
+            }
+
+            // 2. Risoluzione bersaglio.
+            if (!PoiRegistry.TryGet(targetPoiId, out var poi) || poi == null)
+            {
+                if (logVerbose)
+                    Debug.LogWarning($"[ScannerSystem] Scan attivo: POI id {targetPoiId} " +
+                                     "non registrato (despawnato?).");
+                return;
+            }
+
+            // 3. Gate: dev'essere già rilevato passivamente (non si fa deep-scan
+            //    di ciò che non è ancora Detected — T1 è passivo, T2+ è attivo).
+            if (poi.ScanState == PoiScanState.Unknown)
+            {
+                if (logVerbose)
+                    Debug.Log($"[ScannerSystem] Scan attivo su {poi.Data?.DisplayName ?? "POI"}: " +
+                              "ancora Unknown, ignorato (attendere rilevamento passivo).");
+                return;
+            }
+
+            // 3b. Gate range (spazio logico).
+            var ship = ShipMovement.Instance;
+            if (ship == null)
+            {
+                if (logVerbose)
+                    Debug.LogWarning("[ScannerSystem] Scan attivo: ShipMovement.Instance null.");
+                return;
+            }
+            float distSqr = (poi.LogicalPosition - ship.LogicalPosition).sqrMagnitude;
+            float rangeSqr = ScanRange * ScanRange;
+            if (distSqr > rangeSqr)
+            {
+                if (logVerbose)
+                    Debug.Log($"[ScannerSystem] Scan attivo su {poi.Data?.DisplayName ?? "POI"}: " +
+                              $"fuori range ({Mathf.Sqrt(distSqr):F0}m > {ScanRange:F0}m).");
+                return;
+            }
+
+            // 4. Successo: Detected→Scanned (solo se attualmente Detected; non
+            //    tocchiamo lo stato Anchored) + reveal tier.
+            if (poi.ScanState == PoiScanState.Detected)
+            {
+                poi.SetScanState(PoiScanState.Scanned);
+            }
+
+            int effectiveTier = Mathf.Clamp(CurrentTier + GetRoleTierBonus(requesterClientId), 1, 4);
+            poi.SetRevealedInfoTier(effectiveTier);
+            _lastScanTime.Value = now;
+
+            if (logVerbose)
+                Debug.Log($"[ScannerSystem] Scan attivo OK su " +
+                          $"{poi.Data?.DisplayName ?? "POI"} da client {requesterClientId}: " +
+                          $"RevealedInfoTier→{effectiveTier} (tier nave {CurrentTier}).");
+        }
+
+        // ── Modificatori di ruolo (STUB Rev BH) ──────────────────────────────
+        //
+        // dipende da: sistema ruolo networked per-player (OwnerClientId→ruolo).
+        // Oggi il ruolo è una stringa su profilo di menu, non replicata a
+        // runtime → questi hook ritornano valori NEUTRI. Quando il registro
+        // ruolo esisterà, qui si leggerà il ruolo di clientId e si applicheranno
+        // i modificatori (Scanner: cooldown ridotto + tier bonus; altri: neutri
+        // o malus). La firma non cambierà.
+
+        /// <summary>Moltiplicatore del cooldown scan attivo per ruolo. STUB=1.0.</summary>
+        private float GetRoleCooldownMultiplier(ulong clientId) => 1f;
+
+        /// <summary>Bonus di tier info per ruolo (Scanner). STUB=0.</summary>
+        private int GetRoleTierBonus(ulong clientId) => 0;
+
+#if UNITY_EDITOR
+        // ── Debug scaffolding (TEMP fino a Blocco 5 upgrade nave) ────────────
+        [ContextMenu("DEBUG/Alza tier scanner (+1)")]
+        private void DebugRaiseTier()
+        {
+            if (!Application.isPlaying || !IsServer)
+            {
+                Debug.LogWarning("[ScannerSystem] DebugRaiseTier: usabile solo in Play " +
+                                 "sul server/host.");
+                return;
+            }
+            _currentTier.Value = Mathf.Clamp(_currentTier.Value + 1, 1, 4);
+            Debug.Log($"[ScannerSystem] DEBUG tier nave → {_currentTier.Value}.");
+        }
+#endif
 
         // ── Progressione tier ────────────────────────────────────────────────
 
