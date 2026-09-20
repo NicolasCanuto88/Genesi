@@ -180,6 +180,42 @@ namespace SpaceSurvivor.Ship
         /// <summary>Moltiplicatore ruolo sui punti guadagnati (mash + slider positivi). Default 1 (identità).</summary>
         protected virtual float GetRolePointsMultiplier() => 1f;
 
+        // ── Hook win-mode (Rev BI · Path H "hold-against-decay") ────────────────
+        // Estensioni MINIME e opt-in: i default riproducono ESATTAMENTE il modello
+        // "repair" (sali a 100% = successo · timer scaduto = fallimento · start a 0 ·
+        // nessun floor). Il derivato Stabilizzazione li override; RepairMinigame-
+        // Engineering NON tocca nulla → gate di regressione D24 intatto.
+
+        /// <summary>Progresso iniziale della barra (0–100). Default 0 (repair).</summary>
+        protected virtual float GetStartProgress() => 0f;
+
+        /// <summary>
+        /// Se true (default), raggiungere il 100% conclude la sessione con successo.
+        /// La Stabilizzazione lo mette a false: il 100% è solo buffer massimo, la
+        /// vittoria è sopravvivere fino allo scadere del timer.
+        /// </summary>
+        protected virtual bool CompletesAtHundred => true;
+
+        /// <summary>
+        /// Se true, la barra che tocca il floor (GetFloorProgress) termina la
+        /// sessione via OnFloorBreached. Default false → il repair non ha floor.
+        /// </summary>
+        protected virtual bool FailsAtFloor => false;
+
+        /// <summary>Soglia-floor (0–100) sotto cui la sessione fallisce, se FailsAtFloor. Default 0.</summary>
+        protected virtual float GetFloorProgress() => 0f;
+
+        /// <summary>
+        /// Chiamato quando la barra sfonda il floor (solo se FailsAtFloor).
+        /// Default: chiude come interruzione (nessun effetto, nessun consumo).
+        /// Il derivato può aggiungere feedback prima di chiamare base.
+        /// </summary>
+        protected virtual void OnFloorBreached()
+        {
+            CloseInternal();
+            _onInterrupted?.Invoke();
+        }
+
         // ── Lifecycle ─────────────────────────────────────────────────────────
 
         protected virtual void Awake()
@@ -236,6 +272,15 @@ namespace SpaceSurvivor.Ship
             _progress -= _decayRate * Time.deltaTime;
             _progress = Mathf.Clamp(_progress, 0f, 100f);
 
+            // Path H (hold-against-decay) — sfondare il floor termina la sessione.
+            // Opt-in: FailsAtFloor default false → il repair (che ammette 0% fino
+            // allo scadere del timer) resta invariato.
+            if (FailsAtFloor && _progress <= GetFloorProgress())
+            {
+                OnFloorBreached();
+                return;
+            }
+
             // Slider indicator movement
             if (_sliderActive)
             {
@@ -263,7 +308,7 @@ namespace SpaceSurvivor.Ship
             _onInterrupted = onInterrupted;
 
             // Reset stato
-            _progress = 0f;
+            _progress = Mathf.Clamp(GetStartProgress(), 0f, 100f);
             _threshold50Crossed = false;
             _threshold75Crossed = false;
             _threshold100Crossed = false;
@@ -427,7 +472,7 @@ namespace SpaceSurvivor.Ship
             _activeSliderIndex = -1;
         }
 
-        private void OnTimerExpired()
+        protected virtual void OnTimerExpired()
         {
             // Riparazione parziale: mantiene le soglie già raggiunte.
             // I materiali già consumati alle soglie precedenti NON vengono rimborsati.
@@ -464,7 +509,7 @@ namespace SpaceSurvivor.Ship
 
             ApplyThresholdEffect(pct);
 
-            if (pct >= 100f)
+            if (pct >= 100f && CompletesAtHundred)
             {
                 SetStatus(CompleteText, colorGood);
                 CloseInternal();
@@ -587,8 +632,8 @@ namespace SpaceSurvivor.Ship
 
         // ── Debug helpers (standard Rev BA — protected per condivisione derivati) ──
 
-        protected void LogV(string msg)      { if (logVerbose) Debug.Log(msg); }
-        protected void LogVWarn(string msg)  { if (logVerbose) Debug.LogWarning(msg); }
+        protected void LogV(string msg) { if (logVerbose) Debug.Log(msg); }
+        protected void LogVWarn(string msg) { if (logVerbose) Debug.LogWarning(msg); }
         protected void LogVError(string msg) { if (logVerbose) Debug.LogError(msg); }
 
         // ── Debug GUI ─────────────────────────────────────────────────────────
