@@ -114,6 +114,13 @@ public class MonitorSwitcher : MonoBehaviour
         // On open: reset to the default monitor so reopening always starts on Monitor 1.
         if (dashboardActive && !dashboardWasActive)
             ShowMonitor(defaultMonitorIndex, instant: true);
+        // On close: nascondi TUTTI i monitor e chiudi il pannello aperto. Così quando
+        // non sei seduto nessuna pagina Ingegnere resta navigabile né continua a
+        // girare il suo EnsureSafety orfano (che altrimenti contende la selezione
+        // EventSystem ad altre postazioni, es. lo Scanner). Il guard di EnsureSafety
+        // si spegne proprio su CanvasGroup.interactable = false.
+        else if (!dashboardActive && dashboardWasActive)
+            HideAllMonitors();
 
         dashboardWasActive = dashboardActive;
 
@@ -172,5 +179,34 @@ public class MonitorSwitcher : MonoBehaviour
         // Anima la camera verso il monitor attivo
         if (engineeringStation != null)
             engineeringStation.LookAtMonitor(currentIndex);
+    }
+
+    /// <summary>
+    /// Nasconde tutti i monitor (alpha 0, non-interattivi, no raycast) e chiude il
+    /// pannello attualmente aperto. Chiamato quando il giocatore si alza dalla
+    /// postazione: evita che pagine non-Monitor-1 restino interattive/aperte (il
+    /// fronte di discesa non passava da ShowMonitor, e EngineeringStation disattiva
+    /// solo Monitor 1). Alla riapertura, il fronte di salita ripristina il default.
+    /// </summary>
+    private void HideAllMonitors()
+    {
+        if (monitors == null) return;
+
+        for (int i = 0; i < monitors.Length; i++)
+        {
+            CanvasGroup cg = monitors[i];
+            if (cg == null) continue;
+
+            cg.alpha = 0f;
+            cg.interactable = false;
+            cg.blocksRaycasts = false;
+        }
+
+        // Chiudi il pannello che era visibile (ferma InvokeRepeating + EnsureSafety).
+        if (panels != null && currentIndex >= 0 && currentIndex < panels.Length
+            && panels[currentIndex] != null)
+        {
+            panels[currentIndex].Close();
+        }
     }
 }

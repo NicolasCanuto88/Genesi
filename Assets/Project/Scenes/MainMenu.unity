@@ -11462,6 +11462,7 @@ MonoBehaviour:
   followSpeed: 18
   pulse: 1
   pulseSpeed: 3.5
+  alwaysShow: 0
 --- !u!1 &1472281440
 GameObject:
   m_ObjectHideFlags: 0

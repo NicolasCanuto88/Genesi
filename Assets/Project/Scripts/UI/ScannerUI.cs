@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using System.Text;
 using TMPro;
 using UnityEngine;
+using UnityEngine.UI;
 using UnityEngine.EventSystems;
 using SpaceSurvivor.Poi;
 using SpaceSurvivor.Ship;
@@ -10,7 +11,7 @@ using SpaceSurvivor.Ship.Systems;
 namespace SpaceSurvivor.UI
 {
     /// <summary>
-    /// ScannerUI — Milestone 3, Blocco 3 · Rev BH (Fase 2b, D29).
+    /// ScannerUI — Milestone 3, Blocco 3 · Rev BH (Fase 2b, D29) · Rev BJ (toggle Radar).
     ///
     /// Pannello della POSTAZIONE Scanner (monitor World Space), mostrato solo
     /// mentre il giocatore è seduto alla ScannerStation. Adempie la promessa
@@ -27,6 +28,13 @@ namespace SpaceSurvivor.UI
     ///   - Attivazione (click / Submit) di una riga → SCAN ATTIVO su quel POI via
     ///     ScannerSystem.RequestScanRpc: alza RevealedInfoTier fino al tier nave.
     ///
+    /// VISTA RADAR (Rev BJ):
+    ///   Vista SORELLA (ScannerRadarUI) alternata alla lista da un bottone toggle.
+    ///   La commutazione NON usa SetActive su questo GameObject (evita il deadlock
+    ///   di auto-disattivazione: Update non gira su oggetti inattivi); usa un
+    ///   CanvasGroup sul contenuto lista + SetVisible() sul radar. Il bottone
+    ///   toggle vive su una barra NON sfumata (sempre cliccabile).
+    ///
     /// DETTAGLIO PER-TIER (letto da PoiInstance.RevealedInfoTier + Data + reserve):
     ///   T1 (sempre, se Detected): tipo · massa · distanza
     ///   T2: composizione (PoiData.Composition) · O₂ sì/no (WreckOxygenReserve)
@@ -37,6 +45,7 @@ namespace SpaceSurvivor.UI
     ///   - PoiInstance (eventi statici + ScanState/RevealedInfoTier/Data/LogicalPosition)
     ///   - WreckOxygenReserve (per l'O₂; opzionale, GetComponent sul POI)
     ///   - ShipMovement.Instance (distanza) · ScannerSystem.Instance (tier/range/scan)
+    ///   - ScannerRadarUI (vista radar sorella, Rev BJ; opzionale)
     /// </summary>
     public class ScannerUI : MonoBehaviour, IDashboardPanel
     {
@@ -65,6 +74,23 @@ namespace SpaceSurvivor.UI
         [Tooltip("Colore riga per POI Scanned. Default ambra.")]
         [SerializeField] private Color scannedColor = new Color(1f, 0.7f, 0.15f);
 
+        [Header("Vista Radar (Rev BJ)")]
+        [Tooltip("Pannello radar ping-sonar (vista sorella). Se null, il toggle è " +
+                 "nascosto e resta attiva solo la lista.")]
+        [SerializeField] private ScannerRadarUI radarPanel;
+
+        [Tooltip("CanvasGroup del contenuto lista/dettaglio: mostrato/nascosto senza " +
+                 "SetActive (evita il deadlock di auto-disattivazione). Deve avvolgere " +
+                 "header + lista + dettaglio, MA non il bottone toggle.")]
+        [SerializeField] private CanvasGroup listContentCanvasGroup;
+
+        [Tooltip("Bottone che alterna Lista ⇄ Radar. Deve vivere su una barra NON " +
+                 "sfumata (fuori dal CanvasGroup lista e dal CanvasGroup radar).")]
+        [SerializeField] private Button toggleViewButton;
+
+        [Tooltip("Label del bottone toggle (mostra la vista di DESTINAZIONE).")]
+        [SerializeField] private TMP_Text toggleViewLabel;
+
         [Header("Debug")]
         [SerializeField] private bool logVerbose = false;
 
@@ -76,7 +102,11 @@ namespace SpaceSurvivor.UI
         private readonly HashSet<PoiInstance> _tracked = new HashSet<PoiInstance>();
 
         private bool isOpen = false;
+        private bool _radarMode = false;
         private readonly StringBuilder _sb = new StringBuilder(256);
+
+        // Cache ordinata per la navigazione esplicita (evita alloc a 10Hz).
+        private readonly List<ScannerUIEntry> _navOrdered = new List<ScannerUIEntry>();
 
         // ── Iscrizioni POI (attive quando il GameObject è attivo) ─────────────
 
@@ -126,6 +156,16 @@ namespace SpaceSurvivor.UI
         public void Open()
         {
             isOpen = true;
+
+            // Wiring toggle Radar (Rev BJ). Il bottone appare solo se c'è un radar.
+            if (toggleViewButton != null)
+            {
+                toggleViewButton.onClick.RemoveListener(ToggleView);
+                toggleViewButton.onClick.AddListener(ToggleView);
+                toggleViewButton.gameObject.SetActive(radarPanel != null);
+            }
+            SetRadarMode(false); // default: lista
+
             UpdateUI();
             InvokeRepeating(nameof(UpdateUI), 0f, 0.1f);
             DashboardSelection.SetInitial(this, ChooseInitialSelection, logVerbose);
@@ -135,11 +175,60 @@ namespace SpaceSurvivor.UI
         {
             isOpen = false;
             CancelInvoke(nameof(UpdateUI));
+
+            if (toggleViewButton != null)
+                toggleViewButton.onClick.RemoveListener(ToggleView);
+
+            if (radarPanel != null)
+                radarPanel.SetVisible(false);
         }
 
         private void Update()
         {
-            if (isOpen) DashboardSelection.EnsureSafety(this, ChooseInitialSelection, logVerbose);
+            // In modalità radar non forziamo la riselezione della lista (ruberebbe
+            // il focus alla vista radar).
+            if (isOpen && !_radarMode)
+                DashboardSelection.EnsureSafety(this, ChooseInitialSelection, logVerbose);
+        }
+
+        // ── Toggle Lista ⇄ Radar (Rev BJ) ─────────────────────────────────────
+
+        private void ToggleView() => SetRadarMode(!_radarMode);
+
+        private void SetRadarMode(bool radar)
+        {
+            _radarMode = radar && radarPanel != null;
+
+            // Contenuto lista: visibilità via CanvasGroup (niente SetActive su self).
+            if (listContentCanvasGroup != null)
+            {
+                listContentCanvasGroup.alpha = _radarMode ? 0f : 1f;
+                listContentCanvasGroup.interactable = !_radarMode;
+                listContentCanvasGroup.blocksRaycasts = !_radarMode;
+            }
+
+            // Radar.
+            if (radarPanel != null)
+                radarPanel.SetVisible(_radarMode);
+
+            // Label mostra la vista di destinazione.
+            if (toggleViewLabel != null)
+                toggleViewLabel.text = _radarMode ? "◂ LISTA" : "RADAR ▸";
+
+            // Navigazione: anello chiuso Toggle↔Lista (lista) o nessuna direzione (radar).
+            RewireNavigation();
+
+            if (_radarMode)
+            {
+                // Radar: seleziona il toggle così Submit torna alla lista; le direzioni
+                // non fanno nulla (Navigation.None sul toggle). Niente selezione lista.
+                if (toggleViewButton != null && EventSystem.current != null)
+                    EventSystem.current.SetSelectedGameObject(toggleViewButton.gameObject);
+            }
+            else if (isOpen)
+            {
+                DashboardSelection.SetInitial(this, ChooseInitialSelection, logVerbose);
+            }
         }
 
         // ── Refresh (10Hz mentre aperto) ──────────────────────────────────────
@@ -194,6 +283,9 @@ namespace SpaceSurvivor.UI
                 if (sorted[i].Value != null)
                     sorted[i].Value.transform.SetSiblingIndex(i);
             }
+
+            // L'ordine è cambiato: ricabla la navigazione esplicita (contenimento).
+            RewireNavigation();
         }
 
         // ── Dettaglio per-tier del POI selezionato ────────────────────────────
@@ -309,7 +401,67 @@ namespace SpaceSurvivor.UI
                 int sib = kv.Value.transform.GetSiblingIndex();
                 if (sib < bestSibling) { bestSibling = sib; first = kv.Value; }
             }
-            return first != null ? first.Button.gameObject : null;
+            if (first != null) return first.Button.gameObject;
+
+            // Nessuna voce selezionabile: ripiega sul toggle, così il controller non
+            // resta mai senza focus (e può passare al radar).
+            return toggleViewButton != null ? toggleViewButton.gameObject : null;
+        }
+
+        // ── Navigazione esplicita (contenimento) ──────────────────────────────
+        //
+        // Le voci sono prefab istanziati a runtime → la navigazione va cablata in
+        // codice (non in Inspector). Obiettivo: la navigazione direzionale NON deve
+        // poter uscire dal pannello Scanner verso altri canvas (es. i monitor
+        // dell'Ingegnere). Costruiamo un anello chiuso Toggle↔Lista con left/right
+        // = None. In modalità radar disattiviamo del tutto la navigazione del toggle.
+
+        private void RewireNavigation()
+        {
+            if (_radarMode)
+            {
+                if (toggleViewButton != null)
+                    toggleViewButton.navigation = new Navigation { mode = Navigation.Mode.None };
+                return;
+            }
+
+            // Ordina le voci per sibling index (= ordine visivo dopo il sort).
+            _navOrdered.Clear();
+            foreach (var kv in _entries)
+            {
+                if (kv.Value == null || kv.Value.Button == null) continue;
+                _navOrdered.Add(kv.Value);
+            }
+            _navOrdered.Sort((a, b) =>
+                a.transform.GetSiblingIndex().CompareTo(b.transform.GetSiblingIndex()));
+
+            int n = _navOrdered.Count;
+            for (int i = 0; i < n; i++)
+            {
+                Button b = _navOrdered[i].Button;
+                var nav = new Navigation
+                {
+                    mode = Navigation.Mode.Explicit,
+                    selectOnUp = i > 0 ? _navOrdered[i - 1].Button : (Selectable)toggleViewButton,
+                    selectOnDown = i < n - 1 ? _navOrdered[i + 1].Button : (Selectable)toggleViewButton,
+                    selectOnLeft = null,
+                    selectOnRight = null
+                };
+                b.navigation = nav;
+            }
+
+            if (toggleViewButton != null)
+            {
+                var tnav = new Navigation
+                {
+                    mode = Navigation.Mode.Explicit,
+                    selectOnDown = n > 0 ? _navOrdered[0].Button : null,
+                    selectOnUp = n > 0 ? _navOrdered[n - 1].Button : null,
+                    selectOnLeft = null,
+                    selectOnRight = null
+                };
+                toggleViewButton.navigation = tnav;
+            }
         }
 
         // ── Lifecycle POI (eventi statici) ────────────────────────────────────
