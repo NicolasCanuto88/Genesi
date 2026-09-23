@@ -129,9 +129,34 @@ namespace SpaceSurvivor.Ship.Systems
                 NetworkVariableReadPermission.Everyone,
                 NetworkVariableWritePermission.Server);
 
+        // ── Aggancio "live" (Rev BK) ─────────────────────────────────────────
+        //
+        // NetworkObjectId del POI attualmente AGGANCIATO (locked) dalla crew.
+        // Server-write, letto da tutti (Everyone) = un SOLO target ship-wide,
+        // condiviso crew-wide gratis sullo stesso canale già usato per lo scan.
+        // 0ul = nessun target agganciato (sentinella "none", coerente con
+        // AnchorSystem._netCurrentAnchorableId e PilotFlightHUD).
+        //
+        // ASSE ORTOGONALE a ScanState: "locked" NON è un quinto ScanState (che
+        // include già Anchored = attracco FISICO nave↔POI, dominio Docking).
+        // L'aggancio è un LAYER sopra il radar (Rev BJ resta visualizzazione):
+        // un POI non agganciato continua a comparire a ping; uno agganciato è
+        // reso "live" (continuo) da ScannerRadarUI. È anche il dato che il
+        // futuro item Pilota (marker HUD) leggerà — Rev BK prepara SOLO il dato.
+        private readonly NetworkVariable<ulong> _lockedPoiId =
+            new NetworkVariable<ulong>(0ul,
+                NetworkVariableReadPermission.Everyone,
+                NetworkVariableWritePermission.Server);
+
         // ── Accessors pubblici ───────────────────────────────────────────────
         public int CurrentTier => _currentTier.Value;
         public float LastScanTime => _lastScanTime.Value;
+
+        /// <summary>[Rev BK] NetworkObjectId del POI agganciato (live), o 0 se
+        /// nessuno. Un solo target ship-wide, replicato a tutta la crew.
+        /// Consumer: ScannerRadarUI (blip live), ScannerUI (marker + toggle
+        /// AGGANCIA/SGANCIA), futuro item Pilota (marker HUD).</summary>
+        public ulong LockedPoiId => _lockedPoiId.Value;
 
         /// <summary>Range di scan corrente in metri logici, derivato dal
         /// tier. Property calcolata, non replicata (deriva da _currentTier
@@ -203,6 +228,18 @@ namespace SpaceSurvivor.Ship.Systems
         public void PerformScan()
         {
             if (!IsServer) return;
+
+            // Rev BK: auto-clear del lock se il POI agganciato è despawnato.
+            // Il tick passivo (0.5s) è il punto naturale per la garbage-collection
+            // dello stato locked: se l'id non è più nel registro, azzeriamo.
+            if (_lockedPoiId.Value != 0ul
+                && !PoiRegistry.TryGet(_lockedPoiId.Value, out _))
+            {
+                if (logVerbose)
+                    Debug.Log($"[ScannerSystem] Lock auto-clear: POI id " +
+                              $"{_lockedPoiId.Value} non più registrato (despawn).");
+                _lockedPoiId.Value = 0ul;
+            }
 
             var ship = ShipMovement.Instance;
             if (ship == null)
@@ -342,6 +379,104 @@ namespace SpaceSurvivor.Ship.Systems
                 Debug.Log($"[ScannerSystem] Scan attivo OK su " +
                           $"{poi.Data?.DisplayName ?? "POI"} da client {requesterClientId}: " +
                           $"RevealedInfoTier→{effectiveTier} (tier nave {CurrentTier}).");
+        }
+
+        // ── Aggancio "live" (Rev BK) ─────────────────────────────────────────
+
+        /// <summary>
+        /// [Rev BK] Richiesta di AGGANCIO di un POI. Chiamabile da QUALUNQUE
+        /// client (no esclusiva di ruolo — invariante D29). Inviata dal
+        /// LockMinigameScanner al completamento del minigame (soglia 100%).
+        /// Server-side ri-valida il gate (server-authority): il minigame è
+        /// client-local, l'autorità dello stato locked resta qui.
+        ///
+        /// Gate (Q2-b): il bersaglio dev'essere già Scanned (o oltre, es.
+        /// Anchored) ed entro ScanRange. Un solo target ship-wide: agganciare
+        /// un nuovo POI SOSTITUISCE il precedente (punto di coordinamento crew).
+        /// </summary>
+        [Rpc(SendTo.Server)]
+        public void RequestLockRpc(ulong targetPoiId, RpcParams rpcParams = default)
+        {
+            if (!IsServer) return;
+            TryLock(targetPoiId, rpcParams.Receive.SenderClientId);
+        }
+
+        /// <summary>
+        /// [Rev BK] Richiesta di SGANCIO. Istantanea (nessun minigame). Azzera il
+        /// lock se targetPoiId corrisponde a quello agganciato, oppure se
+        /// targetPoiId è 0 (sgancio incondizionato). Chiamabile da qualunque
+        /// client (coordinamento crew, nessuna esclusiva).
+        /// </summary>
+        [Rpc(SendTo.Server)]
+        public void RequestUnlockRpc(ulong targetPoiId, RpcParams rpcParams = default)
+        {
+            if (!IsServer) return;
+
+            if (targetPoiId == 0ul || _lockedPoiId.Value == targetPoiId)
+            {
+                if (logVerbose && _lockedPoiId.Value != 0ul)
+                    Debug.Log($"[ScannerSystem] Sgancio POI id {_lockedPoiId.Value} " +
+                              $"da client {rpcParams.Receive.SenderClientId}.");
+                _lockedPoiId.Value = 0ul;
+            }
+        }
+
+        /// <summary>
+        /// [Rev BK] Logica di aggancio server-only. Estratta da RequestLockRpc.
+        /// requesterClientId oggi serve solo al logging (nessuna esclusiva di
+        /// ruolo); la firma è pronta per gli hook di ruolo futuri.
+        /// </summary>
+        private void TryLock(ulong targetPoiId, ulong requesterClientId)
+        {
+            if (!IsServer) return;
+
+            // 1. Risoluzione bersaglio.
+            if (!PoiRegistry.TryGet(targetPoiId, out var poi) || poi == null)
+            {
+                if (logVerbose)
+                    Debug.LogWarning($"[ScannerSystem] Aggancio: POI id {targetPoiId} " +
+                                     "non registrato (despawnato?).");
+                return;
+            }
+
+            // 2. Gate stato (Q2-b): dev'essere almeno Scanned (scan attivo già
+            //    fatto). ScanState è ordinato: Scanned=2, Anchored=3 → entrambi
+            //    validi. Detected/Unknown NO.
+            if ((byte)poi.ScanState < (byte)PoiScanState.Scanned)
+            {
+                if (logVerbose)
+                    Debug.Log($"[ScannerSystem] Aggancio su {poi.Data?.DisplayName ?? "POI"}: " +
+                              $"stato {poi.ScanState} < Scanned, rifiutato.");
+                return;
+            }
+
+            // 3. Gate range (spazio logico).
+            var ship = ShipMovement.Instance;
+            if (ship == null)
+            {
+                if (logVerbose)
+                    Debug.LogWarning("[ScannerSystem] Aggancio: ShipMovement.Instance null.");
+                return;
+            }
+            float distSqr = (poi.LogicalPosition - ship.LogicalPosition).sqrMagnitude;
+            if (distSqr > ScanRange * ScanRange)
+            {
+                if (logVerbose)
+                    Debug.Log($"[ScannerSystem] Aggancio su {poi.Data?.DisplayName ?? "POI"}: " +
+                              $"fuori range ({Mathf.Sqrt(distSqr):F0}m > {ScanRange:F0}m).");
+                return;
+            }
+
+            // 4. Successo: sostituisce l'eventuale lock precedente (singolo,
+            //    ship-wide). Idempotente se già uguale.
+            if (_lockedPoiId.Value != targetPoiId)
+            {
+                _lockedPoiId.Value = targetPoiId;
+                if (logVerbose)
+                    Debug.Log($"[ScannerSystem] Aggancio OK su " +
+                              $"{poi.Data?.DisplayName ?? "POI"} (id {targetPoiId}) " +
+                              $"da client {requesterClientId}.");
+            }
         }
 
         // ── Modificatori di ruolo (STUB Rev BH) ──────────────────────────────

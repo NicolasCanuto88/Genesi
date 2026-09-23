@@ -36,6 +36,12 @@ namespace SpaceSurvivor.UI
         [Tooltip("CanvasGroup per il fade. Se assente viene aggiunto a runtime.")]
         [SerializeField] private CanvasGroup canvasGroup;
 
+        [Tooltip("Indicatore di AGGANCIO (Rev BK): GameObject opzionale (es. un " +
+                 "anello attorno al quadratino) acceso quando il blip è il target " +
+                 "locked. Se null, lo stato locked resta segnalato dal solo colore " +
+                 "(lockedColor) impostato da ScannerRadarUI — degradazione grazioso.")]
+        [SerializeField] private GameObject lockIndicator;
+
         private RectTransform _rt;
         private Image _arrowImage;
 
@@ -62,6 +68,9 @@ namespace SpaceSurvivor.UI
 
             if (arrow != null)
                 _arrowImage = arrow.GetComponent<Image>();
+
+            if (lockIndicator != null)
+                lockIndicator.SetActive(false);
         }
 
         /// <summary>Posiziona il blip (coordinate anchored, piano radar heading-up).</summary>
@@ -102,6 +111,16 @@ namespace SpaceSurvivor.UI
         public void SetAlpha(float a)
         {
             if (canvasGroup != null) canvasGroup.alpha = Mathf.Clamp01(a);
+        }
+
+        /// <summary>
+        /// [Rev BK] Accende/spegne lo stile "agganciato" (lockIndicator opzionale).
+        /// Il colore distinto è comunque applicato via Configure da ScannerRadarUI,
+        /// quindi lo stato locked è visibile anche senza lockIndicator assegnato.
+        /// </summary>
+        public void SetLocked(bool locked)
+        {
+            if (lockIndicator != null) lockIndicator.SetActive(locked);
         }
     }
 }

@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using TMPro;
+using Unity.Netcode;
 using UnityEngine;
 using UnityEngine.UI;
 using SpaceSurvivor.Poi;
@@ -107,6 +108,20 @@ namespace SpaceSurvivor.UI
         [Tooltip("Alpha massimo dell'anello (al centro; sfuma verso il bordo).")]
         [SerializeField] private float ringMaxAlpha = 0.5f;
 
+        [Header("Aggancio live (Rev BK)")]
+        [Tooltip("Colore del blip AGGANCIATO (live), distinto da detected/scanned. " +
+                 "Default verde acceso.")]
+        [SerializeField] private Color lockedColor = new Color(0.2f, 1f, 0.4f);
+
+        [Tooltip("Glifo prefisso sull'etichetta del blip agganciato (es. '◎'). " +
+                 "Vuoto = nessun glifo (resta il solo colore + lockIndicator).")]
+        [SerializeField] private string lockMarkerGlyph = "◎";
+
+        [Tooltip("Alpha del blip agganciato quando è FUORI portata (clampato al " +
+                 "bordo del radar come indicatore direzionale per il Pilota).")]
+        [Range(0f, 1f)]
+        [SerializeField] private float lockedOutOfRangeAlpha = 0.6f;
+
         [Header("Debug")]
         [SerializeField] private bool logVerbose = false;
 
@@ -128,6 +143,12 @@ namespace SpaceSurvivor.UI
         private bool _visible = false;
         private float _ringTimer = 0f;
         private float _prevRingRadiusM = 0f;
+
+        // ── Aggancio live (Rev BK) ────────────────────────────────────────────
+        // Vista dedicata del target agganciato, gestita FUORI dal pool ping
+        // (_active/_pool): è un singolo blip continuo, non un blip a scatti.
+        private RadarBlip _lockedView;
+        private ulong _lockedIdCached = 0ul;
 
         // ── Iscrizioni POI (attive quando il GameObject è attivo) ─────────────
 
@@ -211,6 +232,11 @@ namespace SpaceSurvivor.UI
             float scanRange = scanner != null ? scanner.ScanRange : 2000f;
             if (scanRange <= 0f) scanRange = 2000f;
 
+            // Rev BK: id del target agganciato (0 = nessuno). Cache per-frame:
+            // usato sia per escludere il locked dal ciclo ping (niente doppio
+            // blip) sia per disegnarlo live.
+            _lockedIdCached = scanner != null ? scanner.LockedPoiId : 0ul;
+
             float pingPeriod = ByTier(pingPeriodByTier, tier, 3f);
             float persistence = ByTier(blipPersistenceByTier, tier, 1f);
 
@@ -232,6 +258,7 @@ namespace SpaceSurvivor.UI
 
             UpdateRingVisual(currM, scanRange);
             UpdateBlips();
+            UpdateLockedBlip(ship, scanRange);
             UpdateHeader(tier, scanRange);
             UpdateEmptyState(ship, scanRange);
         }
@@ -259,6 +286,12 @@ namespace SpaceSurvivor.UI
             {
                 if (poi == null) continue;
                 if (poi.ScanState == PoiScanState.Unknown) continue; // solo Detected+
+
+                // Rev BK: il target agganciato è disegnato LIVE (UpdateLockedBlip),
+                // non a ping → escludilo qui per non avere un doppio blip.
+                if (_lockedIdCached != 0ul && poi.NetworkObject != null
+                    && poi.NetworkObject.NetworkObjectId == _lockedIdCached)
+                    continue;
 
                 Vector3 rel = invShip * (poi.LogicalPosition - shipPos);
                 float horiz = Mathf.Sqrt(rel.x * rel.x + rel.z * rel.z);
@@ -311,6 +344,104 @@ namespace SpaceSurvivor.UI
                 string dn = poi.Data != null ? poi.Data.DisplayName : "POI";
                 Debug.Log($"[ScannerRadarUI] Ping '{dn}' h={height} tier={infoTier}.");
             }
+        }
+
+        // ── Aggancio live (Rev BK) ────────────────────────────────────────────
+
+        /// <summary>
+        /// Disegna il target AGGANCIATO come blip CONTINUO (posizione reale ogni
+        /// frame), bypassando il ciclo ping. Se il POI è fuori portata, il blip è
+        /// clampato al bordo del radar (indicatore direzionale per il Pilota) con
+        /// alpha ridotta. Se non c'è lock o il POI non è risolvibile, nasconde la
+        /// vista dedicata.
+        /// </summary>
+        private void UpdateLockedBlip(ShipMovement ship, float scanRange)
+        {
+            if (_lockedIdCached == 0ul) { HideLockedBlip(); return; }
+
+            // Risoluzione client-side del PoiInstance dal NetworkObjectId. Uso
+            // SpawnManager.SpawnedObjects (invariante: non NetworkManager.SpawnedObjects).
+            var nm = NetworkManager.Singleton;
+            if (nm == null || nm.SpawnManager == null) { HideLockedBlip(); return; }
+            if (!nm.SpawnManager.SpawnedObjects.TryGetValue(_lockedIdCached, out var netObj)
+                || netObj == null) { HideLockedBlip(); return; }
+            if (!netObj.TryGetComponent<PoiInstance>(out var poi) || poi == null)
+            { HideLockedBlip(); return; }
+
+            Quaternion invShip = Quaternion.Inverse(ship.LogicalRotation);
+            Vector3 rel = invShip * (poi.LogicalPosition - ship.LogicalPosition);
+            float displayRadius = DisplayRadiusPixels();
+
+            Vector2 dir2 = new Vector2(rel.x, rel.z);
+            float horiz = dir2.magnitude;
+
+            Vector2 anchored;
+            float alpha;
+            if (scanRange > 0f && horiz <= scanRange)
+            {
+                anchored = dir2 / scanRange * displayRadius;
+                alpha = 1f;
+            }
+            else
+            {
+                // Fuori portata: clamp al bordo (edge indicator direzionale).
+                Vector2 d = dir2.sqrMagnitude > 0.0001f ? dir2.normalized : Vector2.up;
+                anchored = d * displayRadius;
+                alpha = lockedOutOfRangeAlpha;
+            }
+
+            RadarBlip view = EnsureLockedView();
+            if (view == null) return;
+
+            int infoTier = poi.RevealedInfoTier;
+            string height = FormatHeight(rel.y);
+
+            string typeCode = "";
+            bool showArrow = false;
+            float arrowAngle = 0f;
+            if (infoTier >= 2)
+            {
+                typeCode = TypeCode(poi.Data);
+
+                Vector3 relVel = invShip * poi.LogicalVelocity;
+                Vector2 vel2 = new Vector2(relVel.x, relVel.z);
+                if (vel2.magnitude >= minVelocityForArrow)
+                {
+                    showArrow = true;
+                    arrowAngle = Mathf.Atan2(-vel2.x, vel2.y) * Mathf.Rad2Deg;
+                }
+            }
+
+            string heightLabel = string.IsNullOrEmpty(lockMarkerGlyph)
+                ? height : $"{lockMarkerGlyph} {height}";
+
+            view.gameObject.SetActive(true);
+            view.SetLocked(true);
+            view.SetAnchoredPosition(anchored);
+            view.Configure(lockedColor, heightLabel, typeCode, showArrow, arrowAngle);
+            view.SetAlpha(alpha);
+        }
+
+        private RadarBlip EnsureLockedView()
+        {
+            if (_lockedView == null)
+            {
+                if (blipPrefab == null) return null;
+                Transform parent = blipContainer != null ? blipContainer : radarArea;
+                _lockedView = Instantiate(blipPrefab, parent);
+                // Sopra i blip ping (z-order): il target agganciato è prioritario.
+                _lockedView.transform.SetAsLastSibling();
+            }
+            return _lockedView;
+        }
+
+        private void HideLockedBlip()
+        {
+            if (_lockedView == null) return;
+            _lockedView.SetLocked(false);
+            _lockedView.SetAlpha(0f);
+            if (_lockedView.gameObject.activeSelf)
+                _lockedView.gameObject.SetActive(false);
         }
 
         // ── Fade / scadenza blip ──────────────────────────────────────────────
@@ -452,6 +583,10 @@ namespace SpaceSurvivor.UI
             foreach (var kv in _active)
                 RecycleView(kv.Value.View);
             _active.Clear();
+
+            // Rev BK: nascondi anche il blip live del target agganciato (la vista
+            // dedicata non fa parte del pool ping).
+            HideLockedBlip();
         }
 
         // ── Lifecycle POI (eventi statici) ────────────────────────────────────

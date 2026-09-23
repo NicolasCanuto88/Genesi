@@ -84,12 +84,39 @@ namespace SpaceSurvivor.UI
                  "header + lista + dettaglio, MA non il bottone toggle.")]
         [SerializeField] private CanvasGroup listContentCanvasGroup;
 
+        [Tooltip("CanvasGroup che racchiude l'INTERA vista Scanner (lista + radar + " +
+                 "toggle) — tipicamente su BackgroundPanel, sibling del minigame. " +
+                 "Nascosto (alpha 0) durante il minigame di aggancio così lo Scanner " +
+                 "sparisce e il minigame resta solo. Se null, fallback: nasconde " +
+                 "listContentCanvasGroup + il pulsante toggle.")]
+        [SerializeField] private CanvasGroup scannerViewGroup;
+
         [Tooltip("Bottone che alterna Lista ⇄ Radar. Deve vivere su una barra NON " +
                  "sfumata (fuori dal CanvasGroup lista e dal CanvasGroup radar).")]
         [SerializeField] private Button toggleViewButton;
 
         [Tooltip("Label del bottone toggle (mostra la vista di DESTINAZIONE).")]
         [SerializeField] private TMP_Text toggleViewLabel;
+
+        [Header("Aggancio (Rev BK)")]
+        [Tooltip("Pulsante AGGANCIA/SGANCIA nell'area dettaglio. Vive DENTRO il " +
+                 "CanvasGroup lista (si congela col resto durante il minigame e " +
+                 "sparisce in modalità radar). Nell'anello di navigazione esplicito " +
+                 "chiude il ciclo Toggle↔Righe↔Aggancia. Se null, l'aggancio è " +
+                 "disabilitato (resta solo scan + radar).")]
+        [SerializeField] private Button lockButton;
+
+        [Tooltip("Label del pulsante aggancio (AGGANCIA / SGANCIA / AGGANCIO N/D).")]
+        [SerializeField] private TMP_Text lockButtonLabel;
+
+        [Tooltip("Minigame di aggancio (LockMinigameScanner), tipicamente su un " +
+                 "Canvas World Space figlio del monitor Scanner. Se null, il " +
+                 "pulsante AGGANCIA non apre nulla.")]
+        [SerializeField] private LockMinigameScanner lockMinigame;
+
+        [Tooltip("Colore riga per il POI AGGANCIATO (live). Default verde acceso, " +
+                 "distinto da Detected (cyan) / Scanned (ambra).")]
+        [SerializeField] private Color lockedColor = new Color(0.2f, 1f, 0.4f);
 
         [Header("Debug")]
         [SerializeField] private bool logVerbose = false;
@@ -104,6 +131,17 @@ namespace SpaceSurvivor.UI
         private bool isOpen = false;
         private bool _radarMode = false;
         private readonly StringBuilder _sb = new StringBuilder(256);
+
+        // ── Aggancio (Rev BK) ─────────────────────────────────────────────────
+        // Minigame in corso: durante il minigame la lista è congelata
+        // (interactable off) e EnsureSafety/SetInitial sospesi.
+        private bool _lockMinigameActive = false;
+        // Ultimo POI selezionato da una RIGA (persiste quando il focus passa al
+        // pulsante Aggancia, che altrimenti non risolverebbe alcun POI).
+        private PoiInstance _lastSelectedPoi;
+        // Diff dello stato di aggancio: ricoloriamo le righe SOLO quando cambia
+        // (impostare il colore ogni frame cancella il tint Highlighted/Selected).
+        private ulong _prevLockedId = ulong.MaxValue;
 
         // Cache ordinata per la navigazione esplicita (evita alloc a 10Hz).
         private readonly List<ScannerUIEntry> _navOrdered = new List<ScannerUIEntry>();
@@ -164,6 +202,14 @@ namespace SpaceSurvivor.UI
                 toggleViewButton.onClick.AddListener(ToggleView);
                 toggleViewButton.gameObject.SetActive(radarPanel != null);
             }
+
+            // Wiring pulsante Aggancio (Rev BK).
+            if (lockButton != null)
+            {
+                lockButton.onClick.RemoveListener(OnLockButtonClicked);
+                lockButton.onClick.AddListener(OnLockButtonClicked);
+            }
+
             SetRadarMode(false); // default: lista
 
             UpdateUI();
@@ -176,8 +222,18 @@ namespace SpaceSurvivor.UI
             isOpen = false;
             CancelInvoke(nameof(UpdateUI));
 
+            // Se il minigame di aggancio è in corso, interrompilo (nessun lock:
+            // l'effetto scatta solo a 100%). Interrupt → OnLockInterrupted, ma
+            // isOpen è già false → nessuna riselezione.
+            if (_lockMinigameActive && lockMinigame != null)
+                lockMinigame.Interrupt();
+            _lockMinigameActive = false;
+            _lastSelectedPoi = null;
+
             if (toggleViewButton != null)
                 toggleViewButton.onClick.RemoveListener(ToggleView);
+            if (lockButton != null)
+                lockButton.onClick.RemoveListener(OnLockButtonClicked);
 
             if (radarPanel != null)
                 radarPanel.SetVisible(false);
@@ -186,8 +242,9 @@ namespace SpaceSurvivor.UI
         private void Update()
         {
             // In modalità radar non forziamo la riselezione della lista (ruberebbe
-            // il focus alla vista radar).
-            if (isOpen && !_radarMode)
+            // il focus alla vista radar). Durante il minigame di aggancio la lista
+            // è congelata → EnsureSafety sospeso.
+            if (isOpen && !_radarMode && !_lockMinigameActive)
                 DashboardSelection.EnsureSafety(this, ChooseInitialSelection, logVerbose);
         }
 
@@ -238,6 +295,8 @@ namespace SpaceSurvivor.UI
             UpdateHeader();
             UpdateDistances();
             UpdateDetail();
+            UpdateLockButton();
+            RefreshLockColorsIfChanged();
         }
 
         private void UpdateHeader()
@@ -294,7 +353,17 @@ namespace SpaceSurvivor.UI
         {
             if (detailText == null) return;
 
-            PoiInstance poi = ResolveSelectedPoi();
+            // Aggiorna l'ultimo POI selezionato SOLO quando il focus è su una riga
+            // (quando passa al pulsante Aggancia, ResolveSelectedPoi torna null ma
+            // il dettaglio deve restare sul POI).
+            PoiInstance sel = ResolveSelectedPoi();
+            if (sel != null && !ReferenceEquals(sel, _lastSelectedPoi))
+            {
+                _lastSelectedPoi = sel;
+                UpdateLockReturnTarget(); // la freccia SINISTRA del pulsante torna qui
+            }
+
+            PoiInstance poi = _lastSelectedPoi;
             if (poi == null || poi.Data == null)
             {
                 detailText.text = "Seleziona un contatto.";
@@ -312,6 +381,10 @@ namespace SpaceSurvivor.UI
 
             _sb.Clear();
             _sb.AppendLine($"<b>{poi.Data.DisplayName}</b>");
+
+            // Riga stato aggancio (Rev BK).
+            if (IsLocked(poi))
+                _sb.AppendLine("<b>● AGGANCIATO (live)</b>");
 
             // T1 — sempre disponibile se rilevato (tipo/massa/distanza).
             _sb.AppendLine($"Tipo: {poi.Data.Type}");
@@ -387,6 +460,156 @@ namespace SpaceSurvivor.UI
                           $"'{poi.Data?.DisplayName ?? "POI"}'.");
         }
 
+        // ── Aggancio (Rev BK) ─────────────────────────────────────────────────
+
+        /// <summary>Click sul pulsante Aggancia/Sgancia. Opera sull'ULTIMO POI
+        /// selezionato da una riga (_lastSelectedPoi).</summary>
+        private void OnLockButtonClicked()
+        {
+            var poi = _lastSelectedPoi;
+            if (poi == null || poi.NetworkObject == null) return;
+
+            var scanner = ScannerSystem.Instance;
+            if (scanner == null) return;
+
+            ulong id = poi.NetworkObject.NetworkObjectId;
+
+            // Già agganciato → sgancio ISTANTANEO (nessun minigame).
+            if (scanner.LockedPoiId != 0ul && scanner.LockedPoiId == id)
+            {
+                scanner.RequestUnlockRpc(id);
+                if (logVerbose)
+                    Debug.Log($"[ScannerUI] Sgancio '{poi.Data?.DisplayName ?? "POI"}'.");
+                return;
+            }
+
+            // Gate Q2-b: aggancio solo se almeno Scanned. Altrimenti no-op (la
+            // label mostra 'AGGANCIO N/D').
+            if ((byte)poi.ScanState >= (byte)PoiScanState.Scanned)
+                OpenLockMinigame(poi);
+        }
+
+        private void OpenLockMinigame(PoiInstance poi)
+        {
+            if (lockMinigame == null)
+            {
+                Debug.LogWarning("[ScannerUI] lockMinigame non assegnato — aggancio " +
+                                 "non disponibile.");
+                return;
+            }
+            if (_lockMinigameActive) return;
+
+            _lockMinigameActive = true;
+            SetScannerViewVisible(false); // nascondi lo Scanner durante il minigame
+
+            // Azzera la selezione UI: la lista è nascosta e non-interattiva; senza
+            // questo, premere le frecce (che il minigame usa per lo slider) farebbe
+            // comparire l'highlight su righe invisibili.
+            if (EventSystem.current != null)
+                EventSystem.current.SetSelectedGameObject(null);
+
+            lockMinigame.Open(poi, OnLockComplete, OnLockInterrupted);
+
+            if (logVerbose)
+                Debug.Log($"[ScannerUI] Minigame aggancio aperto su " +
+                          $"'{poi.Data?.DisplayName ?? "POI"}'.");
+        }
+
+        private void OnLockComplete() => EndLockMinigame();
+        private void OnLockInterrupted() => EndLockMinigame();
+
+        private void EndLockMinigame()
+        {
+            if (!_lockMinigameActive) return;
+            _lockMinigameActive = false;
+
+            // Riappare lo Scanner (torniamo sempre in modalità lista dopo il minigame).
+            SetScannerViewVisible(true);
+
+            // Ripristina la selezione lista (sospesa durante il minigame).
+            if (isOpen && !_radarMode)
+                DashboardSelection.SetInitial(this, ChooseInitialSelection, logVerbose);
+        }
+
+        /// <summary>
+        /// Mostra/nasconde l'INTERA vista Scanner durante il minigame di aggancio.
+        /// Preferisce scannerViewGroup (BackgroundPanel: nasconde lista+radar+toggle
+        /// e lo sfondo). Fallback null-safe: nasconde la lista (alpha) e il pulsante
+        /// toggle. Non tocca il radar figlio, che mantiene il suo stato lista/radar.
+        /// </summary>
+        private void SetScannerViewVisible(bool visible)
+        {
+            if (scannerViewGroup != null)
+            {
+                scannerViewGroup.alpha = visible ? 1f : 0f;
+                scannerViewGroup.interactable = visible;
+                scannerViewGroup.blocksRaycasts = visible;
+                return;
+            }
+
+            // Fallback (nessun scannerViewGroup assegnato).
+            if (listContentCanvasGroup != null)
+            {
+                listContentCanvasGroup.alpha = visible ? 1f : 0f;
+                listContentCanvasGroup.interactable = visible;
+                listContentCanvasGroup.blocksRaycasts = visible;
+            }
+            if (toggleViewButton != null)
+                toggleViewButton.gameObject.SetActive(visible);
+        }
+
+        private void UpdateLockButton()
+        {
+            if (lockButtonLabel == null) return;
+
+            var scanner = ScannerSystem.Instance;
+            ulong lockedId = scanner != null ? scanner.LockedPoiId : 0ul;
+
+            string label;
+            var poi = _lastSelectedPoi;
+            if (poi == null || poi.NetworkObject == null)
+            {
+                label = "AGGANCIO —";
+            }
+            else
+            {
+                ulong id = poi.NetworkObject.NetworkObjectId;
+                if (lockedId != 0ul && id == lockedId)
+                    label = "SGANCIA";
+                else if ((byte)poi.ScanState >= (byte)PoiScanState.Scanned)
+                    label = "AGGANCIA";
+                else
+                    label = "AGGANCIO N/D";
+            }
+
+            lockButtonLabel.text = label;
+        }
+
+        /// <summary>Ricolora le righe SOLO quando lo stato di aggancio cambia
+        /// (event-driven). Impostare il colore ogni frame calpesterebbe il tint
+        /// di Highlighted/Selected dei Button (regressione Rev BK).</summary>
+        private void RefreshLockColorsIfChanged()
+        {
+            ulong lockedId = ScannerSystem.Instance != null
+                ? ScannerSystem.Instance.LockedPoiId : 0ul;
+            if (lockedId == _prevLockedId) return;
+            _prevLockedId = lockedId;
+
+            foreach (var kv in _entries)
+            {
+                if (kv.Key == null) continue;
+                UpdateEntryColor(kv.Key);
+            }
+        }
+
+        private bool IsLocked(PoiInstance poi)
+        {
+            if (poi == null || poi.NetworkObject == null) return false;
+            var scanner = ScannerSystem.Instance;
+            if (scanner == null || scanner.LockedPoiId == 0ul) return false;
+            return scanner.LockedPoiId == poi.NetworkObject.NetworkObjectId;
+        }
+
         // ── Selezione iniziale (pattern DashboardSelection) ───────────────────
 
         private GameObject ChooseInitialSelection()
@@ -422,6 +645,8 @@ namespace SpaceSurvivor.UI
             {
                 if (toggleViewButton != null)
                     toggleViewButton.navigation = new Navigation { mode = Navigation.Mode.None };
+                if (lockButton != null)
+                    lockButton.navigation = new Navigation { mode = Navigation.Mode.None };
                 return;
             }
 
@@ -436,32 +661,80 @@ namespace SpaceSurvivor.UI
                 a.transform.GetSiblingIndex().CompareTo(b.transform.GetSiblingIndex()));
 
             int n = _navOrdered.Count;
+            Selectable toggleSel = toggleViewButton;   // può essere null
+            Selectable lockSel = lockButton;           // può essere null (aggancio disattivato)
+
+            // Anello VERTICALE: Toggle ↔ riga0 ↔ … ↔ rigaN-1 ↔ Toggle (il pulsante
+            // Aggancia NON è nell'anello verticale). Ogni riga raggiunge il pulsante
+            // ORIZZONTALMENTE (freccia destra): così andare al pulsante NON cambia il
+            // POI selezionato — il gate valuta quello su cui eri davvero (fix Rev BK).
             for (int i = 0; i < n; i++)
             {
                 Button b = _navOrdered[i].Button;
-                var nav = new Navigation
+                Selectable up = i > 0 ? _navOrdered[i - 1].Button : toggleSel;
+                Selectable down = i < n - 1 ? _navOrdered[i + 1].Button : toggleSel;
+                b.navigation = new Navigation
                 {
                     mode = Navigation.Mode.Explicit,
-                    selectOnUp = i > 0 ? _navOrdered[i - 1].Button : (Selectable)toggleViewButton,
-                    selectOnDown = i < n - 1 ? _navOrdered[i + 1].Button : (Selectable)toggleViewButton,
+                    selectOnUp = up,
+                    selectOnDown = down,
                     selectOnLeft = null,
-                    selectOnRight = null
+                    selectOnRight = lockSel, // destra → Aggancia (dalla riga corrente)
                 };
-                b.navigation = nav;
             }
 
             if (toggleViewButton != null)
             {
-                var tnav = new Navigation
+                Selectable tDown = n > 0 ? _navOrdered[0].Button
+                                 : (lockSel != null ? lockSel : null);
+                Selectable tUp = n > 0 ? _navOrdered[n - 1].Button
+                               : (lockSel != null ? lockSel : null);
+                // Lista vuota: il pulsante resta raggiungibile a destra dal toggle.
+                Selectable tRight = n == 0 ? lockSel : null;
+                toggleViewButton.navigation = new Navigation
                 {
                     mode = Navigation.Mode.Explicit,
-                    selectOnDown = n > 0 ? _navOrdered[0].Button : null,
-                    selectOnUp = n > 0 ? _navOrdered[n - 1].Button : null,
+                    selectOnDown = tDown,
+                    selectOnUp = tUp,
                     selectOnLeft = null,
-                    selectOnRight = null
+                    selectOnRight = tRight,
                 };
-                toggleViewButton.navigation = tnav;
             }
+
+            if (lockButton != null)
+            {
+                // selectOnLeft è DINAMICO (la riga di provenienza) → impostato da
+                // UpdateLockReturnTarget in base al POI selezionato. Qui inizializziamo.
+                lockButton.navigation = new Navigation
+                {
+                    mode = Navigation.Mode.Explicit,
+                    selectOnUp = null,
+                    selectOnDown = null,
+                    selectOnLeft = toggleSel, // placeholder; aggiornato subito sotto
+                    selectOnRight = null,
+                };
+                UpdateLockReturnTarget();
+            }
+        }
+
+        /// <summary>Fa sì che, dal pulsante Aggancia, la freccia SINISTRA riporti
+        /// alla riga da cui si è arrivati (il POI selezionato). Aggiornato quando
+        /// cambia la selezione, così il ritorno è sempre coerente.</summary>
+        private void UpdateLockReturnTarget()
+        {
+            if (lockButton == null) return;
+
+            Selectable left = null;
+            if (_lastSelectedPoi != null
+                && _entries.TryGetValue(_lastSelectedPoi, out var e)
+                && e != null && e.Button != null)
+                left = e.Button;
+            else if (toggleViewButton != null)
+                left = toggleViewButton;
+
+            var nav = lockButton.navigation;
+            nav.selectOnLeft = left;
+            lockButton.navigation = nav;
         }
 
         // ── Lifecycle POI (eventi statici) ────────────────────────────────────
@@ -551,7 +824,10 @@ namespace SpaceSurvivor.UI
             if (!_entries.TryGetValue(poi, out var entry)) return;
             if (entry == null) return;
 
-            Color c = poi.ScanState == PoiScanState.Scanned ? scannedColor : detectedColor;
+            // Unica sorgente di verità per il colore riga: lock > scanned > detected.
+            Color c = IsLocked(poi) ? lockedColor
+                    : poi.ScanState == PoiScanState.Scanned ? scannedColor
+                    : detectedColor;
             entry.SetTextColor(c);
         }
 
@@ -565,6 +841,14 @@ namespace SpaceSurvivor.UI
                 Destroy(entry.gameObject);
             }
             _entries.Remove(poi);
+
+            // Rev BK: se era il POI di riferimento del dettaglio/aggancio, azzera.
+            if (ReferenceEquals(poi, _lastSelectedPoi))
+                _lastSelectedPoi = null;
+
+            // La lista è cambiata: ricabla la navigazione (evita link verso la riga
+            // appena distrutta e riallinea il ritorno del pulsante Aggancia).
+            RewireNavigation();
 
             if (logVerbose)
                 Debug.Log($"[ScannerUI] Riga rimossa per '{poi.Data?.DisplayName ?? "POI"}'.");
