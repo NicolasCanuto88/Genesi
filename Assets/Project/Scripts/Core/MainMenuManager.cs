@@ -6,6 +6,7 @@ using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.InputSystem;
 using UnityEngine.SceneManagement;
+using UnityEngine.Serialization;
 using UnityEngine.UI;
 using TMPro;
 
@@ -24,6 +25,13 @@ using TMPro;
 /// separati (Name, Role, Dot) — Dot è un'Image colorata dinamicamente in
 /// base al ruolo tramite RoleColors.Get() (fonte unica, condivisa con
 /// CharacterEntryUI per coerenza tra badge personaggio e lista selezione).
+///
+/// REV BM — RUOLI: 5 bottoni ruolo (Pilota, Ingegnere, Scanner, Corpsman,
+/// Quartermaster). "Medico" → "Corpsman" (rinomina M3 close; il campo
+/// serializzato è rinominato con FormerlySerializedAs, nessun riferimento perso);
+/// Quartermaster aggiunto (identità pronta, contenuto in Fase 3b). Le etichette
+/// salvate nel profilo vengono da CrewRoles.ToDisplayName (fonte unica della
+/// mappatura ruolo ↔ stringa, condivisa con PlayerCrewRole e RoleColors).
 /// </summary>
 public class MainMenuManager : MonoBehaviour
 {
@@ -61,8 +69,11 @@ public class MainMenuManager : MonoBehaviour
     [SerializeField] private Button creationBtnIngegnere;
     [Tooltip("ContentContainer/RoleContainer/Scanner")]
     [SerializeField] private Button creationBtnScanner;
-    [Tooltip("ContentContainer/RoleContainer/Medico")]
-    [SerializeField] private Button creationBtnMedico;
+    [Tooltip("ContentContainer/RoleContainer/Corpsman (ex Medico — Rev BM)")]
+    [FormerlySerializedAs("creationBtnMedico")]
+    [SerializeField] private Button creationBtnCorpsman;
+    [Tooltip("ContentContainer/RoleContainer/Quartermaster (NUOVO — Rev BM)")]
+    [SerializeField] private Button creationBtnQuartermaster;
     [Tooltip("ContentContainer/ErrorText")]
     [SerializeField] private TextMeshProUGUI creationErrorLabel;
     [Tooltip("ContentContainer/Apply")]
@@ -185,8 +196,19 @@ public class MainMenuManager : MonoBehaviour
     private string _selectedCharId = "";
     private string _ruoloSelezionato = "";
 
-    private static readonly string[] NomiRuoli = { "Pilota", "Ingegnere", "Scanner", "Medico" };
+    // Rev BM: etichette dalla fonte unica CrewRoles, nell'ordine dei bottoni
+    // (Pilota, Ingegnere, Scanner, Corpsman, Quartermaster). È la stringa che
+    // finisce nel profilo e che PlayerCrewRole converte in CrewRole.
+    private static readonly string[] NomiRuoli = BuildNomiRuoli();
     private Button[] _creationRoleButtons;
+
+    private static string[] BuildNomiRuoli()
+    {
+        var nomi = new string[CrewRoles.SelectableCount];
+        for (int i = 0; i < nomi.Length; i++)
+            nomi[i] = CrewRoles.ToDisplayName(CrewRoles.GetSelectable(i));
+        return nomi;
+    }
 
     // ── LIFECYCLE ─────────────────────────────────────────────────────────────
 
@@ -204,8 +226,17 @@ public class MainMenuManager : MonoBehaviour
         // ClonesManager.IsClone() necessario qui.
         _creationRoleButtons = new[] {
             creationBtnPilota, creationBtnIngegnere,
-            creationBtnScanner, creationBtnMedico
+            creationBtnScanner, creationBtnCorpsman,
+            creationBtnQuartermaster
         };
+
+        // Rev BM: bottoni e NomiRuoli sono accoppiati per indice → stessa lunghezza.
+        if (_creationRoleButtons.Length != NomiRuoli.Length)
+            Debug.LogError($"[MainMenuManager] Bottoni ruolo ({_creationRoleButtons.Length}) ≠ ruoli " +
+                           $"selezionabili ({NomiRuoli.Length}). Allineare _creationRoleButtons a CrewRoles.");
+        if (creationBtnQuartermaster == null)
+            Debug.LogWarning("[MainMenuManager] creationBtnQuartermaster non assegnato: il ruolo Quartermaster " +
+                             "non è selezionabile. Vedi guida setup Editor Rev BM.");
     }
 
     private void Start()
@@ -376,7 +407,7 @@ public class MainMenuManager : MonoBehaviour
             case Stato.SessionType: TransitionTo(Stato.MainMenu); break;
             case Stato.LobbyHost: OnAnnullaHost(); break;
             case Stato.Join: TransitionTo(Stato.MainMenu); break;
-            // MainMenu: nessun "indietro" (è la radice del menu).
+                // MainMenu: nessun "indietro" (è la radice del menu).
         }
     }
 

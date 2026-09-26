@@ -35,6 +35,13 @@ using UnityEngine;
 /// soglia è il gate d'AVVIO del canale; la vulnerabilità co-op durante il canale
 /// deriva da look-away e danno (entrambi rilevati client-side qui), non dal
 /// rilascio del pulsante.
+///
+/// REV BM — PROFILO DI RUOLO CABLATO: ResolveProfile consulta PlayerCrewRole
+/// (identità di ruolo networked). Rianimatore Corpsman → profilo Corpsman di
+/// DefibConfig (2s / 60%); chiunque altro (o ruolo non ancora dichiarato) →
+/// profilo di default (4s / 30%, malus Rev U). Il server NON si fida più del
+/// clientId passato dal client: il rianimatore è ricavato da SenderClientId
+/// (altrimenti un client potrebbe dichiararsi "il Corpsman" per ottenere il 60%).
 /// </summary>
 [RequireComponent(typeof(PlayerHealthSystem))]
 public class PlayerReviveTarget : NetworkBehaviour, IInteractable
@@ -47,6 +54,12 @@ public class PlayerReviveTarget : NetworkBehaviour, IInteractable
     [SerializeField] private float fallbackChannelSeconds = 4f;
     [Range(0f, 1f)]
     [SerializeField] private float fallbackHpRestoreFraction = 0.30f;
+
+    [Tooltip("Fallback profilo Corpsman se config è null (Rev BM). GDD ruoli: 2s.")]
+    [SerializeField] private float fallbackCorpsmanChannelSeconds = 2f;
+    [Tooltip("Fallback profilo Corpsman se config è null (Rev BM). GDD ruoli: 60%.")]
+    [Range(0f, 1f)]
+    [SerializeField] private float fallbackCorpsmanHpRestoreFraction = 0.60f;
 
     [Header("Prompt")]
     [Tooltip("Prompt mostrato al rianimatore. {interact} è sostituito dal tasto dal InputDeviceManager.")]
@@ -141,7 +154,8 @@ public class PlayerReviveTarget : NetworkBehaviour, IInteractable
     {
         channeling = false;
         // Il rianimatore non è owner di questo oggetto → RequireOwnership = false.
-        ReviveServerRpc(reviverClientId);
+        // Rev BM: nessun clientId nel payload — il server usa SenderClientId.
+        ReviveServerRpc();
         reviverInteraction?.EndInteraction();
         reviverInteraction = null;
         reviverHealth = null;
@@ -158,8 +172,13 @@ public class PlayerReviveTarget : NetworkBehaviour, IInteractable
     // ── RPC server: rianimazione (Q3-a, Q4-a) ──────────────────────────────────
 
     [ServerRpc(RequireOwnership = false)]
-    private void ReviveServerRpc(ulong requesterClientId)
+    private void ReviveServerRpc(ServerRpcParams rpcParams = default)
     {
+        // Rev BM: il rianimatore è CHI HA INVIATO l'RPC, non un id nel payload —
+        // ora che il profilo dipende dal ruolo, un id dichiarato dal client sarebbe
+        // falsificabile (60% HP "da Corpsman" per chiunque).
+        ulong requesterClientId = rpcParams.Receive.SenderClientId;
+
         // Validazione server-authoritative (non ci si fida del client).
         if (health == null) return;
         if (health.State != PlayerHealthSystem.LifeState.Downed) return;   // first-completer-wins
@@ -176,18 +195,28 @@ public class PlayerReviveTarget : NetworkBehaviour, IInteractable
     // ── Seam modificatore di ruolo (Q5-a) ──────────────────────────────────────
 
     /// <summary>
-    /// Risolve il profilo defib per il rianimatore. SEAM: oggi ritorna sempre
-    /// l'identità di DEFAULT (non-Corpsman). Quando il sistema ruoli esisterà, qui
-    /// si consulterà il ruolo del rianimatore (Corpsman → 2s / 60%). Nessun ramo
-    /// Corpsman costruito ora — stesso hook a identità di default di Rev BB. È puro
-    /// e deterministico, così client (durata canale) e server (frazione HP)
-    /// calcolano lo stesso profilo.
+    /// Risolve il profilo defib per il rianimatore (Q5-a Rev BD → cablato Rev BM).
+    /// Corpsman (ruolo networked via PlayerCrewRole) → profilo Corpsman di
+    /// DefibConfig (2s / 60%); qualsiasi altro ruolo, o ruolo non ancora dichiarato
+    /// (None nella finestra di spawn) → profilo di DEFAULT (4s / 30%, malus Rev U).
+    /// Deterministico su stato replicato: client (durata canale) e server (frazione
+    /// HP) leggono lo stesso NetworkVariable → stesso profilo. In caso di cambio
+    /// ruolo a canale in corso vince il server (autorità sulla frazione HP).
     /// </summary>
     private DefibProfile ResolveProfile(ulong reviverClientId)
     {
-        float ch = config != null ? config.DefaultChannelSeconds : Mathf.Max(0.01f, fallbackChannelSeconds);
-        float hp = config != null ? config.DefaultHpRestoreFraction : Mathf.Clamp01(fallbackHpRestoreFraction);
-        return new DefibProfile(ch, hp);
+        bool isCorpsman = PlayerCrewRole.HasRole(reviverClientId, CrewRole.Corpsman);
+
+        if (config != null)
+        {
+            return isCorpsman
+                ? new DefibProfile(config.CorpsmanChannelSeconds, config.CorpsmanHpRestoreFraction)
+                : new DefibProfile(config.DefaultChannelSeconds, config.DefaultHpRestoreFraction);
+        }
+
+        return isCorpsman
+            ? new DefibProfile(Mathf.Max(0.01f, fallbackCorpsmanChannelSeconds), Mathf.Clamp01(fallbackCorpsmanHpRestoreFraction))
+            : new DefibProfile(Mathf.Max(0.01f, fallbackChannelSeconds), Mathf.Clamp01(fallbackHpRestoreFraction));
     }
 }
 

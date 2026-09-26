@@ -13,5 +13,7 @@ MonoBehaviour:
   m_Name: DefibConfig
   m_EditorClassIdentifier: Assembly-CSharp::DefibConfig
   defaultChannelSeconds: 4
-  defaultHpRestoreFraction: 1
+  defaultHpRestoreFraction: 0.3
+  corpsmanChannelSeconds: 2
+  corpsmanHpRestoreFraction: 0.6
   placeholderStartingCharges: 3
