@@ -32794,7 +32794,7 @@ RectTransform:
   m_GameObject: {fileID: 553822763}
   m_LocalRotation: {x: 0, y: -0.7071068, z: 0, w: 0.7071068}
   m_LocalPosition: {x: 0, y: 0, z: 0}
-  m_LocalScale: {x: 0.0010000003, y: 0.00094000006, z: 0.0010000003}
+  m_LocalScale: {x: 0.0010000003, y: 0.001, z: 0.0010000003}
   m_ConstrainProportionsScale: 0
   m_Children:
   - {fileID: 24447129}
@@ -41006,13 +41006,13 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 702795180}
   serializedVersion: 2
-  m_LocalRotation: {x: -0.60876137, y: 0, z: 0, w: 0.7933534}
+  m_LocalRotation: {x: -0.258819, y: 0, z: 0, w: 0.9659259}
   m_LocalPosition: {x: 0, y: 0.286, z: -0.914}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 143933420}
-  m_LocalEulerAnglesHint: {x: -75, y: 0, z: 0}
+  m_LocalEulerAnglesHint: {x: -30, y: 0, z: 0}
 --- !u!1 &704704677
 GameObject:
   m_ObjectHideFlags: 0
@@ -81161,8 +81161,8 @@ Transform:
   m_GameObject: {fileID: 1479821920}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 0, y: 0, z: 5649}
-  m_LocalScale: {x: 1000, y: 1000, z: 1000}
+  m_LocalPosition: {x: 0, y: 0, z: 10716}
+  m_LocalScale: {x: 5000, y: 5000, z: 5000}
   m_ConstrainProportionsScale: 1
   m_Children: []
   m_Father: {fileID: 1734535009}
@@ -85942,7 +85942,6 @@ GameObject:
   - component: {fileID: 1582953968}
   - component: {fileID: 1582953971}
   - component: {fileID: 1582953970}
-  - component: {fileID: 1582953969}
   m_Layer: 6
   m_Name: OccupiedVisual
   m_TagString: Untagged
@@ -85965,29 +85964,6 @@ Transform:
   m_Children: []
   m_Father: {fileID: 143933420}
   m_LocalEulerAnglesHint: {x: 90, y: 0, z: 0}
---- !u!136 &1582953969
-CapsuleCollider:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1582953967}
-  m_Material: {fileID: 0}
-  m_IncludeLayers:
-    serializedVersion: 2
-    m_Bits: 0
-  m_ExcludeLayers:
-    serializedVersion: 2
-    m_Bits: 0
-  m_LayerOverridePriority: 0
-  m_IsTrigger: 0
-  m_ProvidesContacts: 0
-  m_Enabled: 1
-  serializedVersion: 2
-  m_Radius: 0.5
-  m_Height: 2
-  m_Direction: 1
-  m_Center: {x: 0, y: 0, z: 0}
 --- !u!23 &1582953970
 MeshRenderer:
   m_ObjectHideFlags: 0
