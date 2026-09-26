@@ -25,6 +25,8 @@ namespace SpaceSurvivor.Ship
     ///     resta nella base come default overridabile; un derivato con interazione
     ///     diversa potrà sostituirla, ma finché non serve è condivisa.
     ///   - Lifecycle (grace, timer, open/interrupt/close), UI barra/slider, input.
+    ///     NB (Rev BL): l'input (mash + slider) si abilita SOLO a fine grace period,
+    ///     non all'avvio → nessun progresso accumulabile durante "INIZIA TRA n…".
     ///   - Hook modificatore di ruolo (clausola malus trasversale, Rev U) — default
     ///     IDENTITÀ (1.0): i tipi esistenti restano invariati; i ruoli lo cablano
     ///     nella Fase ruoli.
@@ -255,6 +257,14 @@ namespace SpaceSurvivor.Ship
                 {
                     _inGracePeriod = false;
                     SetStatus(PromptText, colorNeutral);
+
+                    // Rev BL — Q1-b: input abilitato SOLO ora (fine grace).
+                    // _isActive è già true (BeginSession) → invariante
+                    // "_isActive prima di StartCoroutine" rispettata. Il flip
+                    // avviene una volta sola: al frame successivo il ramo
+                    // _inGracePeriod è già saltato.
+                    EnableMashInput();
+                    _sliderRoutine = StartCoroutine(SliderRoutine());
                 }
                 else
                 {
@@ -315,6 +325,7 @@ namespace SpaceSurvivor.Ship
             _sliderActive = false;
             _activeSliderIndex = -1;
             _sliderIndicatorPos = 0f;
+            _sliderRoutine = null;   // Rev BL: la routine parte a fine grace (in Update), non qui.
 
             // Reset marker — nuova sessione, nessuna soglia ancora "al sicuro"
             if (marker50 != null) marker50.color = colorMarkerDefault;
@@ -335,12 +346,14 @@ namespace SpaceSurvivor.Ship
 
             SetStatus(PromptText, colorNeutral);
 
-            // Input
-            EnableMashInput();
-
-            // Slider routine — _isActive prima di StartCoroutine (regola invariante)
+            // Rev BL — Q1-b (gate input in grace): mash e SliderRoutine NON partono
+            // qui. Durante il grace period nessun input è cablato e nessuno slider si
+            // muove → impossibile accumulare progresso prima di "INIZIA". L'input si
+            // abilita al flip _inGracePeriod→false in Update (punto singolo).
+            // _isActive resta l'ultima assegnazione: nulla gira in Update prima che
+            // il setup sia completo. (Con nessuno StartCoroutine qui, cade anche il
+            // vincolo "GO attivo per StartCoroutine in BeginSession".)
             _isActive = true;
-            _sliderRoutine = StartCoroutine(SliderRoutine());
         }
 
         /// <summary>Interrompe il minigame senza applicare effetti (nessun consumo materiali).</summary>

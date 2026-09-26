@@ -3,15 +3,15 @@
   "WorkspaceRootPath": "C:\\Users\\nicol\\UnityProjects\\SpacePRJ\\",
   "Documents": [
     {
-      "AbsoluteMoniker": "D:0:0:{D02C7C30-1E04-944D-CA4B-BF4BFB5FB4B6}|Assembly-CSharp.csproj|c:\\users\\nicol\\unityprojects\\spaceprj\\assets\\project\\scripts\\ship\\systems\\lockminigamescanner.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
-      "RelativeMoniker": "D:0:0:{D02C7C30-1E04-944D-CA4B-BF4BFB5FB4B6}|Assembly-CSharp.csproj|solutionrelative:assets\\project\\scripts\\ship\\systems\\lockminigamescanner.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
-    },
-    {
       "AbsoluteMoniker": "D:0:0:{D02C7C30-1E04-944D-CA4B-BF4BFB5FB4B6}|Assembly-CSharp.csproj|C:\\Users\\nicol\\UnityProjects\\SpacePRJ\\assets\\project\\scripts\\ui\\scannerui.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
       "RelativeMoniker": "D:0:0:{D02C7C30-1E04-944D-CA4B-BF4BFB5FB4B6}|Assembly-CSharp.csproj|solutionrelative:assets\\project\\scripts\\ui\\scannerui.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
     },
     {
-      "AbsoluteMoniker": "D:0:0:{D02C7C30-1E04-944D-CA4B-BF4BFB5FB4B6}|Assembly-CSharp.csproj|c:\\users\\nicol\\unityprojects\\spaceprj\\assets\\project\\scripts\\ui\\radarblip.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "AbsoluteMoniker": "D:0:0:{D02C7C30-1E04-944D-CA4B-BF4BFB5FB4B6}|Assembly-CSharp.csproj|c:\\users\\nicol\\unityprojects\\spaceprj\\assets\\project\\scripts\\ship\\systems\\lockminigamescanner.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{D02C7C30-1E04-944D-CA4B-BF4BFB5FB4B6}|Assembly-CSharp.csproj|solutionrelative:assets\\project\\scripts\\ship\\systems\\lockminigamescanner.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{D02C7C30-1E04-944D-CA4B-BF4BFB5FB4B6}|Assembly-CSharp.csproj|C:\\Users\\nicol\\UnityProjects\\SpacePRJ\\assets\\project\\scripts\\ui\\radarblip.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
       "RelativeMoniker": "D:0:0:{D02C7C30-1E04-944D-CA4B-BF4BFB5FB4B6}|Assembly-CSharp.csproj|solutionrelative:assets\\project\\scripts\\ui\\radarblip.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
     },
     {
@@ -358,21 +358,8 @@
       "DocumentGroups": [
         {
           "DockedWidth": 200,
-          "SelectedChildIndex": 0,
+          "SelectedChildIndex": 18,
           "Children": [
-            {
-              "$type": "Document",
-              "DocumentIndex": 0,
-              "Title": "LockMinigameScanner.cs",
-              "DocumentMoniker": "C:\\Users\\nicol\\UnityProjects\\SpacePRJ\\Assets\\Project\\Scripts\\Ship\\Systems\\LockMinigameScanner.cs",
-              "RelativeDocumentMoniker": "Assets\\Project\\Scripts\\Ship\\Systems\\LockMinigameScanner.cs",
-              "ToolTip": "C:\\Users\\nicol\\UnityProjects\\SpacePRJ\\Assets\\Project\\Scripts\\Ship\\Systems\\LockMinigameScanner.cs",
-              "RelativeToolTip": "Assets\\Project\\Scripts\\Ship\\Systems\\LockMinigameScanner.cs",
-              "ViewState": "AgIAAFcAAAAAAAAAAAAuwJAAAAABAAAAAAAAAA==",
-              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
-              "WhenOpened": "2026-09-23T21:12:24.616Z",
-              "EditorCaption": ""
-            },
             {
               "$type": "Document",
               "DocumentIndex": 2,
@@ -383,8 +370,7 @@
               "RelativeToolTip": "Assets\\Project\\Scripts\\UI\\RadarBlip.cs",
               "ViewState": "AgIAAEQAAAAAAAAAAAAuwH0AAAABAAAAAAAAAA==",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
-              "WhenOpened": "2026-09-23T20:35:24.179Z",
-              "EditorCaption": ""
+              "WhenOpened": "2026-09-23T20:35:24.179Z"
             },
             {
               "$type": "Document",
@@ -540,8 +526,7 @@
               "RelativeToolTip": "Library\\PackageCache\\com.unity.netcode.gameobjects@aaabf07f880c\\Runtime\\Core\\NetworkBehaviour.cs",
               "ViewState": "AgIAACsBAAAAAAAAAAApwEcBAABrAAAAAAAAAA==",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
-              "WhenOpened": "2026-09-20T21:51:22.321Z",
-              "EditorCaption": ""
+              "WhenOpened": "2026-09-20T21:51:22.321Z"
             },
             {
               "$type": "Document",
@@ -593,15 +578,28 @@
             },
             {
               "$type": "Document",
-              "DocumentIndex": 1,
+              "DocumentIndex": 0,
               "Title": "ScannerUI.cs",
               "DocumentMoniker": "C:\\Users\\nicol\\UnityProjects\\SpacePRJ\\Assets\\Project\\Scripts\\UI\\ScannerUI.cs",
               "RelativeDocumentMoniker": "Assets\\Project\\Scripts\\UI\\ScannerUI.cs",
               "ToolTip": "C:\\Users\\nicol\\UnityProjects\\SpacePRJ\\Assets\\Project\\Scripts\\UI\\ScannerUI.cs",
               "RelativeToolTip": "Assets\\Project\\Scripts\\UI\\ScannerUI.cs",
-              "ViewState": "AgIAAOQCAAAAAAAAAAAuwB0DAAABAAAAAAAAAA==",
+              "ViewState": "AgIAACUDAAAAAAAAAAAuwF4DAAABAAAAAAAAAA==",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
               "WhenOpened": "2026-09-09T13:41:47.597Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 1,
+              "Title": "LockMinigameScanner.cs",
+              "DocumentMoniker": "C:\\Users\\nicol\\UnityProjects\\SpacePRJ\\Assets\\Project\\Scripts\\Ship\\Systems\\LockMinigameScanner.cs",
+              "RelativeDocumentMoniker": "Assets\\Project\\Scripts\\Ship\\Systems\\LockMinigameScanner.cs",
+              "ToolTip": "C:\\Users\\nicol\\UnityProjects\\SpacePRJ\\Assets\\Project\\Scripts\\Ship\\Systems\\LockMinigameScanner.cs",
+              "RelativeToolTip": "Assets\\Project\\Scripts\\Ship\\Systems\\LockMinigameScanner.cs",
+              "ViewState": "AgIAAFcAAAAAAAAAAAAuwJAAAAABAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2026-09-23T21:12:24.616Z",
               "EditorCaption": ""
             },
             {
