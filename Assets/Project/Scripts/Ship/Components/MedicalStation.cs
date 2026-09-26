@@ -6,7 +6,8 @@ using UnityEngine;
 using UnityEngine.InputSystem;
 
 /// <summary>
-/// MedicalStation — postazione del Corpsman nella Medibay (M2 · console di trattamento Rev BO-b).
+/// MedicalStation — postazione del Corpsman nella Medibay (M2 · console di trattamento Rev BO-b,
+/// sutura Rev BO-c).
 ///
 /// Pattern di base identico a EngineeringStation:
 ///   - IInteractable → rilevata da InteractionSystem via raycast
@@ -21,6 +22,11 @@ using UnityEngine.InputSystem;
 ///   - Trattamento: il minigame medico (StabilizationMinigameMedical, canvas complanare)
 ///     sostituisce il dashboard per la durata della sessione. Il letto è il "robot
 ///     chirurgico", la console lo teleopera.
+///
+/// SUTURA (Rev BO-c · Q6-a): il reticolo si muove con l'azione Look del PlayerInput del
+/// giocatore seduto. La console la trova in EnterStation (come Cancel e Interact) e la
+/// passa a Open; il minigame fa solo ReadValue (nessun handler). PlayerController è spento
+/// da seduti: la visuale non si muove.
 ///
 /// AVVIO (Q9-a): da seduti, con un paziente pronto la riga di stato mostra
 /// "PATIENT READY — PRESS {interact} …". La pressione di Interact chiede il trattamento
@@ -100,6 +106,7 @@ public class MedicalStation : MonoBehaviour, IInteractable
     private TabletStation playerTablet;
     private InputAction cancelAction;
     private InputAction interactAction;
+    private InputAction lookAction;      // Rev BO-c — reticolo della sutura
 
     private Vector3 originalPlayerPosition;
     private Quaternion originalPlayerRotation;
@@ -259,7 +266,7 @@ public class MedicalStation : MonoBehaviour, IInteractable
         if (dashboardCanvas != null)
             dashboardCanvas.worldCamera = playerCamera;
 
-        // Cancel e Interact dal PlayerInput del player (mai hardcodati).
+        // Cancel, Interact e Look dal PlayerInput del player (mai hardcodati).
         PlayerInput pi = playerInputReference != null
             ? playerInputReference
             : interactor.GetComponent<PlayerInput>();
@@ -269,6 +276,9 @@ public class MedicalStation : MonoBehaviour, IInteractable
             : null;
         interactAction = pi != null && pi.actions != null
             ? pi.actions.FindAction("Interact", throwIfNotFound: false)
+            : null;
+        lookAction = pi != null && pi.actions != null
+            ? pi.actions.FindAction("Look", throwIfNotFound: false)
             : null;
 
         // Salva stato originale
@@ -397,7 +407,7 @@ public class MedicalStation : MonoBehaviour, IInteractable
         treatmentOpen = true;
         SetDashboardVisible(false);
 
-        treatmentMinigame.Open(bed, bed.Config, bed.PatientLabel,
+        treatmentMinigame.Open(bed, bed.Config, bed.PatientLabel, lookAction,
                                OnTreatmentComplete, OnTreatmentInterrupted);
     }
 
