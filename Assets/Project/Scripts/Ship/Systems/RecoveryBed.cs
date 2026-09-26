@@ -1,3 +1,4 @@
+using System;
 using Unity.Netcode;
 using UnityEngine;
 using UnityEngine.InputSystem;
@@ -5,22 +6,31 @@ using UnityEngine.InputSystem;
 namespace SpaceSurvivor.Ship
 {
     /// <summary>
-    /// RecoveryBed — letto della Recovery Bay (Rev BO-a · Fase 3a Corpsman · M4.2).
+    /// RecoveryBed — letto della Recovery Bay (Rev BO-a · Rev BO-b · Fase 3a Corpsman · M4.2).
     /// Coordinatore server del trattamento medico: fratello di RepairPanel /
     /// StabilizationPanel, ma con OCCUPAZIONE DI RETE (i pannelli non ce l'hanno).
     ///
-    /// FLUSSO (Q1-a):
+    /// FLUSSO:
     ///   1. Un giocatore ferito (Alive, HP &lt; max) interagisce → "Sdraiati".
     ///      Il server lo accetta come paziente (netPatient). Il suo client blocca il
-    ///      movimento e porta la CAMERA sul patientViewPoint (sdraiato, sguardo in alto).
+    ///      movimento e porta la CAMERA sul patientViewPoint.
     ///   2. Senza trattamento in corso il letto cura da solo fino al tetto del tier
     ///      (T1: 50% di maxHP — Q5-a, valori da MedbayConfig).
-    ///   3. Un altro membro interagisce → "Cura paziente (ruolo)". Il server lo
-    ///      accetta come operatore (netOperator) e il suo client apre
-    ///      StabilizationMinigameMedical. Durante la sessione l'auto-cura è sospesa.
+    ///   3. Rev BO-b (Q8/Q9): il trattamento si avvia dalla CONSOLE (MedicalStation),
+    ///      non più dal letto. Chi siede alla postazione chiama RequestTreatment(); il
+    ///      server lo accetta come operatore (netOperator) e il letto pubblica
+    ///      OperatorChanged: la console apre il minigame sul proprio monitor. Il letto
+    ///      è il "robot chirurgico", la console lo teleopera. Durante la sessione
+    ///      l'auto-cura è sospesa.
     ///   4. Ogni soglia del minigame chiama ApplyTreatmentThresholdRpc: il server porta
     ///      gli HP del paziente ad ALMENO soglia% di maxHP (Q3-a, idempotente).
     ///   5. Il paziente si alza con Cancel. Le soglie già raggiunte restano.
+    ///
+    /// RESPONSABILITÀ (Rev BO-b): autorità server (occupazione, auto-cura, cure di
+    /// soglia, regola di disponibilità del trattamento) + lato locale del PAZIENTE.
+    /// Il lato locale dell'OPERATORE (PlayerController, tablet, Cancel, UI) vive nella
+    /// console: un solo scrittore per ruolo (audit Rev AF/AG — in BO-a letto e
+    /// postazione avrebbero scritto entrambi PlayerController.enabled).
     ///
     /// AUTORITÀ: ogni richiesta è una RPC verso il server, che identifica il mittente
     /// con SenderClientId (precedente Rev BM): nessun clientId nel payload. Paziente e
@@ -33,7 +43,7 @@ namespace SpaceSurvivor.Ship
     ///   I client reagiscono ai cambi delle NetworkVariable (OnValueChanged): nessuna
     ///   RPC verso i client.
     ///
-    /// SCELTE LOCALI (paziente e operatore):
+    /// SCELTE LOCALI DEL PAZIENTE:
     ///   - Solo la CAMERA del paziente si sposta sul letto; il root del player NON si
     ///     muove e il CharacterController NON viene toccato. Motivi: niente teletrasporto
     ///     dentro la geometria, e un paziente che va a terra resta un bersaglio valido
@@ -46,9 +56,10 @@ namespace SpaceSurvivor.Ship
     ///     tablet e letto salvano/ripristinano entrambi PlayerController e camera.
     ///     Audit Rev AF/AG, vedi TabletStation.
     ///
-    /// ⚠️ SETUP SCENA (guida Editor Rev BO-a): GameObject con NetworkObject + collider
-    /// sulla layer Interactable + questo componente; figli PatientViewPoint,
-    /// OccupiedVisual e il canvas del minigame medico. Oggetto di scena: nessuna
+    /// ⚠️ SETUP SCENA (guide Editor Rev BO-a / BO-b): GameObject con NetworkObject +
+    /// collider sulla layer Interactable + questo componente; figli PatientViewPoint e
+    /// OccupiedVisual (senza collider). Il canvas del minigame medico sta sul monitor
+    /// della MedicalStation (Rev BO-b), non più qui. Oggetto di scena: nessuna
     /// registrazione in NetworkPrefabs.
     /// </summary>
     public class RecoveryBed : NetworkBehaviour, IInteractable
@@ -56,38 +67,53 @@ namespace SpaceSurvivor.Ship
         /// <summary>Sentinella "nessun client" per paziente e operatore.</summary>
         public const ulong NoClient = ulong.MaxValue;
 
-        private enum LocalRole { None, Patient, Operator }
+        /// <summary>
+        /// Rev BO-b — esito della regola "questo client può avviare un trattamento?".
+        /// UNA sola regola: la usa il server per accettare RequestTreatRpc e la console
+        /// per la riga di stato sul monitor (stesse condizioni di BO-a).
+        /// </summary>
+        public enum TreatmentAvailability
+        {
+            /// <summary>Letto non spawnato o non configurato.</summary>
+            NotReady,
+            /// <summary>Nessun paziente (o paziente non più Alive: sta per essere liberato).</summary>
+            NoPatient,
+            /// <summary>Il candidato è il paziente stesso.</summary>
+            SelfIsPatient,
+            /// <summary>C'è già un operatore.</summary>
+            InProgress,
+            /// <summary>Il candidato non è Alive.</summary>
+            OperatorUnable,
+            /// <summary>Paziente con HP al massimo: niente da curare.</summary>
+            PatientStable,
+            /// <summary>Trattamento avviabile.</summary>
+            Ready
+        }
 
         [Header("Config")]
         [Tooltip("Asset MedbayConfig: tetto e velocità dell'auto-cura per tier, parametri del " +
                  "trattamento, malus Rev U. Obbligatorio.")]
         [SerializeField] private MedbayConfig config;
 
-        [Header("Minigame di trattamento")]
-        [Tooltip("Lo StabilizationMinigameMedical di questo letto (di solito il canvas figlio).")]
-        [SerializeField] private StabilizationMinigameMedical treatmentMinigame;
-
         [Header("Paziente")]
         [Tooltip("Posa della CAMERA del paziente sdraiato: posizione poco sopra il cuscino, " +
-                 "asse Z (blu) rivolto verso il soffitto. Il root del player non si sposta.")]
+                 "asse Z (blu) verso i piedi del letto e la stanza (−30° circa). Il root del player non si sposta.")]
         [SerializeField] private Transform patientViewPoint;
 
         [Header("Visibilità agli altri (Q1.v-a)")]
-        [Tooltip("Placeholder 'letto occupato' (es. capsula sdraiata, senza collider). Acceso su " +
-                 "tutti i client quando c'è un paziente, tranne che per il paziente stesso. " +
-                 "Sostituito dal corpo del player quando arriverà D33.")]
+        [Tooltip("Placeholder 'letto occupato' (es. capsula sdraiata, SENZA collider: un collider " +
+                 "sulla layer Interactable ferma il raggio di InteractionSystem). Acceso su tutti i " +
+                 "client quando c'è un paziente, tranne che per il paziente stesso. Sostituito dal " +
+                 "corpo del player quando arriverà D33.")]
         [SerializeField] private GameObject occupiedVisual;
 
         [Header("Prompt")]
         [SerializeField] private string lieDownPrompt = "Sdraiati sul lettino";
-        [Tooltip("Prompt per curare. {0} = ruolo del paziente (il nome del personaggio non è replicato).")]
-        [SerializeField] private string treatPromptFormat = "Cura paziente ({0})";
 
         [Header("Tempi")]
         [Tooltip("Pausa dopo una richiesta al server, per non inviarne una a ogni pressione.")]
         [SerializeField] private float requestCooldown = 0.5f;
-        [Tooltip("Pausa dopo l'uscita dal letto o dal trattamento: evita di rientrare subito " +
-                 "(E è sia Interact sia RepairMash).")]
+        [Tooltip("Pausa dopo l'uscita dal letto: evita di risdraiarsi subito con la stessa pressione.")]
         [SerializeField] private float exitCooldown = 1.0f;
 
         [Header("Debug")]
@@ -107,11 +133,25 @@ namespace SpaceSurvivor.Ship
         public ulong OperatorClientId => netOperator.Value;
         public bool IsOccupied => netPatient.Value != NoClient;
 
+        /// <summary>Rev BO-b — config del letto, passata dalla console al minigame.</summary>
+        public MedbayConfig Config => config;
+
+        /// <summary>Rev BO-b — etichetta del paziente per l'header del minigame (ruolo, non nome).</summary>
+        public string PatientLabel => BuildPatientLabel();
+
+        /// <summary>
+        /// Rev BO-b — (precedente, attuale) a ogni cambio dell'operatore, su TUTTI i client.
+        /// La console lo usa per aprire/chiudere la sessione locale. Invocato anche allo
+        /// despawn del letto se c'era un operatore (attuale = NoClient), così nessuna UI
+        /// resta aperta.
+        /// </summary>
+        public event Action<ulong, ulong> OperatorChanged;
+
         // ── Stato server ──
         private float _autoHealAccumulator;
 
-        // ── Stato locale (client che è paziente oppure operatore di questo letto) ──
-        private LocalRole _localRole = LocalRole.None;
+        // ── Stato locale (client che è paziente di questo letto) ──
+        private bool _localIsPatient;
         private float _cooldown;
         private bool _leaveRequested;
         private bool _despawning;
@@ -137,8 +177,6 @@ namespace SpaceSurvivor.Ship
 
             if (config == null)
                 Debug.LogError($"[RecoveryBed] {name}: MedbayConfig non assegnato — letto disattivato.");
-            if (treatmentMinigame == null)
-                Debug.LogError($"[RecoveryBed] {name}: StabilizationMinigameMedical non assegnato — letto disattivato.");
             if (patientViewPoint == null)
                 Debug.LogError($"[RecoveryBed] {name}: PatientViewPoint non assegnato — letto disattivato.");
         }
@@ -149,22 +187,19 @@ namespace SpaceSurvivor.Ship
             netPatient.OnValueChanged -= HandlePatientChanged;
             netOperator.OnValueChanged -= HandleOperatorChanged;
 
-            // Non lasciare mai il giocatore locale bloccato se il letto sparisce.
-            if (_localRole == LocalRole.Operator)
-            {
-                if (treatmentMinigame != null) treatmentMinigame.Interrupt();
-                EndOperatingLocal(notifyServer: false);
-            }
-            else if (_localRole == LocalRole.Patient)
-            {
+            // Non lasciare mai UI o giocatori bloccati se il letto sparisce.
+            // La console chiude la propria sessione; nessuna RPC parte (flag _despawning).
+            ulong operatorId = netOperator.Value;
+            if (operatorId != NoClient)
+                OperatorChanged?.Invoke(operatorId, NoClient);
+
+            if (_localIsPatient)
                 ExitLyingLocal();
-            }
         }
 
-        private bool IsConfigured =>
-            config != null && treatmentMinigame != null && patientViewPoint != null;
+        private bool IsConfigured => config != null && patientViewPoint != null;
 
-        // ── Update: cooldown, tick server, Cancel locale ────────────────────────
+        // ── Update: cooldown, tick server, Cancel del paziente ─────────────────
 
         private void Update()
         {
@@ -173,23 +208,14 @@ namespace SpaceSurvivor.Ship
             if (IsServer && IsSpawned)
                 ServerTick(Time.deltaTime);
 
-            if (_localRole == LocalRole.None || _localCancel == null) return;
+            if (!_localIsPatient || _localCancel == null) return;
             if (!_localCancel.WasPressedThisFrame()) return;
 
-            if (_localRole == LocalRole.Patient)
+            // Alzarsi: lo decide il server; il ripristino arriva da OnValueChanged.
+            if (!_leaveRequested)
             {
-                // Alzarsi: lo decide il server; il ripristino arriva da OnValueChanged.
-                if (!_leaveRequested)
-                {
-                    _leaveRequested = true;
-                    RequestLeaveRpc();
-                }
-            }
-            else if (_localRole == LocalRole.Operator)
-            {
-                // Uscita dal trattamento: Interrupt → OnMinigameInterrupted → EndOperatingLocal.
-                if (treatmentMinigame != null) treatmentMinigame.Interrupt();
-                EndOperatingLocal(notifyServer: true);   // idempotente: copre il minigame già chiuso
+                _leaveRequested = true;
+                RequestLeaveRpc();
             }
         }
 
@@ -267,6 +293,54 @@ namespace SpaceSurvivor.Ship
                    && health.IsAlive;
         }
 
+        // ── Regola di disponibilità del trattamento (server + console) ─────────
+
+        /// <summary>
+        /// Rev BO-b — il candidato può avviare un trattamento adesso? Stesse condizioni
+        /// che in BO-a stavano dentro RequestTreatRpc. Sul server decide; sulla console
+        /// (client) serve solo a scegliere il testo di stato: l'ultima parola resta al
+        /// server, che la ricalcola alla ricezione della RPC.
+        /// </summary>
+        public TreatmentAvailability GetTreatmentAvailability(ulong candidateClientId)
+        {
+            if (!IsSpawned || !IsConfigured) return TreatmentAvailability.NotReady;
+
+            ulong patient = netPatient.Value;
+            if (patient == NoClient) return TreatmentAvailability.NoPatient;
+            if (candidateClientId == patient) return TreatmentAvailability.SelfIsPatient;
+            if (netOperator.Value != NoClient) return TreatmentAvailability.InProgress;
+            if (!TryGetAliveHealth(candidateClientId, out _)) return TreatmentAvailability.OperatorUnable;
+            if (!TryGetAliveHealth(patient, out PlayerHealthSystem patientHealth))
+                return TreatmentAvailability.NoPatient;
+            if (patientHealth.CurrentHP >= patientHealth.MaxHP) return TreatmentAvailability.PatientStable;
+
+            return TreatmentAvailability.Ready;
+        }
+
+        // ── API client della console (Rev BO-b) ────────────────────────────────
+
+        /// <summary>
+        /// Chiede al server di diventare operatore. L'esito arriva come OperatorChanged
+        /// (accettata) oppure non arriva (rifiutata: la console resta sul dashboard).
+        /// </summary>
+        public bool RequestTreatment()
+        {
+            if (!IsSpawned || _despawning) return false;
+            RequestTreatRpc();
+            return true;
+        }
+
+        /// <summary>
+        /// Chiude il trattamento lato server. Invia la RPC solo se il server considera
+        /// ancora questo client l'operatore: dopo una fine decisa dal server non parte nulla.
+        /// </summary>
+        public void EndTreatment()
+        {
+            if (!IsSpawned || _despawning || NetworkManager == null) return;
+            if (netOperator.Value != NetworkManager.LocalClientId) return;
+            EndTreatmentRpc();
+        }
+
         // ── RPC verso il server (mittente = SenderClientId, mai dal payload) ──
 
         [Rpc(SendTo.Server)]
@@ -305,18 +379,13 @@ namespace SpaceSurvivor.Ship
         {
             if (!IsServer) return;
             ulong sender = rpcParams.Receive.SenderClientId;
-            ulong patient = netPatient.Value;
 
-            if (!IsConfigured) return;
-            if (patient == NoClient || sender == patient) return;
-            if (netOperator.Value != NoClient)
+            TreatmentAvailability availability = GetTreatmentAvailability(sender);
+            if (availability != TreatmentAvailability.Ready)
             {
-                LogV($"[RecoveryBed] {name}: trattamento rifiutato a {sender} — operatore già presente.");
+                LogV($"[RecoveryBed] {name}: trattamento rifiutato a {sender} — {availability}.");
                 return;
             }
-            if (!TryGetAliveHealth(sender, out _)) return;
-            if (!TryGetAliveHealth(patient, out PlayerHealthSystem patientHealth)) return;
-            if (patientHealth.CurrentHP >= patientHealth.MaxHP) return;
 
             netOperator.Value = sender;
             _autoHealAccumulator = 0f;
@@ -366,26 +435,17 @@ namespace SpaceSurvivor.Ship
             ApplyOccupiedVisual(current);
 
             ulong me = NetworkManager.LocalClientId;
-            if (current == me && _localRole == LocalRole.None)
+            if (current == me && !_localIsPatient)
                 EnterLyingLocal();
-            else if (previous == me && current != me && _localRole == LocalRole.Patient)
+            else if (previous == me && current != me && _localIsPatient)
                 ExitLyingLocal();
         }
 
         private void HandleOperatorChanged(ulong previous, ulong current)
         {
-            ulong me = NetworkManager.LocalClientId;
-            if (current == me && _localRole == LocalRole.None)
-            {
-                BeginOperatingLocal();
-            }
-            else if (previous == me && current != me && _localRole == LocalRole.Operator)
-            {
-                // Fine decisa dal server (paziente alzato o espulso, operatore a terra):
-                // chiude la UI senza rimandare nulla al server.
-                if (treatmentMinigame != null) treatmentMinigame.Interrupt();
-                EndOperatingLocal(notifyServer: false);
-            }
+            // Rev BO-b: il letto non gestisce più il lato locale dell'operatore.
+            // Lo pubblica e basta: la console (MedicalStation) apre o chiude la sessione.
+            OperatorChanged?.Invoke(previous, current);
         }
 
         private void ApplyOccupiedVisual(ulong patient)
@@ -408,7 +468,7 @@ namespace SpaceSurvivor.Ship
                 return;
             }
 
-            _localRole = LocalRole.Patient;
+            _localIsPatient = true;
             _leaveRequested = false;
 
             _savedCameraLocalPosition = _localCamera.localPosition;
@@ -422,9 +482,9 @@ namespace SpaceSurvivor.Ship
 
         private void ExitLyingLocal()
         {
-            if (_localRole != LocalRole.Patient) return;
+            if (!_localIsPatient) return;
 
-            _localRole = LocalRole.None;
+            _localIsPatient = false;
             _leaveRequested = false;
             _cooldown = exitCooldown;
 
@@ -436,49 +496,6 @@ namespace SpaceSurvivor.Ship
 
             RestoreLocalController();
             if (_localTablet != null) _localTablet.SetOpenBlocked(false);
-        }
-
-        // ── Operatore (locale) ─────────────────────────────────────────────────
-
-        private void BeginOperatingLocal()
-        {
-            if (!EnsureLocalRig() || treatmentMinigame == null)
-            {
-                Debug.LogError($"[RecoveryBed] {name}: impossibile aprire il trattamento " +
-                               "(player o minigame mancanti) — sessione chiusa.");
-                if (!_despawning && IsSpawned) EndTreatmentRpc();
-                return;
-            }
-
-            _localRole = LocalRole.Operator;
-            _localController.enabled = false;
-            if (_localTablet != null) _localTablet.SetOpenBlocked(true);
-
-            treatmentMinigame.Open(this, config, BuildPatientLabel(),
-                                   OnMinigameComplete, OnMinigameInterrupted);
-        }
-
-        private void OnMinigameComplete() => EndOperatingLocal(notifyServer: true);
-
-        private void OnMinigameInterrupted() => EndOperatingLocal(notifyServer: true);
-
-        /// <summary>
-        /// Ripristino locale dell'operatore. Idempotente (guard sul ruolo locale).
-        /// Avvisa il server solo se il server lo considera ancora operatore.
-        /// </summary>
-        private void EndOperatingLocal(bool notifyServer)
-        {
-            if (_localRole != LocalRole.Operator) return;
-
-            _localRole = LocalRole.None;
-            _cooldown = exitCooldown;
-
-            RestoreLocalController();
-            if (_localTablet != null) _localTablet.SetOpenBlocked(false);
-
-            if (notifyServer && !_despawning && IsSpawned
-                && NetworkManager != null && netOperator.Value == NetworkManager.LocalClientId)
-                EndTreatmentRpc();
         }
 
         // ── Rig del giocatore locale ───────────────────────────────────────────
@@ -531,51 +548,38 @@ namespace SpaceSurvivor.Ship
         private string BuildPatientLabel()
         {
             string role = CrewRoles.ToDisplayName(PlayerCrewRole.GetRole(netPatient.Value));
-            return $"Paziente · {role}";
+            return $"Patient · {role}";
         }
 
         // ── IInteractable ──────────────────────────────────────────────────────
 
         /// <summary>
-        /// Letto vuoto: "Sdraiati" se il giocatore locale è ferito. Letto occupato da un
-        /// altro: "Cura" se nessuno sta già curando e il paziente è ferito. Mai durante
-        /// un uso in corso, a tablet aperto o nel cooldown.
+        /// Solo "Sdraiati": letto vuoto e giocatore locale ferito. Rev BO-b: il
+        /// trattamento si avvia dalla console, quindi un letto occupato non offre prompt.
+        /// Mai durante un uso in corso, nel cooldown, a tablet aperto o con il movimento
+        /// già bloccato da altro (postazione, tablet, a terra).
         /// </summary>
         public bool CanInteract()
         {
             if (!IsSpawned || !IsConfigured) return false;
-            if (_cooldown > 0f || _localRole != LocalRole.None) return false;
+            if (_cooldown > 0f || _localIsPatient) return false;
+            if (netPatient.Value != NoClient) return false;
             if (!EnsureLocalRig()) return false;
             if (!_localHealth.IsAlive) return false;
+            if (!_localController.enabled) return false;
             if (_localTablet != null && _localTablet.IsBusy) return false;
 
-            ulong patient = netPatient.Value;
-            if (patient == NoClient)
-                return _localHealth.CurrentHP < _localHealth.MaxHP;
-
-            if (patient == NetworkManager.LocalClientId) return false;
-            if (netOperator.Value != NoClient) return false;
-
-            return TryGetAliveHealth(patient, out PlayerHealthSystem patientHealth)
-                   && patientHealth.CurrentHP < patientHealth.MaxHP;
+            return _localHealth.CurrentHP < _localHealth.MaxHP;
         }
 
-        public string GetInteractionPrompt()
-        {
-            ulong patient = netPatient.Value;
-            if (patient == NoClient) return lieDownPrompt;
-
-            string role = CrewRoles.ToDisplayName(PlayerCrewRole.GetRole(patient));
-            return (treatPromptFormat ?? string.Empty).Replace("{0}", role);
-        }
+        public string GetInteractionPrompt() => lieDownPrompt;
 
         public void Interact(GameObject interactor)
         {
             if (!CanInteract()) return;
 
             _cooldown = requestCooldown;
-            if (netPatient.Value == NoClient) RequestLieDownRpc();
-            else RequestTreatRpc();
+            RequestLieDownRpc();
         }
 
         public bool IsContinuousInteraction() => false;
