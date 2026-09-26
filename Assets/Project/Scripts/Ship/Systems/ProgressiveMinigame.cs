@@ -11,38 +11,52 @@ namespace SpaceSurvivor.Ship
     /// ProgressiveMinigame — Framework Minigame Progressivo (D24 · Rev BB)
     ///
     /// Classe base astratta che generalizza il minigame a barra di progresso con
-    /// soglie (50/75/100%), estratta da RepairMinigame (M2). Ingegneria e Medicina
-    /// (Corpsman) ne derivano SENZA duplicare logica:
-    ///   - RepairMinigameEngineering    : ProgressiveMinigame  (riparazione subsystem)
-    ///   - StabilizationMinigameMedical : ProgressiveMinigame  (stabilizzazione — placeholder)
+    /// soglie (50/75/100%), estratta da RepairMinigame (M2). I minigame di tutti i
+    /// ruoli ne derivano SENZA duplicare logica:
+    ///   - RepairMinigameEngineering        (riparazione subsystem · Ingegnere)
+    ///   - StabilizationMinigameEngineering (Path H hold-against-decay · Ingegnere)
+    ///   - LockMinigameScanner              (aggancio POI · Scanner)
+    ///   - StabilizationMinigameMedical     (stabilizzazione paziente · Corpsman — placeholder)
     ///
     /// COSA VIVE QUI (condiviso):
     ///   - Accumulo progresso 0-100, decay, soglie one-shot.
     ///     L'EFFETTO di soglia è delegato al derivato (vedi ApplyThresholdEffect):
     ///     l'invariante materiali "solo al superamento soglia, mai all'avvio né su
     ///     interruzione" è onorata qui, perché l'effetto scatta UNA volta in CrossThreshold.
-    ///   - Interazione di DEFAULT: Mashing + Slider burst (GDD §9.8). Scelta QA:
-    ///     resta nella base come default overridabile; un derivato con interazione
-    ///     diversa potrà sostituirla, ma finché non serve è condivisa.
-    ///   - Lifecycle (grace, timer, open/interrupt/close), UI barra/slider, input.
-    ///     NB (Rev BL): l'input (mash + slider) si abilita SOLO a fine grace period,
-    ///     non all'avvio → nessun progresso accumulabile durante "INIZIA TRA n…".
+    ///   - Lifecycle (grace, timer, open/interrupt/close), UI-shell (barra, marker,
+    ///     timer, status).
+    ///   - Servizi all'interazione (IMinigameHost, implementato esplicitamente):
+    ///     ApplyPoints è l'UNICO canale verso il progresso e ne centralizza gli
+    ///     invarianti (×ruolo sui guadagni positivi, clamp, feedback prima delle
+    ///     soglie, niente punti a sessione inattiva o in grace).
     ///   - Hook modificatore di ruolo (clausola malus trasversale, Rev U) — default
     ///     IDENTITÀ (1.0): i tipi esistenti restano invariati; i ruoli lo cablano
     ///     nella Fase ruoli.
+    ///
+    /// INTERAZIONE — seam QB (Rev BN · strategy iniettabile):
+    ///   Il modello d'interazione (cosa fa il giocatore) vive dietro
+    ///   IMinigameInteraction. Default = MashSliderInteraction (Mashing + Slider
+    ///   burst, GDD §9.8), costruita sui campi "Slider Event" / "Input" / "Parametri
+    ///   Minigame" di QUESTA classe (esposti via IMashSliderSettings). Un derivato
+    ///   con meccanica propria fa override di CreateInteraction(). Scelta Q1-c: i
+    ///   campi restano qui → zero migrazione dei riferimenti serializzati (debito
+    ///   cosmetico: sui derivati con interazione propria restano visibili, inutilizzati).
+    ///   NB (Rev BL): l'input si abilita SOLO a fine grace (IMinigameInteraction.Enable,
+    ///   punto singolo in Update) → nessun progresso accumulabile durante "INIZIA TRA n…".
     ///
     /// COSA DELEGA AL DERIVATO (astratto):
     ///   - GetTargetDisplayName()  → etichetta header (nome sistema / paziente)
     ///   - GetInitialDecayRate()   → velocità decay iniziale (dominio-specifica)
     ///   - GetTimeLimitSeconds()   → limite di tempo iniziale (dominio-specifico)
     ///   - ApplyThresholdEffect()  → effetto server-authority a ogni soglia
-    ///                               (Ingegneria → RepairPanel RPC; Medicina → TBD)
+    ///                               (Ingegneria → Repair/StabilizationPanel; Scanner →
+    ///                               lock POI; Medicina → BO)
     ///
     /// NB: MonoBehaviour ASTRATTO — non si aggiunge mai direttamente a un GameObject;
-    /// si aggiunge il concreto (RepairMinigameEngineering / StabilizationMinigameMedical).
+    /// si aggiunge il concreto (uno dei derivati elencati sopra).
     /// I campi [SerializeField] della base sono serializzati sul componente concreto.
     /// </summary>
-    public abstract class ProgressiveMinigame : MonoBehaviour
+    public abstract class ProgressiveMinigame : MonoBehaviour, IMinigameHost, IMashSliderSettings
     {
         // ── UI References (interazione condivisa) ─────────────────────────────
 
@@ -59,7 +73,7 @@ namespace SpaceSurvivor.Ship
         [Tooltip("Marker visivo a 75% sulla barra. Stesso comportamento di marker50.")]
         [SerializeField] protected Image marker75;
 
-        [Header("Slider Event")]
+        [Header("Slider Event (interazione default Mash+Slider)")]
         [SerializeField] protected GameObject sliderPanel;
         [SerializeField] protected RectTransform sliderIndicator;
         [SerializeField] protected TextMeshProUGUI sliderKeyLabel;
@@ -70,7 +84,7 @@ namespace SpaceSurvivor.Ship
 
         // ── Input ─────────────────────────────────────────────────────────────
 
-        [Header("Input — New Input System")]
+        [Header("Input — New Input System (interazione default Mash+Slider)")]
         [Tooltip("Azione mappata a E / South button. Aggiungi 'RepairMash' al tuo InputActions.")]
         [SerializeField] protected InputActionReference mashAction;
 
@@ -79,7 +93,7 @@ namespace SpaceSurvivor.Ship
 
         // ── Parametri minigame ──────────────────────────────────────────────────
 
-        [Header("Parametri Minigame")]
+        [Header("Parametri Minigame (interazione default Mash+Slider)")]
         [Tooltip("Punti aggiunti per ogni pressione di mash.")]
         [SerializeField] protected float mashPointsPerPress = 1f;
 
@@ -136,9 +150,10 @@ namespace SpaceSurvivor.Ship
         protected float _progress;          // 0–100
         protected float _decayRate;
         protected bool _isActive;
-        protected bool _sliderActive;
-        protected float _sliderIndicatorPos; // 0–1
-        protected int _activeSliderIndex = -1;
+
+        // Interazione (seam QB) — creata in modo lazy alla prima BeginSession, NON in
+        // Awake: LockMinigameScanner può avere il GO spento a riposo (Awake tardivo).
+        private IMinigameInteraction _interaction;
 
         // Soglie già superate in questa sessione (per non applicare effetti duplicati)
         protected bool _threshold50Crossed;
@@ -148,7 +163,6 @@ namespace SpaceSurvivor.Ship
         protected Action _onComplete;
         protected Action _onInterrupted;
 
-        protected Coroutine _sliderRoutine;
         protected Coroutine _statusRoutine;
 
         // ── Testi status (overridabili — default engineering-flavored) ──────────
@@ -179,7 +193,10 @@ namespace SpaceSurvivor.Ship
         /// <summary>Moltiplicatore ruolo sul decay. Default 1 (identità). Override nella Fase ruoli.</summary>
         protected virtual float GetRoleDecayMultiplier() => 1f;
 
-        /// <summary>Moltiplicatore ruolo sui punti guadagnati (mash + slider positivi). Default 1 (identità).</summary>
+        /// <summary>
+        /// Moltiplicatore ruolo sui punti guadagnati. Applicato da ApplyPoints ai SOLI
+        /// guadagni positivi riportati da qualsiasi interazione. Default 1 (identità).
+        /// </summary>
         protected virtual float GetRolePointsMultiplier() => 1f;
 
         // ── Hook win-mode (Rev BI · Path H "hold-against-decay") ────────────────
@@ -218,11 +235,40 @@ namespace SpaceSurvivor.Ship
             _onInterrupted?.Invoke();
         }
 
+        // ── Hook interazione (seam QB · Rev BN) ─────────────────────────────────
+
+        /// <summary>
+        /// Crea il modello d'interazione del minigame. Default: Mash + Slider sui campi
+        /// serializzati di questa classe (comportamento pre-BN). Chiamato UNA volta, alla
+        /// prima BeginSession (dopo che il derivato ha impostato il proprio target).
+        /// Override per un archetipo diverso (es. BO: "sutura" del Corpsman); il derivato
+        /// può tenere un riferimento tipizzato all'istanza per pilotarne le fasi.
+        /// </summary>
+        protected virtual IMinigameInteraction CreateInteraction() => new MashSliderInteraction(this);
+
+        private IMinigameInteraction GetOrCreateInteraction()
+        {
+            if (_interaction != null) return _interaction;
+
+            _interaction = CreateInteraction();
+            if (_interaction == null)
+            {
+                // Guard esplicito: un override che ritorna null è un errore di
+                // programmazione, ma non deve lasciare il minigame senza input.
+                Debug.LogError($"[{GetType().Name}] CreateInteraction() ha restituito null — " +
+                               "uso MashSliderInteraction di default.");
+                _interaction = new MashSliderInteraction(this);
+            }
+            return _interaction;
+        }
+
         // ── Lifecycle ─────────────────────────────────────────────────────────
 
         protected virtual void Awake()
         {
             if (rootCanvas != null) rootCanvas.SetActive(false);
+            // sliderPanel appartiene all'interazione di default, ma l'interazione nasce
+            // lazy in BeginSession: lo stato a riposo va garantito qui (come pre-BN).
             if (sliderPanel != null) sliderPanel.SetActive(false);
         }
 
@@ -263,8 +309,9 @@ namespace SpaceSurvivor.Ship
                     // "_isActive prima di StartCoroutine" rispettata. Il flip
                     // avviene una volta sola: al frame successivo il ramo
                     // _inGracePeriod è già saltato.
-                    EnableMashInput();
-                    _sliderRoutine = StartCoroutine(SliderRoutine());
+                    // QB (Rev BN): l'abilitazione è dell'interazione (default:
+                    // mash, poi routine slider — stesso ordine pre-BN).
+                    _interaction?.Enable();
                 }
                 else
                 {
@@ -291,15 +338,9 @@ namespace SpaceSurvivor.Ship
                 return;
             }
 
-            // Slider indicator movement
-            if (_sliderActive)
-            {
-                _sliderIndicatorPos += sliderSpeed * Time.deltaTime;
-                if (_sliderIndicatorPos > 1f)
-                    ResolveSlider(false, false);
-                else
-                    UpdateSliderIndicatorPosition();
-            }
+            // QB (Rev BN) — tick dell'interazione. Stessa posizione del movimento
+            // slider pre-BN: dopo decay e floor, prima dell'aggiornamento barra.
+            _interaction?.Tick(Time.deltaTime);
 
             UpdateUI();
         }
@@ -322,10 +363,6 @@ namespace SpaceSurvivor.Ship
             _threshold50Crossed = false;
             _threshold75Crossed = false;
             _threshold100Crossed = false;
-            _sliderActive = false;
-            _activeSliderIndex = -1;
-            _sliderIndicatorPos = 0f;
-            _sliderRoutine = null;   // Rev BL: la routine parte a fine grace (in Update), non qui.
 
             // Reset marker — nuova sessione, nessuna soglia ancora "al sicuro"
             if (marker50 != null) marker50.color = colorMarkerDefault;
@@ -339,14 +376,17 @@ namespace SpaceSurvivor.Ship
 
             // UI
             if (rootCanvas != null) rootCanvas.SetActive(true);
-            if (sliderPanel != null) sliderPanel.SetActive(false);
+
+            // QB (Rev BN) — l'interazione resetta stato e UI propri (default: slider
+            // spento, indice/posizione azzerati). Nessun input, nessuna routine (Rev BL).
+            GetOrCreateInteraction().Begin(this);
 
             if (systemNameText != null)
                 systemNameText.text = GetTargetDisplayName().ToUpper();
 
             SetStatus(PromptText, colorNeutral);
 
-            // Rev BL — Q1-b (gate input in grace): mash e SliderRoutine NON partono
+            // Rev BL — Q1-b (gate input in grace): l'interazione NON viene abilitata
             // qui. Durante il grace period nessun input è cablato e nessuno slider si
             // muove → impossibile accumulare progresso prima di "INIZIA". L'input si
             // abilita al flip _inGracePeriod→false in Update (punto singolo).
@@ -364,126 +404,55 @@ namespace SpaceSurvivor.Ship
             _onInterrupted?.Invoke();
         }
 
-        // ── Input Handlers ──────────────────────────────────────────────────────
+        // ── IMinigameHost (servizi all'interazione · seam QB) ───────────────────
 
-        protected void EnableMashInput()
+        bool IMinigameHost.IsActive => _isActive;
+
+        MinigamePalette IMinigameHost.Palette =>
+            new MinigamePalette(colorGood, colorWarning, colorCritical, colorNeutral);
+
+        void IMinigameHost.ApplyPoints(float rawPoints, string feedback,
+                                       Color feedbackColor, float feedbackDuration)
         {
-            if (mashAction?.action == null) return;
-            mashAction.action.Enable();
-            mashAction.action.performed += OnMashPerformed;
-        }
+            // Invariante strutturale (Rev BL): nessun punto a sessione inattiva o in
+            // grace. Con l'interazione di default è un guard mai attraversato (input
+            // cablato solo post-grace, handler già gated su IsActive); protegge le
+            // interazioni future.
+            if (!_isActive || _inGracePeriod) return;
 
-        protected void DisableMashInput()
-        {
-            if (mashAction?.action == null) return;
-            mashAction.action.performed -= OnMashPerformed;
-        }
-
-        protected void EnableSliderInput(int keyIndex)
-        {
-            if (repairSliderKeys == null || keyIndex < 0
-                || keyIndex >= repairSliderKeys.Length) return;
-
-            var action = repairSliderKeys[keyIndex]?.action;
-            if (action == null) return;
-            action.Enable();
-            action.performed += OnSliderKeyPerformed;
-        }
-
-        protected void DisableSliderInput()
-        {
-            if (repairSliderKeys == null || _activeSliderIndex < 0) return;
-            var action = repairSliderKeys[_activeSliderIndex]?.action;
-            if (action == null) return;
-            action.performed -= OnSliderKeyPerformed;
-        }
-
-        private void OnMashPerformed(InputAction.CallbackContext ctx)
-        {
-            if (!_isActive || _sliderActive) return;
-
-            _progress = Mathf.Min(_progress + mashPointsPerPress * GetRolePointsMultiplier(), 100f);
-            SetStatus("+1", colorGood, 0.3f);
-            CheckThresholds();
-        }
-
-        private void OnSliderKeyPerformed(InputAction.CallbackContext ctx)
-        {
-            if (!_isActive || !_sliderActive) return;
-
-            float pos = _sliderIndicatorPos;
-            bool hit = Mathf.Abs(pos - 0.5f) <= hitZoneFraction;
-            bool near = Mathf.Abs(pos - 0.5f) <= nearZoneFraction;
-
-            ResolveSlider(hit, near);
-        }
-
-        // ── Slider Coroutine ──────────────────────────────────────────────────
-
-        private IEnumerator SliderRoutine()
-        {
-            while (_isActive)
-            {
-                float wait = UnityEngine.Random.Range(sliderMinInterval, sliderMaxInterval);
-                yield return new WaitForSeconds(wait);
-
-                if (!_isActive) yield break;
-                if (repairSliderKeys == null || repairSliderKeys.Length == 0) continue;
-
-                int idx = UnityEngine.Random.Range(0, repairSliderKeys.Length);
-                _activeSliderIndex = idx;
-                _sliderIndicatorPos = 0f;
-                _sliderActive = true;
-
-                string keyName = GetActionDisplayName(idx);
-                if (sliderKeyLabel != null) sliderKeyLabel.text = keyName;
-                if (sliderPanel != null) sliderPanel.SetActive(true);
-
-                EnableSliderInput(idx);
-
-                yield return new WaitUntil(() => !_sliderActive);
-            }
-        }
-
-        private void ResolveSlider(bool hit, bool near)
-        {
-            DisableSliderInput();
-            _sliderActive = false;
-
-            float points;
-            string msg;
-            Color color;
-
-            if (hit)
-            {
-                points = 15f;
-                msg = "CENTRATO! +15";
-                color = colorGood;
-            }
-            else if (near)
-            {
-                points = 5f;
-                msg = "QUASI +5";
-                color = colorWarning;
-            }
-            else
-            {
-                points = -20f;
-                msg = "MANCATO −20";
-                color = colorCritical;
-            }
-
-            // Il modificatore di ruolo si applica solo ai guadagni positivi.
-            if (points > 0f) points *= GetRolePointsMultiplier();
-
+            // Rev U: il modificatore di ruolo si applica solo ai guadagni positivi.
+            float points = rawPoints > 0f ? rawPoints * GetRolePointsMultiplier() : rawPoints;
             _progress = Mathf.Clamp(_progress + points, 0f, 100f);
-            SetStatus(msg, color, 1.5f);
-            CheckThresholds();
 
-            if (sliderPanel != null) sliderPanel.SetActive(false);
-            _sliderIndicatorPos = 0f;
-            _activeSliderIndex = -1;
+            // Ordine pre-BN: feedback PRIMA delle soglie → "SOGLIA n%" / CompleteText
+            // prevalgono sul feedback dell'azione.
+            if (feedback != null) SetStatus(feedback, feedbackColor, feedbackDuration);
+            CheckThresholds();
         }
+
+        Coroutine IMinigameHost.StartHostedRoutine(IEnumerator routine) => StartCoroutine(routine);
+
+        void IMinigameHost.StopHostedRoutine(Coroutine routine)
+        {
+            if (routine != null) StopCoroutine(routine);
+        }
+
+        // ── IMashSliderSettings (campi dell'interazione default · Q1-c) ────────
+
+        InputActionReference IMashSliderSettings.MashAction => mashAction;
+        InputActionReference[] IMashSliderSettings.SliderKeys => repairSliderKeys;
+        GameObject IMashSliderSettings.SliderPanel => sliderPanel;
+        RectTransform IMashSliderSettings.SliderIndicator => sliderIndicator;
+        TextMeshProUGUI IMashSliderSettings.SliderKeyLabel => sliderKeyLabel;
+        Image IMashSliderSettings.HitZoneImage => hitZoneImage;
+        float IMashSliderSettings.MashPointsPerPress => mashPointsPerPress;
+        float IMashSliderSettings.HitZoneFraction => hitZoneFraction;
+        float IMashSliderSettings.NearZoneFraction => nearZoneFraction;
+        float IMashSliderSettings.SliderSpeed => sliderSpeed;
+        float IMashSliderSettings.SliderMinInterval => sliderMinInterval;
+        float IMashSliderSettings.SliderMaxInterval => sliderMaxInterval;
+
+        // ── Esiti ───────────────────────────────────────────────────────────────
 
         protected virtual void OnTimerExpired()
         {
@@ -549,33 +518,6 @@ namespace SpaceSurvivor.Ship
                 progressText.text = $"{_progress:F0}/100";
         }
 
-        private void UpdateSliderIndicatorPosition()
-        {
-            if (sliderIndicator == null || sliderPanel == null) return;
-
-            var panelRect = (RectTransform)sliderPanel.transform;
-            float halfPanel = panelRect.rect.width * 0.5f;
-            float halfInd = sliderIndicator.rect.width * 0.5f;
-
-            float minX = -halfPanel + halfInd;
-            float maxX = halfPanel - halfInd;
-
-            var pos = sliderIndicator.anchoredPosition;
-            pos.x = Mathf.Lerp(minX, maxX, _sliderIndicatorPos);
-            sliderIndicator.anchoredPosition = pos;
-
-            if (hitZoneImage != null)
-                hitZoneImage.color = colorGood;
-
-            float dist = Mathf.Abs(_sliderIndicatorPos - 0.5f);
-            if (sliderIndicator.TryGetComponent<Image>(out var img))
-            {
-                img.color = dist <= hitZoneFraction ? colorGood
-                          : dist <= nearZoneFraction ? colorWarning
-                          : Color.white;
-            }
-        }
-
         protected void SetStatus(string msg, Color color, float duration = 0f)
         {
             if (statusText == null) return;
@@ -610,37 +552,15 @@ namespace SpaceSurvivor.Ship
         {
             _isActive = false;
 
-            DisableMashInput();
-            DisableSliderInput();
+            // QB (Rev BN) — l'interazione sgancia input, ferma le proprie routine e
+            // spegne la propria UI. Chiamata PRIMA di spegnere rootCanvas: su
+            // Stabilizzazione Ing. e Aggancio rootCanvas è il GO stesso del
+            // componente → StopCoroutine avviene a GO ancora attivo (come pre-BN).
+            _interaction?.Disable();
 
-            if (_sliderRoutine != null) StopCoroutine(_sliderRoutine);
             if (_statusRoutine != null) StopCoroutine(_statusRoutine);
 
             if (rootCanvas != null) rootCanvas.SetActive(false);
-            if (sliderPanel != null) sliderPanel.SetActive(false);
-
-            _sliderActive = false;
-            _activeSliderIndex = -1;
-        }
-
-        // ── Helper ────────────────────────────────────────────────────────────
-
-        protected string GetActionDisplayName(int index)
-        {
-            if (repairSliderKeys == null || index < 0
-                || index >= repairSliderKeys.Length) return "?";
-
-            var action = repairSliderKeys[index]?.action;
-            if (action == null) return "?";
-
-            foreach (var binding in action.bindings)
-            {
-                if (!binding.isPartOfComposite)
-                    return InputControlPath.ToHumanReadableString(
-                        binding.effectivePath,
-                        InputControlPath.HumanReadableStringOptions.OmitDevice);
-            }
-            return action.name.ToUpper();
         }
 
         // ── Debug helpers (standard Rev BA — protected per condivisione derivati) ──
@@ -661,7 +581,7 @@ namespace SpaceSurvivor.Ship
             GUILayout.Label($"[{GetType().Name}]");
             GUILayout.Label($"Progresso: {_progress:F1}/100");
             GUILayout.Label($"Decay: {_decayRate:F1} pt/s");
-            GUILayout.Label($"Slider: {(_sliderActive ? $"ATTIVO [{_sliderIndicatorPos:F2}]" : "in attesa")}");
+            GUILayout.Label(_interaction != null ? _interaction.DebugLine : "Interazione: —");
             GUILayout.Label($"Soglie: 50={_threshold50Crossed} 75={_threshold75Crossed} 100={_threshold100Crossed}");
             OnDebugGUIExtra();
             GUILayout.EndVertical();
