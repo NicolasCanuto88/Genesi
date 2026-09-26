@@ -41,6 +41,13 @@ using UnityEngine;
 /// clone è un CORPO NUOVO → NESSUNA Ferita Composta al respawn (Q8-a); le Ferite
 /// Composte si applicano SOLO alla rianimazione via defibrillatore.
 ///
+/// CURA (Rev BO-a): ApplyHeal è il choke point server-only VERSO L'ALTO, speculare
+/// ad ApplyDamage. Lo usano la Recovery Bay (auto-cura e soglie del trattamento) e,
+/// in futuro, Medikit (BQ) e bomba curativa. Cura SOLO un giocatore Alive: un
+/// Downed si rialza col defibrillatore, non con la cura. Le due eccezioni restano
+/// le transizioni della macchina a stati (ServerTryRevive / ServerRespawn), che
+/// impostano HP come parte del cambio di stato.
+///
 /// ⚠️ VERIFICA EDITOR: il Player prefab deve avere NetworkObject + essere il
 /// "Player Prefab" di NetworkManager (setup NGO standard, non in codice). Su di
 /// esso convivono PlayerHealthSystem, PlayerStatusEffects (Rev BC) e
@@ -270,6 +277,34 @@ public class PlayerHealthSystem : NetworkBehaviour
             ServerEnterDowned();
     }
 
+    // ── API pubblica — cura (Rev BO-a) ────────────────────────────────────
+
+    /// <summary>
+    /// Ripristina HP a questo giocatore. SERVER ONLY. Choke point unico verso l'alto
+    /// (speculare ad ApplyDamage): cura solo se Alive, con clamp a maxHP. Ritorna gli
+    /// HP effettivamente ripristinati (0 se nulla è cambiato), così il chiamante può
+    /// sapere se la cura ha avuto effetto senza rileggere lo stato.
+    /// </summary>
+    public float ApplyHeal(float amount)
+    {
+        if (!IsServer)
+        {
+            Debug.LogWarning("[PlayerHealthSystem] ApplyHeal chiamato lato client — server only. " +
+                             "Una sorgente di cura reale deve inviare una Rpc al server che poi chiama questo metodo.");
+            return 0f;
+        }
+
+        if (amount <= 0f) return 0f;
+        if (netLifeState.Value != LifeState.Alive) return 0f;   // Downed/RespawnWait: la cura non rialza
+
+        float before = netCurrentHP.Value;
+        float after = Mathf.Min(maxHP, before + amount);
+        if (after <= before) return 0f;
+
+        netCurrentHP.Value = after;
+        return after - before;
+    }
+
     // ── Macchina a stati (SERVER) ─────────────────────────────────────────
 
     private void ServerEnterDowned()
@@ -340,8 +375,7 @@ public class PlayerHealthSystem : NetworkBehaviour
         GUILayout.Label($"[Health] Client {OwnerClientId}: {netCurrentHP.Value:F0}/{maxHP:F0} — {netLifeState.Value}");
         GUILayout.BeginHorizontal();
         if (GUILayout.Button("-10 danno")) ApplyDamage(10f);
-        if (GUILayout.Button("+10 cura") && netLifeState.Value == LifeState.Alive)
-            netCurrentHP.Value = Mathf.Min(maxHP, netCurrentHP.Value + 10f);
+        if (GUILayout.Button("+10 cura")) ApplyHeal(10f);   // Rev BO-a: passa dal choke point
         GUILayout.EndHorizontal();
         GUILayout.BeginHorizontal();
         if (GUILayout.Button("Downed")) ApplyDamage(maxHP);

@@ -52,6 +52,20 @@ using UnityEngine.InputSystem;
 /// ⚠️ Edge case non gestito in questa sessione: apertura del Tablet mentre il
 ///    giocatore è già seduto a un'altra postazione (Engineering/Medical/Pilot) —
 ///    da testare e, se necessario, bloccare in una sessione futura.
+///
+/// REV BO-a — BLOCCO ESTERNO (SetOpenBlocked / IsBusy), additivo:
+///   Il letto della Recovery Bay (RecoveryBed) blocca l'APERTURA del tablet mentre
+///   il giocatore è sdraiato o sta curando. Motivo (audit Rev AF/AG): tablet e
+///   postazioni salvano/ripristinano entrambi PlayerController.enabled e la
+///   rotazione camera. Se l'uscita dalla postazione avviene a tablet aperto (Cancel
+///   condiviso nello stesso frame, o fine forzata dal server), il ripristino del
+///   tablet arriva DOPO e rimette PlayerController a false → giocatore bloccato.
+///   - SetOpenBlocked(true) impedisce solo l'APERTURA; la chiusura resta sempre
+///     possibile.
+///   - IsBusy = aperto o in transizione: chi apre una postazione lo controlla PRIMA
+///     di entrare.
+///   Le altre postazioni (Engineering/Medical/Pilot/pannelli) NON lo usano ancora:
+///   l'edge case sopra resta aperto per loro (debito tracciato nel GDD delta).
 /// </summary>
 [RequireComponent(typeof(PlayerInput))]
 public class TabletStation : MonoBehaviour
@@ -88,6 +102,18 @@ public class TabletStation : MonoBehaviour
 
     private Quaternion originalCameraLocalRotation;
     private bool wasPlayerControllerEnabled;
+
+    // Rev BO-a — blocco esterno dell'apertura (vedi commento di classe).
+    private bool openBlocked = false;
+
+    /// <summary>Rev BO-a — true se il tablet è aperto o in transizione (apertura/chiusura).</summary>
+    public bool IsBusy => isOpen || isTransitioning;
+
+    /// <summary>
+    /// Rev BO-a — blocca/sblocca l'APERTURA del tablet (la chiusura resta possibile).
+    /// Usato da RecoveryBed mentre il giocatore è sdraiato o sta curando.
+    /// </summary>
+    public void SetOpenBlocked(bool blocked) => openBlocked = blocked;
 
     private void Awake()
     {
@@ -126,7 +152,7 @@ public class TabletStation : MonoBehaviour
         if (cooldownTimer > 0f || isTransitioning) return;
 
         if (isOpen) CloseTablet();
-        else OpenTablet();
+        else if (!openBlocked) OpenTablet();   // Rev BO-a: apertura bloccabile dall'esterno
     }
 
     private void OpenTablet()
