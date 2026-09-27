@@ -12,18 +12,21 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: cc826e475ad9bf6488f4c1b7319cb943, type: 3}
   m_Name: SutureTuning
   m_EditorClassIdentifier: Assembly-CSharp::SpaceSurvivor.Ship.SutureTuning
-  segments: 6
+  segments: 8
   marginX: 40
   marginY: 40
-  amplitudeMinFraction: 0.5
+  amplitudeMinFraction: 0.7
   markerSpeeds:
-  - 100
-  - 140
-  - 180
+  - 130
+  - 175
+  - 220
   mouseSensitivity: 0.6
-  stickSpeed: 410
-  enterRadius: 35
-  exitRadius: 43
-  onTargetPointsPerSecond: 12
-  offTargetLossPerSecond: 4
+  stickSpeed: 500
+  enterRadius: 28
+  exitRadius: 34
+  nonCorpsmanRadiusMultiplier: 0.75
+  mouseRadiusMultiplier: 0.8
+  stickRadiusMultiplier: 1.2
+  onTargetPointsPerSecond: 10
+  offTargetLossPerSecond: 5
   feedbackSeconds: 1.2

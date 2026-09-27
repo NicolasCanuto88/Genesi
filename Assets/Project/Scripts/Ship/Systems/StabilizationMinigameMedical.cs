@@ -20,6 +20,8 @@ namespace SpaceSurvivor.Ship
     ///   - Rev BO-c: SUTURA "segui l'ago" (archetipo 4, tracking continuo) tramite
     ///     CreateInteraction() — primo uso reale del seam QB. Niente barra (Q13-b): la
     ///     ferita si cuce fino al progresso raggiunto, con tacche 50/75.
+    ///   - Rev BO-d: preset più duro nello SO (Q17-b); il ruolo passa alla sutura
+    ///     (ISutureSettings.OperatorIsCorpsman) per ridurre l'anello al non-Corpsman (Q18-c).
     ///
     /// WIN-MODE: "repair" (default dei seam base, nessun override): il progresso sale da
     /// 0, soglie 50/75/100, al 100% la sessione si chiude con successo.
@@ -35,8 +37,9 @@ namespace SpaceSurvivor.Ship
     ///
     /// MALUS REV U (Q6-a di BO-a): operatore Corpsman = linea di base (1.0 / 1.0).
     /// Chiunque altro → moltiplicatori di MedbayConfig su decay e punti positivi (la
-    /// perdita fuori bersaglio non è attenuata). Ruolo letto dal proprio PlayerCrewRole e
-    /// fissato all'apertura della sessione.
+    /// perdita fuori bersaglio non è attenuata) e, da BO-d, anello della sutura ridotto
+    /// (SutureTuning). Ruolo letto dal proprio PlayerCrewRole e fissato all'apertura della
+    /// sessione.
     /// </summary>
     public class StabilizationMinigameMedical : ProgressiveMinigame, ISutureSettings
     {
@@ -156,6 +159,7 @@ namespace SpaceSurvivor.Ship
         SutureLineGraphic ISutureSettings.Graphic => sutureGraphic;
         InputAction ISutureSettings.LookAction => _lookAction;
         Color ISutureSettings.NotchDefaultColor => colorMarkerDefault;
+        bool ISutureSettings.OperatorIsCorpsman => _operatorIsCorpsman;
 
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
         protected override void OnDebugGUIExtra()

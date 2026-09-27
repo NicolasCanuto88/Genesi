@@ -18,6 +18,11 @@ namespace SpaceSurvivor.Ship
         InputAction LookAction { get; }
         /// <summary>Colore delle tacche 50/75 non ancora raggiunte (colorMarkerDefault della base).</summary>
         Color NotchDefaultColor { get; }
+        /// <summary>
+        /// Rev BO-d · Q18-c — true se l'operatore è Corpsman (fissato dal minigame all'apertura
+        /// della sessione). Se false l'anello si riduce (SutureTuning.NonCorpsmanRadiusMultiplier).
+        /// </summary>
+        bool OperatorIsCorpsman { get; }
     }
 
     /// <summary>
@@ -36,6 +41,12 @@ namespace SpaceSurvivor.Ship
     ///   - PUNTI: +onTarget/s sul bersaglio, −offTarget/s fuori, SOLO via
     ///     IMinigameHost.ApplyPoints (×ruolo sui soli guadagni, clamp, soglie).
     ///   - FEEDBACK (Q3-a): isteresi enter/exit; testo solo ai cambi di stato.
+    ///   - RUOLO (Rev BO-d · Q18-c): operatore non Corpsman → raggi di ingresso/uscita e
+    ///     anello × NonCorpsmanRadiusMultiplier (la "mano" meno esperta ha meno tolleranza).
+    ///   - DISPOSITIVO (Rev BO-d · Q19-a): raggi × moltiplicatore mouse o stick. Il dispositivo
+    ///     per la TOLLERANZA viene da InputDeviceManager (appiccicoso, lo stesso dei prompt:
+    ///     l'anello non sfarfalla quando il mouse sta fermo). Il MOVIMENTO usa invece il
+    ///     controllo del frame (delta del mouse o velocità dello stick).
     ///   - Q5-a: a inizio sessione ago e reticolo sono sovrapposti all'inizio della linea e
     ///     restano fermi durante il grace (Tick non gira).
     ///
@@ -110,7 +121,8 @@ namespace SpaceSurvivor.Ship
 
         public string DebugLine =>
             $"Sutura: stadio {_stage + 1} · ago {(_length > 0f ? Mathf.PingPong(_travel, _length) / _length : 0f):F2}" +
-            $" · dist {_lastDistance:F0}u · {(_onTarget ? "ON" : "OFF")} · {(_lastFromMouse ? "mouse" : "stick")}";
+            $" · dist {_lastDistance:F0}u / r {EnterRadius(Tuning):F0}u · {(_onTarget ? "ON" : "OFF")}" +
+            $" · {(UsingGamepad() ? "pad" : "mouse")}";
 
         public void Begin(IMinigameHost host)
         {
@@ -121,7 +133,8 @@ namespace SpaceSurvivor.Ship
             _reached75 = false;
             _travel = 0f;
             _lastDistance = 0f;
-            _lastFromMouse = false;
+            // Ripiego del dispositivo se InputDeviceManager manca: si parte dal mouse.
+            _lastFromMouse = InputDeviceManager.Instance == null || !InputDeviceManager.Instance.IsGamepad;
 
             GenerateLine(Tuning);
 
@@ -181,8 +194,8 @@ namespace SpaceSurvivor.Ship
             float distance = Vector2.Distance(_reticlePos, _markerPos);
             _lastDistance = distance;
             bool wasOnTarget = _onTarget;
-            if (_onTarget) { if (distance > t.ExitRadius) _onTarget = false; }
-            else if (distance <= t.EnterRadius) _onTarget = true;
+            if (_onTarget) { if (distance > ExitRadius(t)) _onTarget = false; }
+            else if (distance <= EnterRadius(t)) _onTarget = true;
 
             // 4. Punti — unico canale verso il progresso. Testo solo ai cambi di stato.
             MinigamePalette palette = _host.Palette;
@@ -230,6 +243,30 @@ namespace SpaceSurvivor.Ship
                 return _fallbackTuning;
             }
         }
+
+        /// <summary>Q18-c — moltiplicatore di ruolo sui raggi (1 per il Corpsman).</summary>
+        private float RoleRadiusMultiplier(SutureTuning t) =>
+            _settings.OperatorIsCorpsman ? 1f : t.NonCorpsmanRadiusMultiplier;
+
+        /// <summary>
+        /// Q19-a — dispositivo per la tolleranza. Fonte: InputDeviceManager (appiccicoso).
+        /// Ripiego: ultimo dispositivo che ha dato input non nullo alla sutura.
+        /// </summary>
+        private bool UsingGamepad()
+        {
+            InputDeviceManager idm = InputDeviceManager.Instance;
+            return idm != null ? idm.IsGamepad : !_lastFromMouse;
+        }
+
+        private float DeviceRadiusMultiplier(SutureTuning t) =>
+            UsingGamepad() ? t.StickRadiusMultiplier : t.MouseRadiusMultiplier;
+
+        /// <summary>Raggio finale = base × ruolo × dispositivo.</summary>
+        private float EnterRadius(SutureTuning t) =>
+            t.EnterRadius * RoleRadiusMultiplier(t) * DeviceRadiusMultiplier(t);
+
+        private float ExitRadius(SutureTuning t) =>
+            t.ExitRadius * RoleRadiusMultiplier(t) * DeviceRadiusMultiplier(t);
 
         private void GenerateLine(SutureTuning t)
         {
@@ -298,7 +335,8 @@ namespace SpaceSurvivor.Ship
 
             Vector2 value = look.ReadValue<Vector2>();
             bool fromMouse = look.activeControl?.device is Mouse;
-            _lastFromMouse = fromMouse;
+            // Appiccicoso: si aggiorna solo con input reale (a mouse fermo activeControl è null).
+            if (value.sqrMagnitude > 0f) _lastFromMouse = fromMouse;
 
             // Mouse: delta in pixel del frame. Stick: velocità (−1..1) × u/s × dt.
             Vector2 delta = fromMouse
@@ -313,7 +351,7 @@ namespace SpaceSurvivor.Ship
         private void PushDynamic(SutureLineGraphic g, MinigamePalette palette)
         {
             g.SetMarker(_markerPos);
-            g.SetReticle(_reticlePos, Tuning.EnterRadius, _onTarget ? palette.Good : palette.Critical);
+            g.SetReticle(_reticlePos, EnterRadius(Tuning), _onTarget ? palette.Good : palette.Critical);
         }
     }
 }
