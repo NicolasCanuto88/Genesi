@@ -13,6 +13,12 @@ namespace SpaceSurvivor.Ship
     /// MedbayConfig. Così il tier ha una sola autorità, condivisa da tutti i futuri
     /// consumatori (cariche defib BP, cura Ferite Composte T3+ via TryCure, Chemistry Lab).
     ///
+    /// CAMBIO DI TIER (Rev BP-a): OnTierChanged notifica ogni cambio del tier replicato,
+    /// su server e client. Primo consumatore: DefibChargePool, che sul server riporta le
+    /// cariche al valore del nuovo tier (DefibConfig). Se il tier iniziale coincide col
+    /// default (T1) l'evento non parte: chi dipende dal tier lo legge anche allo spawn
+    /// (CurrentTierOrDefault) e su OnInstanceReady.
+    ///
     /// PATTERN: singleton di scena Instance + OnInstanceReady, identico a
     /// DefibChargePool / ScannerSystem. Tier come NetworkVariable scritta dal server,
     /// letta da tutti (i client ne hanno bisogno per prompt e UI future).
@@ -37,6 +43,12 @@ namespace SpaceSurvivor.Ship
 
         /// <summary>Fired dopo OnNetworkSpawn — i dipendenti si sottoscrivono se Instance è null al loro Start.</summary>
         public static event Action OnInstanceReady;
+
+        /// <summary>
+        /// Rev BP-a — fired su OGNI istanza (server e client) quando il tier replicato
+        /// cambia. Parametro: il nuovo tier. Chi scrive stato di rete reagisce solo sul server.
+        /// </summary>
+        public static event Action<int> OnTierChanged;
 
         [Header("Tier (TEMP fino al Blocco 5 — upgrade nave)")]
         [Tooltip("Tier del modulo Medbay impostato dal server allo spawn. Placeholder finché " +
@@ -68,6 +80,10 @@ namespace SpaceSurvivor.Ship
 
             Instance = this;
 
+            // Sottoscrizione PRIMA della scrittura del server: un tier iniziale diverso dal
+            // default (T1) arriva così anche a chi ascolta OnTierChanged.
+            netTier.OnValueChanged += HandleTierChanged;
+
             if (IsServer)
                 netTier.Value = Mathf.Clamp(debugStartTier, MinTier, MaxTier);
 
@@ -76,14 +92,21 @@ namespace SpaceSurvivor.Ship
 
         public override void OnNetworkDespawn()
         {
+            netTier.OnValueChanged -= HandleTierChanged;
             if (Instance == this) Instance = null;
+        }
+
+        private void HandleTierChanged(int previous, int current)
+        {
+            OnTierChanged?.Invoke(current);
         }
 
         // ── API server ─────────────────────────────────────────────────────────
 
         /// <summary>
         /// Imposta il tier del modulo. SERVER ONLY. Futuro chiamante: upgrade nave
-        /// (Blocco 5). Oggi usato solo dall'overlay di debug.
+        /// (Blocco 5). Oggi usato solo dall'overlay di debug. Un cambio effettivo genera
+        /// OnTierChanged (Rev BP-a: le cariche defib tornano al valore del nuovo tier).
         /// </summary>
         public void ServerSetTier(int tier)
         {

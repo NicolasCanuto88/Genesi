@@ -27,6 +27,8 @@ using UnityEngine;
 ///
 /// CONSUMATORI:
 ///   - Rev BM: PlayerReviveTarget.ResolveProfile (Corpsman → 2s / 60% HP).
+///   - Rev BP-a: DefibChargePool.IsDefibAvailable via AnyWithRole(Corpsman) — regola
+///     "nessun Corpsman in crew → nessun defib".
 ///   - Futuri: clausola malus trasversale Rev U (ProgressiveMinigame.GetRole*,
 ///     ScannerSystem.GetRole*) — i moltiplicatori restano a identità finché non
 ///     vengono progettati (debito "Bonus/malus di ruolo").
@@ -80,6 +82,24 @@ public class PlayerCrewRole : NetworkBehaviour
     /// <summary>true se il client indicato ha esattamente quel ruolo. HasRole(x, None) è sempre false.</summary>
     public static bool HasRole(ulong clientId, CrewRole role)
         => role != CrewRole.None && GetRole(clientId) == role;
+
+    /// <summary>
+    /// Rev BP-a — true se almeno un membro CONNESSO della crew ha quel ruolo, in
+    /// qualsiasi stato vitale (anche a terra o in attesa del clone). Leggibile su server
+    /// E client: il registro contiene ogni player spawnato e il ruolo è replicato.
+    /// AnyWithRole(None) è sempre false. Primo consumatore: la regola del defib
+    /// "nessun Corpsman in crew → nessun defib" (DefibChargePool.IsDefibAvailable).
+    /// </summary>
+    public static bool AnyWithRole(CrewRole role)
+    {
+        if (role == CrewRole.None) return false;
+        foreach (KeyValuePair<ulong, PlayerCrewRole> entry in activeByClientId)
+        {
+            if (entry.Value != null && entry.Value.Role == role)
+                return true;
+        }
+        return false;
+    }
 
     // ── Debug (standard Rev BA) ────────────────────────────────────────────────
     [Header("Debug")]

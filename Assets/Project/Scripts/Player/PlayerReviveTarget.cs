@@ -9,8 +9,9 @@ using UnityEngine;
 /// prompt e può defibrillare.
 ///
 /// MODELLO (Q3-a):
-///   - CanInteract(): true solo se questo giocatore è Downed E ci sono cariche
-///     defib (DefibChargePool). A T1 (0 cariche) → nessun prompt (Q6-a).
+///   - CanInteract(): true solo se questo giocatore è Downed E il defib è
+///     disponibile (DefibChargePool.IsDefibAvailable: cariche dal tier Medbay E un
+///     Corpsman in crew — Rev BP-a). A T1 (0 cariche) o senza Corpsman → nessun prompt.
 ///   - Interazione CONTINUA (canale): il rianimatore tiene premuto per la durata
 ///     del profilo di ruolo. È il PRIMO utente del path continuous di
 ///     InteractionSystem (Ladder/Door usano solo one-shot → zero regressione).
@@ -42,6 +43,11 @@ using UnityEngine;
 /// profilo di default (4s / 30%, malus Rev U). Il server NON si fida più del
 /// clientId passato dal client: il rianimatore è ricavato da SenderClientId
 /// (altrimenti un client potrebbe dichiararsi "il Corpsman" per ottenere il 60%).
+///
+/// REV BP-a — il profilo porta anche i secondi di IMMUNITÀ al danno dopo la
+/// rianimazione (Corpsman 3 s, default 0 — Q27-a), applicati dal server in
+/// PlayerHealthSystem.ServerTryRevive. La RPC ricontrolla la stessa regola di
+/// disponibilità del client (IsDefibAvailable): cariche E Corpsman in crew.
 /// </summary>
 [RequireComponent(typeof(PlayerHealthSystem))]
 public class PlayerReviveTarget : NetworkBehaviour, IInteractable
@@ -60,6 +66,10 @@ public class PlayerReviveTarget : NetworkBehaviour, IInteractable
     [Tooltip("Fallback profilo Corpsman se config è null (Rev BM). GDD ruoli: 60%.")]
     [Range(0f, 1f)]
     [SerializeField] private float fallbackCorpsmanHpRestoreFraction = 0.60f;
+
+    [Tooltip("Fallback profilo Corpsman se config è null (Rev BP-a). GDD ruoli: 3s di immunità. " +
+             "Il profilo di default non ha immunità.")]
+    [SerializeField] private float fallbackCorpsmanImmunitySeconds = 3f;
 
     [Header("Prompt")]
     [Tooltip("Prompt mostrato al rianimatore. {interact} è sostituito dal tasto dal InputDeviceManager.")]
@@ -86,10 +96,11 @@ public class PlayerReviveTarget : NetworkBehaviour, IInteractable
 
     public bool CanInteract()
     {
-        // Interagibile solo se questo giocatore è a terra e ci sono cariche defib.
+        // Interagibile solo se questo giocatore è a terra e il defib è disponibile
+        // (Rev BP-a: cariche dal tier Medbay E Corpsman in crew — regola unica del pool).
         if (health == null || health.State != PlayerHealthSystem.LifeState.Downed)
             return false;
-        return DefibChargePool.Instance != null && DefibChargePool.Instance.HasCharge;
+        return DefibChargePool.Instance != null && DefibChargePool.Instance.IsDefibAvailable;
     }
 
     public string GetInteractionPrompt() => revivePrompt;
@@ -183,11 +194,13 @@ public class PlayerReviveTarget : NetworkBehaviour, IInteractable
         if (health == null) return;
         if (health.State != PlayerHealthSystem.LifeState.Downed) return;   // first-completer-wins
 
+        // Rev BP-a: stessa regola del prompt — cariche E Corpsman in crew.
         DefibChargePool pool = DefibChargePool.Instance;
-        if (pool == null || !pool.HasCharge) return;
+        if (pool == null || !pool.IsDefibAvailable) return;
 
         DefibProfile profile = ResolveProfile(requesterClientId);
-        bool revived = health.ServerTryRevive(profile.HpRestoreFraction);   // applica anche CompoundWounds (Q8-a)
+        // Applica anche l'immunità del profilo (BP-a) e CompoundWounds (Q8-a).
+        bool revived = health.ServerTryRevive(profile.HpRestoreFraction, profile.ImmunitySeconds);
         if (revived)
             pool.TryConsumeCharge();
     }
@@ -210,13 +223,16 @@ public class PlayerReviveTarget : NetworkBehaviour, IInteractable
         if (config != null)
         {
             return isCorpsman
-                ? new DefibProfile(config.CorpsmanChannelSeconds, config.CorpsmanHpRestoreFraction)
-                : new DefibProfile(config.DefaultChannelSeconds, config.DefaultHpRestoreFraction);
+                ? new DefibProfile(config.CorpsmanChannelSeconds, config.CorpsmanHpRestoreFraction,
+                                   config.CorpsmanImmunitySeconds)
+                : new DefibProfile(config.DefaultChannelSeconds, config.DefaultHpRestoreFraction,
+                                   config.DefaultImmunitySeconds);
         }
 
         return isCorpsman
-            ? new DefibProfile(Mathf.Max(0.01f, fallbackCorpsmanChannelSeconds), Mathf.Clamp01(fallbackCorpsmanHpRestoreFraction))
-            : new DefibProfile(Mathf.Max(0.01f, fallbackChannelSeconds), Mathf.Clamp01(fallbackHpRestoreFraction));
+            ? new DefibProfile(Mathf.Max(0.01f, fallbackCorpsmanChannelSeconds), Mathf.Clamp01(fallbackCorpsmanHpRestoreFraction),
+                               Mathf.Max(0f, fallbackCorpsmanImmunitySeconds))
+            : new DefibProfile(Mathf.Max(0.01f, fallbackChannelSeconds), Mathf.Clamp01(fallbackHpRestoreFraction), 0f);
     }
 }
 
@@ -225,10 +241,13 @@ public readonly struct DefibProfile
 {
     public readonly float ChannelSeconds;
     public readonly float HpRestoreFraction;
+    /// <summary>Rev BP-a — secondi di immunità al danno dopo la rianimazione (0 = nessuna).</summary>
+    public readonly float ImmunitySeconds;
 
-    public DefibProfile(float channelSeconds, float hpRestoreFraction)
+    public DefibProfile(float channelSeconds, float hpRestoreFraction, float immunitySeconds)
     {
         ChannelSeconds = channelSeconds;
         HpRestoreFraction = Mathf.Clamp01(hpRestoreFraction);
+        ImmunitySeconds = Mathf.Max(0f, immunitySeconds);
     }
 }

@@ -41,6 +41,12 @@ using UnityEngine;
 /// clone è un CORPO NUOVO → NESSUNA Ferita Composta al respawn (Q8-a); le Ferite
 /// Composte si applicano SOLO alla rianimazione via defibrillatore.
 ///
+/// IMMUNITÀ (Rev BP-a · Q27-a): ServerTryRevive riceve i secondi di immunità del
+/// profilo del rianimatore (Corpsman 3 s, default 0). Finché dura, ApplyDamage non ha
+/// effetto: essendo il choke point unico, l'immunità copre anche il DoT degli Stati.
+/// Stato SOLO server (nessun consumatore client oggi). Azzerata a terra e al respawn:
+/// il clone non la eredita.
+///
 /// CURA (Rev BO-a): ApplyHeal è il choke point server-only VERSO L'ALTO, speculare
 /// ad ApplyDamage. Lo usano la Recovery Bay (auto-cura e soglie del trattamento) e,
 /// in futuro, Medikit (BQ) e bomba curativa. Cura SOLO un giocatore Alive: un
@@ -125,6 +131,9 @@ public class PlayerHealthSystem : NetworkBehaviour
     private float downedTimer;
     private float respawnTimer;
 
+    // ── Immunità al danno (Rev BP-a) — SOLO server, istante di fine in Time.time ──
+    private float immuneUntil;
+
     // ── Layer originale (per il ripristino dopo il downed) ──
     private int originalLayer;
 
@@ -146,6 +155,7 @@ public class PlayerHealthSystem : NetworkBehaviour
             // è fuori scope D27 (nessuno store persistente esiste).
             netCurrentHP.Value = maxHP;
             netLifeState.Value = LifeState.Alive;
+            immuneUntil = 0f;
 
             statusEffects = GetComponent<PlayerStatusEffects>();
             if (statusEffects == null)
@@ -257,7 +267,8 @@ public class PlayerHealthSystem : NetworkBehaviour
     /// <summary>
     /// Applica danno a questo giocatore. SERVER ONLY. Unico choke point verso il
     /// basso: combat futuro e DoT degli Stati passano di qui. A HP 0, se il player
-    /// è ancora Alive, entra in Downed (Q2-a).
+    /// è ancora Alive, entra in Downed (Q2-a). Durante l'immunità post-rianimazione
+    /// (Rev BP-a) il danno è ignorato.
     /// </summary>
     public void ApplyDamage(float amount)
     {
@@ -270,6 +281,7 @@ public class PlayerHealthSystem : NetworkBehaviour
 
         if (amount <= 0f) return;
         if (netLifeState.Value != LifeState.Alive) return;   // già a terra/in respawn: nessun ulteriore danno
+        if (IsImmuneServer) return;                          // Rev BP-a: immunità post-rianimazione
 
         netCurrentHP.Value = Mathf.Max(0f, netCurrentHP.Value - amount);
 
@@ -314,6 +326,7 @@ public class PlayerHealthSystem : NetworkBehaviour
 
         netLifeState.Value = LifeState.Downed;
         downedTimer = Mathf.Max(0f, downedDuration);
+        immuneUntil = 0f;
     }
 
     private void ServerEnterRespawnWait()
@@ -329,21 +342,32 @@ public class PlayerHealthSystem : NetworkBehaviour
     {
         if (!IsServer) return;
 
-        // Clone = corpo nuovo (Q7-a in-place, Q8-a nessuna Ferita Composta).
+        // Clone = corpo nuovo (Q7-a in-place, Q8-a nessuna Ferita Composta, nessuna immunità).
         netCurrentHP.Value = maxHP;
         netLifeState.Value = LifeState.Alive;
+        immuneUntil = 0f;
     }
+
+    /// <summary>
+    /// Rev BP-a — true se il giocatore è nella finestra di immunità post-rianimazione.
+    /// Significativo SOLO sul server (sui client è sempre false: stato non replicato).
+    /// </summary>
+    public bool IsImmuneServer => IsServer && Time.time < immuneUntil;
 
     /// <summary>
     /// Tenta la rianimazione via defibrillatore. SERVER ONLY. Chiamato dal
     /// ReviveServerRpc di PlayerReviveTarget. First-completer-wins (Q4-a): riesce
     /// solo se il player è ancora Downed. Su successo: HP = maxHP × frazione,
-    /// stato → Alive, e applica Ferite Composte (Q8-a). Ritorna true su successo.
+    /// stato → Alive, immunità al danno per immunitySeconds (Rev BP-a, profilo del
+    /// rianimatore) e Ferite Composte (Q8-a). Ritorna true su successo.
     /// </summary>
-    public bool ServerTryRevive(float hpRestoreFraction)
+    public bool ServerTryRevive(float hpRestoreFraction, float immunitySeconds = 0f)
     {
         if (!IsServer) return false;
         if (netLifeState.Value != LifeState.Downed) return false;   // già rianimato / non a terra
+
+        // Immunità PRIMA del ritorno ad Alive: nessun danno può infilarsi tra i due passi.
+        immuneUntil = immunitySeconds > 0f ? Time.time + immunitySeconds : 0f;
 
         float frac = Mathf.Clamp01(hpRestoreFraction);
         netCurrentHP.Value = Mathf.Max(1f, maxHP * frac);   // almeno 1 HP: rianimato = non subito ri-downed
@@ -372,7 +396,8 @@ public class PlayerHealthSystem : NetworkBehaviour
 
         GUILayout.BeginArea(new Rect(280, y, 300, 130));
         GUILayout.BeginVertical("box");
-        GUILayout.Label($"[Health] Client {OwnerClientId}: {netCurrentHP.Value:F0}/{maxHP:F0} — {netLifeState.Value}");
+        string immunity = IsImmuneServer ? $" · immune {immuneUntil - Time.time:F1}s" : "";
+        GUILayout.Label($"[Health] Client {OwnerClientId}: {netCurrentHP.Value:F0}/{maxHP:F0} — {netLifeState.Value}{immunity}");
         GUILayout.BeginHorizontal();
         if (GUILayout.Button("-10 danno")) ApplyDamage(10f);
         if (GUILayout.Button("+10 cura")) ApplyHeal(10f);   // Rev BO-a: passa dal choke point
