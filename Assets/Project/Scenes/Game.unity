@@ -21351,7 +21351,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::SpaceSurvivor.Ship.MedbaySystem
   ShowTopMostFoldoutHeaderGroup: 1
   debugStartTier: 1
-  showDebugUI: 1
+  showDebugUI: 0
 --- !u!1 &363068783
 GameObject:
   m_ObjectHideFlags: 0
@@ -85435,7 +85435,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::DefibChargePool
   ShowTopMostFoldoutHeaderGroup: 1
-  config: {fileID: 0}
+  config: {fileID: 11400000, guid: dac752ddf4ffcdb41975e2f8cfdd2cef, type: 2}
   fallbackStartingCharges: 3
   showDebugUI: 0
   logVerbose: 0
