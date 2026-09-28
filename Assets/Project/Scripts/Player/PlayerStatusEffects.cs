@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using Unity.Netcode;
 using UnityEngine;
@@ -16,7 +17,7 @@ using UnityEngine;
 ///
 /// SCOPE DI REPLICA (Q3-a Rev BC → Rev BP-b · Q24-a): l'insieme degli stati attivi
 /// (istanze, stack, timer) vive SOLO lato server. Da BP-b si replica una MASCHERA dei
-/// TIPI attivi (NetworkVariable&lt;byte&gt;, un bit per StatusEffectType): basta ai
+/// TIPI attivi (NetworkVariable&lt;ushort&gt; da Rev BR, un bit per StatusEffectType): basta ai
 /// consumatori client reali — letto e console della Recovery Bay (quale fase curare,
 /// chi può sdraiarsi) e, in futuro, le icone stato dell'HUD. Stack e durate restano
 /// server-only finché una UI non li chiede. Il danno DoT è visibile cross-client
@@ -46,17 +47,43 @@ using UnityEngine;
 /// - Medbay (Rev BP-b): TryCure(type, medbayTier) è chiamato da RecoveryBed al 100%
 ///   di una fase stato. Ferite Composte resta curabile solo con tier &gt;= 3.
 ///
+/// MODIFICATORI DI STATISTICA (Rev BR · Q38-a … Q44-a): gli stati StatModifier (droghe:
+/// Hazmat, Combat Stim) cambiano statistiche del giocatore finché sono attivi.
+/// - CATEGORIE: Condition (da curare, la vede la Recovery Bay tramite ConditionMask) e
+///   Buff (effetto voluto: invisibile alla Bay, non si cura, scade da solo).
+/// - CALCOLO SU OGNI CLIENT (Q44-a): GetStatMultiplier legge la maschera replicata e il
+///   catalogo serializzato sul prefab (lo stesso ovunque). Nessuna NetworkVariable in più;
+///   per questo gli stati StatModifier sono sempre RefreshDuration (un bit = un effetto).
+/// - COMBINAZIONE (Q40-a): per statistica le percentuali si sommano; moltiplicatore
+///   1 + somma/100, limitato dallo SO StatModifierLimits. Risultato in cache per maschera.
+/// - DOVE SI APPLICANO: velocità → PlayerController (client proprietario); danno subito →
+///   PlayerHealthSystem.ApplyDamage (server); danno da Radiazioni → tick qui sotto (server);
+///   HP max → PlayerHealthSystem.MaxHP (tutti). Quando la maschera cambia il server taglia
+///   gli HP correnti al nuovo massimo (ServerClampHPToMax): se il massimo risale, gli HP
+///   tagliati non tornano (Q40-a).
+/// - DURATA PER RUOLO (Q43-a): ApplyEffect accetta un fattore di durata (non-Corpsman 60%
+///   nella Combat Stim, BR-b). Riapplicare rinnova senza accorciare.
+///
 /// ⚠️ VERIFICA EDITOR: aggiungere questo componente sullo STESSO GameObject radice
-/// del Player prefab dove sta PlayerHealthSystem; assegnare i 3 asset
-/// StatusEffectData nel campo "Status Catalog" (serve al debug overlay e alla
-/// convenienza ApplyEffect(type)).
+/// del Player prefab dove sta PlayerHealthSystem; assegnare TUTTI gli asset
+/// StatusEffectData nel campo "Status Catalog" (da Rev BR: 3 condizioni + SED_Hazmat e
+/// SED_CombatStim — obbligatorio per i buff, i client ne leggono categoria e modificatori)
+/// e l'asset StatModifierLimits nel campo "Limits".
 /// </summary>
 public class PlayerStatusEffects : NetworkBehaviour
 {
-    [Header("Catalogo stati (assegnare i 3 asset StatusEffectData)")]
+    [Header("Catalogo stati (assegnare TUTTI gli asset StatusEffectData)")]
     [Tooltip("Asset SO degli stati noti. Usato per applicare per tipo (ApplyEffect(StatusEffectType)) " +
              "e dal debug overlay. Le future sorgenti possono anche passare direttamente il proprio SO.")]
     [SerializeField] private List<StatusEffectData> statusCatalog = new List<StatusEffectData>();
+
+    [Header("Modificatori di statistica (Rev BR)")]
+    [Tooltip("Asset StatModifierLimits: intervallo ammesso per ogni moltiplicatore. " +
+             "Senza asset si limitano solo i valori impossibili (errore a spawn).")]
+    [SerializeField] private StatModifierLimits limits;
+
+    /// <summary>Numero massimo di StatusEffectType rappresentabili nella maschera (ushort).</summary>
+    private const int MaxMaskTypes = 16;
 
     // ── Runtime SOLO server (Q3-a): insieme non replicato degli stati attivi ──
     private class ActiveEffect
@@ -70,14 +97,28 @@ public class PlayerStatusEffects : NetworkBehaviour
     private readonly List<ActiveEffect> _active = new List<ActiveEffect>();
 
     // ── Maschera replicata dei TIPI attivi (Rev BP-b · Q24-a) — server scrive, tutti leggono ──
-    private readonly NetworkVariable<byte> netActiveMask = new NetworkVariable<byte>(
+    // Rev BR: ushort (16 tipi) al posto di byte (8): condizioni + buff.
+    private readonly NetworkVariable<ushort> netActiveMask = new NetworkVariable<ushort>(
         0, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Server);
 
     /// <summary>
-    /// Rev BP-b — maschera dei tipi attivi (bit = 1 &lt;&lt; (int)StatusEffectType).
-    /// Replicata: leggibile su server e client.
+    /// Rev BP-b — maschera dei tipi attivi (bit = 1 &lt;&lt; (int)StatusEffectType), condizioni
+    /// E buff. Replicata: leggibile su server e client.
     /// </summary>
-    public byte ActiveMask => netActiveMask.Value;
+    public ushort ActiveMask => netActiveMask.Value;
+
+    /// <summary>
+    /// Rev BR — maschera delle sole CONDIZIONI attive (buff esclusi). È quello che conta per
+    /// la Recovery Bay ("c'è qualcosa da curare?"). Un tipo assente dal catalogo conta come
+    /// condizione (comportamento prudente, identico a prima di BR).
+    /// </summary>
+    public ushort ConditionMask => (ushort)(netActiveMask.Value & ~BuffBits);
+
+    /// <summary>
+    /// Rev BR — fired su server e client quando la maschera replicata cambia (stato applicato,
+    /// scaduto, curato). Lo usa PlayerHealthSystem sull'owner per aggiornare HP max nella UI.
+    /// </summary>
+    public event Action OnActiveMaskChanged;
 
     /// <summary>
     /// Rev BP-b — true se almeno un'istanza del tipo è attiva. Legge la maschera
@@ -118,9 +159,18 @@ public class PlayerStatusEffects : NetworkBehaviour
         if (IsOwner)
             LocalInstance = this;
 
+        netActiveMask.OnValueChanged += HandleMaskChanged;
+        _statCacheValid = false;
+
         if (IsServer)
         {
             netActiveMask.Value = 0;
+
+            if (limits == null)
+                Debug.LogError("[PlayerStatusEffects] StatModifierLimits non assegnato sul Player prefab (campo \"Limits\"). " +
+                               "I moltiplicatori verranno limitati solo ai valori impossibili. Assegnare l'asset StatModifierLimits.");
+
+            ValidateEnumFitsMask();
             _health = GetComponent<PlayerHealthSystem>();
             if (_health == null)
                 Debug.LogError("[PlayerStatusEffects] PlayerHealthSystem mancante sullo stesso GameObject " +
@@ -131,6 +181,8 @@ public class PlayerStatusEffects : NetworkBehaviour
 
     public override void OnNetworkDespawn()
     {
+        netActiveMask.OnValueChanged -= HandleMaskChanged;
+
         if (activeByClientId.TryGetValue(OwnerClientId, out var registered) && registered == this)
             activeByClientId.Remove(OwnerClientId);
 
@@ -162,7 +214,8 @@ public class PlayerStatusEffects : NetworkBehaviour
                 {
                     e.tickAccumulator -= e.data.tickInterval;
                     float dmg = e.data.effectPerTick *
-                                (e.data.stackingPolicy == StackingPolicy.StackIntensity ? e.stacks : 1);
+                                (e.data.EffectivePolicy == StackingPolicy.StackIntensity ? e.stacks : 1);
+                    dmg *= TypedDamageMultiplier(e.data.type);   // Rev BR: Hazmat sulle Radiazioni
                     if (dmg > 0f && _health != null)
                         _health.ApplyDamage(dmg);
                 }
@@ -186,8 +239,12 @@ public class PlayerStatusEffects : NetworkBehaviour
 
     // ── API server: applicazione ─────────────────────────────────────────────
 
-    /// <summary>Applica per tipo, risolvendo lo SO dal catalogo. SERVER ONLY.</summary>
-    public void ApplyEffect(StatusEffectType type)
+    /// <summary>
+    /// Applica per tipo, risolvendo lo SO dal catalogo. SERVER ONLY.
+    /// durationScale (Rev BR · Q43-a): moltiplica la durata degli stati non persistenti
+    /// (Combat Stim iniettata da un non-Corpsman: 0.6). Ignorato per gli stati persistenti.
+    /// </summary>
+    public void ApplyEffect(StatusEffectType type, float durationScale = 1f)
     {
         StatusEffectData data = FindInCatalog(type);
         if (data == null)
@@ -196,14 +253,16 @@ public class PlayerStatusEffects : NetworkBehaviour
                              "Assegnare l'asset nell'Inspector del Player prefab.");
             return;
         }
-        ApplyEffect(data);
+        ApplyEffect(data, durationScale);
     }
 
     /// <summary>
-    /// Applica uno stato secondo la sua stacking policy. SERVER ONLY.
+    /// Applica uno stato secondo la sua stacking policy effettiva. SERVER ONLY.
     /// Le future sorgenti (hazard) chiamano questa via registro per-clientId.
+    /// Rev BR: durationScale come sopra; riapplicare uno stato RefreshDuration rinnova la
+    /// durata SENZA accorciarla (vale il residuo più lungo).
     /// </summary>
-    public void ApplyEffect(StatusEffectData data)
+    public void ApplyEffect(StatusEffectData data, float durationScale = 1f)
     {
         if (!IsServer)
         {
@@ -213,20 +272,28 @@ public class PlayerStatusEffects : NetworkBehaviour
         }
         if (data == null) return;
 
-        switch (data.stackingPolicy)
+        // Rev BR: buff e stati con modificatori devono stare nel catalogo, altrimenti i client
+        // non ne conoscono categoria e modificatori (la maschera porta solo il tipo).
+        if ((data.category == StatusCategory.Buff || data.HasStatModifiers) && FindInCatalog(data.type) != data)
+            Debug.LogError($"[PlayerStatusEffects] {data.name} ({data.type}) non è nel Status Catalog del Player prefab: " +
+                           "i client non ne vedranno categoria e modificatori. Aggiungere l'asset al catalogo.");
+
+        float duration = data.IsPersistent ? data.duration : data.duration * Mathf.Max(0.01f, durationScale);
+
+        switch (data.EffectivePolicy)
         {
             case StackingPolicy.RefreshDuration:
                 {
                     ActiveEffect existing = FindActive(data.type);
                     if (existing != null)
                     {
-                        existing.remaining = data.duration;
-                        LogV($"Refresh durata: {data.type}");
+                        existing.remaining = Mathf.Max(existing.remaining, duration);   // Rev BR: mai accorciare
+                        LogV($"Refresh durata: {data.type} → {existing.remaining:F1}s");
                     }
                     else
                     {
-                        _active.Add(NewInstance(data, 1));
-                        LogV($"Applicato (refresh policy): {data.type}");
+                        _active.Add(NewInstance(data, 1, duration));
+                        LogV($"Applicato (refresh policy): {data.type} · {duration:F1}s");
                     }
                     break;
                 }
@@ -237,12 +304,12 @@ public class PlayerStatusEffects : NetworkBehaviour
                     if (existing != null)
                     {
                         existing.stacks = Mathf.Min(existing.stacks + 1, Mathf.Max(1, data.maxStacks));
-                        existing.remaining = data.duration; // rinnova la durata
+                        existing.remaining = duration; // rinnova la durata
                         LogV($"Stack intensita': {data.type} → {existing.stacks}");
                     }
                     else
                     {
-                        _active.Add(NewInstance(data, 1));
+                        _active.Add(NewInstance(data, 1, duration));
                         LogV($"Applicato (intensity policy): {data.type} → 1");
                     }
                     break;
@@ -253,7 +320,7 @@ public class PlayerStatusEffects : NetworkBehaviour
                     int count = CountActive(data.type);
                     if (count < Mathf.Max(1, data.maxStacks))
                     {
-                        _active.Add(NewInstance(data, 1));
+                        _active.Add(NewInstance(data, 1, duration));
                         LogV($"Applicato (independent policy): {data.type} → istanze {count + 1}");
                     }
                     else
@@ -262,7 +329,7 @@ public class PlayerStatusEffects : NetworkBehaviour
                         ActiveEffect soonest = FindSoonestExpiring(data.type);
                         if (soonest != null && !soonest.data.IsPersistent)
                         {
-                            soonest.remaining = data.duration;
+                            soonest.remaining = duration;
                             LogV($"Independent al cap ({data.maxStacks}): rinnovata l'istanza piu' vicina a scadere.");
                         }
                     }
@@ -330,28 +397,60 @@ public class PlayerStatusEffects : NetworkBehaviour
     public bool IsCurableAtMedbay(StatusEffectType type, int medbayTier)
         => CureAllowed(FindInCatalog(type), medbayTier);
 
-    /// <summary>Regola unica di curabilità per tier (Rev BC · BP-b).</summary>
+    /// <summary>
+    /// Regola unica di curabilità per tier (Rev BC · BP-b). Rev BR: solo le Condition si
+    /// curano; i Buff scadono da soli.
+    /// </summary>
     private static bool CureAllowed(StatusEffectData data, int medbayTier)
-        => data != null && (!data.curableOnlyAtMedbayT3Plus || medbayTier >= 3);
+        => data != null
+           && data.category == StatusCategory.Condition
+           && (!data.curableOnlyAtMedbayT3Plus || medbayTier >= 3);
+
+    // ── API modificatori (Rev BR) — server e client ────────────────────────────
+
+    /// <summary>
+    /// Rev BR — moltiplicatore corrente della statistica (1 = nessuna modifica). Vale su server
+    /// E client: somma le percentuali dei tipi attivi nella maschera replicata, leggendo i
+    /// modificatori dal catalogo (Q40-a / Q44-a), poi applica i limiti. In cache per maschera:
+    /// si ricalcola solo quando la maschera cambia.
+    /// </summary>
+    public float GetStatMultiplier(StatKind stat)
+    {
+        int idx = (int)stat;
+        if (idx < 0 || idx >= _statCache.Length) return 1f;
+
+        ushort mask = netActiveMask.Value;
+        if (!_statCacheValid || mask != _statCacheMask)
+            RebuildStatCache(mask);
+
+        return _statCache[idx];
+    }
 
     // ── Helper interni ────────────────────────────────────────────────────────
 
-    private static byte MaskBit(StatusEffectType type) => (byte)(1 << (int)type);
+    private static ushort MaskBit(StatusEffectType type) => (ushort)(1 << (int)type);
 
     /// <summary>Ricalcola la maschera replicata dai tipi attivi. SERVER ONLY. Scrive solo se cambia.</summary>
     private void SyncMask()
     {
         if (!IsServer) return;
-        byte mask = 0;
+        ushort mask = 0;
         for (int i = 0; i < _active.Count; i++)
             mask |= MaskBit(_active[i].data.type);
-        if (netActiveMask.Value != mask) netActiveMask.Value = mask;
+        if (netActiveMask.Value == mask) return;
+
+        netActiveMask.Value = mask;
+
+        // Rev BR: se la maschera cambia può cambiare l'HP max (Combat Stim −30%): il server
+        // taglia gli HP correnti al nuovo massimo. Se il massimo risale non restituisce nulla.
+        if (_health != null)
+            _health.ServerClampHPToMax();
     }
 
-    private ActiveEffect NewInstance(StatusEffectData data, int stacks) => new ActiveEffect
+    private ActiveEffect NewInstance(StatusEffectData data, int stacks, float duration) => new ActiveEffect
     {
         data = data,
-        remaining = data.duration,   // ignorato se persistente
+        remaining = duration,        // ignorato se persistente
         tickAccumulator = 0f,
         stacks = stacks
     };
@@ -389,6 +488,102 @@ public class PlayerStatusEffects : NetworkBehaviour
         return null;
     }
 
+    // ── Helper modificatori (Rev BR) ───────────────────────────────────────────
+
+    // Cache dei moltiplicatori per maschera: indice = (int)StatKind.
+    private readonly float[] _statCache = new float[(int)StatKind.COUNT];
+    private ushort _statCacheMask;
+    private bool _statCacheValid;
+
+    // Bit dei tipi Buff secondo il catalogo (statico a runtime: calcolato una volta).
+    private ushort _buffBits;
+    private bool _buffBitsValid;
+
+    private ushort BuffBits
+    {
+        get
+        {
+            if (!_buffBitsValid)
+            {
+                _buffBits = 0;
+                for (int i = 0; i < statusCatalog.Count; i++)
+                {
+                    StatusEffectData d = statusCatalog[i];
+                    if (d != null && d.category == StatusCategory.Buff && (int)d.type >= 0 && (int)d.type < MaxMaskTypes)
+                        _buffBits |= MaskBit(d.type);
+                }
+                _buffBitsValid = true;
+            }
+            return _buffBits;
+        }
+    }
+
+    private void RebuildStatCache(ushort mask)
+    {
+        // Somme percentuali per statistica (Q40-a).
+        for (int s = 0; s < _statCache.Length; s++)
+            _statCache[s] = 0f;
+
+        for (int bit = 0; bit < MaxMaskTypes; bit++)
+        {
+            if ((mask & (1 << bit)) == 0) continue;
+
+            StatusEffectData data = FindInCatalog((StatusEffectType)bit);
+            if (data == null || !data.HasStatModifiers) continue;
+
+            for (int m = 0; m < data.modifiers.Length; m++)
+            {
+                int stat = (int)data.modifiers[m].stat;
+                if (stat < 0 || stat >= _statCache.Length) continue;
+                _statCache[stat] += data.modifiers[m].percent;
+            }
+        }
+
+        // Somma → moltiplicatore limitato.
+        for (int s = 0; s < _statCache.Length; s++)
+        {
+            float multiplier = 1f + _statCache[s] / 100f;
+            _statCache[s] = limits != null
+                ? limits.Clamp((StatKind)s, multiplier)
+                : StatModifierLimits.ClampFallback((StatKind)s, multiplier);
+        }
+
+        _statCacheMask = mask;
+        _statCacheValid = true;
+    }
+
+    /// <summary>
+    /// Rev BR — moltiplicatore del danno di un DoT in base al tipo di stato. Solo le Radiazioni
+    /// hanno una statistica dedicata (Hazmat, GDD §9.6). Il moltiplicatore generale del danno
+    /// subito si applica poi in PlayerHealthSystem.ApplyDamage, come per ogni altro danno.
+    /// </summary>
+    private float TypedDamageMultiplier(StatusEffectType type)
+    {
+        switch (type)
+        {
+            case StatusEffectType.Radiation: return GetStatMultiplier(StatKind.RadiationDamageTaken);
+            default: return 1f;
+        }
+    }
+
+    private void HandleMaskChanged(ushort previous, ushort current)
+    {
+        _statCacheValid = false;
+        OnActiveMaskChanged?.Invoke();
+    }
+
+    /// <summary>
+    /// Rev BR — ogni StatusEffectType deve avere un bit nella maschera ushort (valori 0–15).
+    /// Un tipo fuori range non verrebbe mai replicato: errore reale, log incondizionato.
+    /// </summary>
+    private static void ValidateEnumFitsMask()
+    {
+        foreach (StatusEffectType t in Enum.GetValues(typeof(StatusEffectType)))
+            if ((int)t < 0 || (int)t >= MaxMaskTypes)
+                Debug.LogError($"[PlayerStatusEffects] StatusEffectType.{t} = {(int)t} fuori dalla maschera replicata " +
+                               $"(ammessi 0–{MaxMaskTypes - 1}). Allargare netActiveMask prima di aggiungere tipi.");
+    }
+
     // ── Log verboso standard Rev BA ───────────────────────────────────────────
     private void LogV(string msg)
     {
@@ -404,11 +599,12 @@ public class PlayerStatusEffects : NetworkBehaviour
 
         // Affiancato al pannello di PlayerHealthSystem (x=280, w=280 → termina a 560),
         // stessa banda verticale per OwnerClientId.
-        float y = 310 + (OwnerClientId * 90f);
+        // Rev BR: pannello più alto (buff e moltiplicatori) → passo verticale 250.
+        float y = 310 + (OwnerClientId * 250f);
 
-        GUILayout.BeginArea(new Rect(570, y, 340, 175));
+        GUILayout.BeginArea(new Rect(570, y, 360, 245));
         GUILayout.BeginVertical("box");
-        GUILayout.Label($"[PlayerStatusEffects] Client {OwnerClientId} — attivi: {_active.Count} · mask {netActiveMask.Value}");
+        GUILayout.Label($"[PlayerStatusEffects] Client {OwnerClientId} — attivi: {_active.Count} · mask {netActiveMask.Value} · condizioni {ConditionMask}");
 
         GUILayout.BeginHorizontal();
         if (GUILayout.Button("Rad")) ApplyEffect(StatusEffectType.Radiation);
@@ -426,6 +622,22 @@ public class PlayerStatusEffects : NetworkBehaviour
         if (GUILayout.Button("Cura Ferite T2 (deve fallire)")) TryCure(StatusEffectType.CompoundWounds, 2);
         if (GUILayout.Button("Cura Ferite T3 (ok)")) TryCure(StatusEffectType.CompoundWounds, 3);
         GUILayout.EndHorizontal();
+
+        // Rev BR — buff. "Stim ×0.6" prova il fattore di durata del non-Corpsman (valore di sola
+        // prova: quello reale arriva dal profilo del kit in BR-b).
+        GUILayout.BeginHorizontal();
+        if (GUILayout.Button("Hazmat")) ApplyEffect(StatusEffectType.Hazmat);
+        if (GUILayout.Button("Stim")) ApplyEffect(StatusEffectType.CombatStim);
+        if (GUILayout.Button("Stim ×0.6")) ApplyEffect(StatusEffectType.CombatStim, 0.6f);
+        if (GUILayout.Button("- Buff"))
+        {
+            RemoveEffect(StatusEffectType.Hazmat);
+            RemoveEffect(StatusEffectType.CombatStim);
+        }
+        GUILayout.EndHorizontal();
+
+        GUILayout.Label($"Vel ×{GetStatMultiplier(StatKind.MoveSpeed):F2} · Danno ×{GetStatMultiplier(StatKind.DamageTaken):F2} · " +
+                        $"Rad ×{GetStatMultiplier(StatKind.RadiationDamageTaken):F2} · HPmax ×{GetStatMultiplier(StatKind.MaxHP):F2}");
 
         for (int i = 0; i < _active.Count; i++)
         {

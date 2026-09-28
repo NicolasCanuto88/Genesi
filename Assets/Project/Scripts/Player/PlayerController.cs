@@ -5,6 +5,15 @@ using UnityEngine.InputSystem;
 /// First-person controller for Space Survivor
 /// Uses Unity's New Input System with InputSystem_Actions
 /// FIXED: Proper gravity + No legacy Input calls
+///
+/// MODIFICATORI (Rev BR · Q39-b): la velocità di movimento (camminata, scatto, accovacciato)
+/// è moltiplicata per il moltiplicatore MoveSpeed di PlayerStatusEffects (Combat Stim +20%).
+/// Il movimento gira sul client proprietario (NetworkTransform owner-authoritative): il
+/// moltiplicatore viene dalla maschera replicata degli stati, quindi è già noto qui senza
+/// RPC. Le scale non sono influenzate (Ladder gestisce la salita).
+///
+/// STAMINA (Rev BR): RefillStamina riporta la stamina al massimo. La chiamerà l'Adrenaline
+/// (BR-b) sul client proprietario, dove vive la stamina.
 /// </summary>
 [RequireComponent(typeof(CharacterController))]
 [RequireComponent(typeof(PlayerInput))]
@@ -40,6 +49,7 @@ public class PlayerController : MonoBehaviour
     // Components
     private CharacterController characterController;
     private PlayerInput playerInput;
+    private PlayerStatusEffects statusEffects;   // Rev BR: moltiplicatore di velocità (può mancare fuori dal Player prefab)
 
     // Input values
     private Vector2 moveInput;
@@ -82,10 +92,24 @@ public class PlayerController : MonoBehaviour
         verticalVelocity = -2f; // valore di riposo "a terra", stesso usato in HandleMovement()
     }
 
+    /// <summary>
+    /// Rev BR — riporta la stamina al massimo. Operazione distinta dal recupero naturale
+    /// (HandleStamina): la usa l'Adrenaline (BR-b), sul client proprietario.
+    /// </summary>
+    public void RefillStamina()
+    {
+        currentStamina = maxStamina;
+    }
+
+    /// <summary>Rev BR — moltiplicatore di velocità dagli stati attivi (1 se il componente manca).</summary>
+    private float MoveSpeedMultiplier =>
+        statusEffects != null ? statusEffects.GetStatMultiplier(StatKind.MoveSpeed) : 1f;
+
     private void Awake()
     {
         characterController = GetComponent<CharacterController>();
         playerInput = GetComponent<PlayerInput>();
+        statusEffects = GetComponent<PlayerStatusEffects>();
         currentStamina = maxStamina;
 
         // Auto-assign camera if not set
@@ -173,6 +197,9 @@ public class PlayerController : MonoBehaviour
         {
             targetSpeed = crouchSpeed;
         }
+
+        // Rev BR: modificatori di velocità (Combat Stim)
+        targetSpeed *= MoveSpeedMultiplier;
 
         // Calculate movement direction (horizontal only)
         Vector3 inputDirection = transform.right * moveInput.x + transform.forward * moveInput.y;
@@ -295,7 +322,7 @@ public class PlayerController : MonoBehaviour
         if (!showDebugUI) return;
 
         GUI.Label(new Rect(10, 10, 300, 20), $"Stamina: {currentStamina:F1}/{maxStamina}");
-        GUI.Label(new Rect(10, 30, 300, 20), $"Speed: {currentVelocity.magnitude:F2} m/s");
+        GUI.Label(new Rect(10, 30, 300, 20), $"Speed: {currentVelocity.magnitude:F2} m/s (×{MoveSpeedMultiplier:F2})");
         GUI.Label(new Rect(10, 50, 300, 20), $"Sprinting: {IsSprinting}");
         GUI.Label(new Rect(10, 70, 300, 20), $"Crouching: {IsCrouching}");
 #endif

@@ -418,11 +418,15 @@ namespace SpaceSurvivor.Ship
                    && effects.IsCurableAtMedbay(status, tier);
         }
 
+        /// <summary>
+        /// true se il paziente ha almeno una CONDIZIONE attiva. Rev BR: i buff (droghe) non
+        /// contano — un paziente sano con una Combat Stim è "stabile", non "non curabile".
+        /// </summary>
         private static bool HasActiveStatus(ulong clientId)
         {
             return PlayerStatusEffects.TryGetByClientId(clientId, out PlayerStatusEffects effects)
                    && effects != null
-                   && effects.ActiveMask != 0;
+                   && effects.ConditionMask != 0;
         }
 
         /// <summary>Stato di alterazione curato da una fase (false per None e Hp).</summary>
@@ -808,10 +812,10 @@ namespace SpaceSurvivor.Ship
             string phaseLine = "Prossima fase: —";
             if (patient != NoClient)
             {
-                byte mask = PlayerStatusEffects.TryGetByClientId(patient, out PlayerStatusEffects fx) && fx != null
-                    ? fx.ActiveMask
-                    : (byte)0;
-                phaseLine = $"Prossima fase: {GetNextPhase(patient)} · maschera stati {mask}";
+                ushort mask = PlayerStatusEffects.TryGetByClientId(patient, out PlayerStatusEffects fx) && fx != null
+                    ? fx.ConditionMask
+                    : (ushort)0;
+                phaseLine = $"Prossima fase: {GetNextPhase(patient)} · maschera condizioni {mask}";
             }
 
             GUILayout.BeginArea(new Rect(600, 10, 380, 140));

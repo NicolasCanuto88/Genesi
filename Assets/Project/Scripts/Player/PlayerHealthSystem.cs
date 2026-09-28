@@ -62,6 +62,19 @@ using UnityEngine;
 /// le transizioni della macchina a stati (ServerTryRevive / ServerRespawn), che
 /// impostano HP come parte del cambio di stato.
 ///
+/// MODIFICATORI (Rev BR · Q39-b / Q40-a): due statistiche degli stati StatModifier passano
+/// di qui.
+/// - HP MAX DINAMICO: MaxHP = HP max base × moltiplicatore MaxHP di PlayerStatusEffects.
+///   Il moltiplicatore si ricava dalla maschera replicata, quindi MaxHP vale uguale su server
+///   e client senza NetworkVariable nuove. Quando la maschera cambia, il server taglia gli
+///   HP correnti al nuovo massimo (ServerClampHPToMax); se il massimo risale gli HP tagliati
+///   NON tornano (Combat Stim: il costo è reale). Sull'owner, un cambio di maschera rilancia
+///   OnLocalHealthChanged, così la UI vede il nuovo massimo.
+/// - DANNO SUBITO: ApplyDamage moltiplica il danno per il moltiplicatore DamageTaken, dopo
+///   il controllo di immunità. Il danno da Radiazioni ha in più un moltiplicatore suo,
+///   applicato nel tick di PlayerStatusEffects (Hazmat).
+/// La base (campo maxHP) resta il valore di (ri)nascita: il clone nasce senza stati.
+///
 /// ⚠️ VERIFICA EDITOR: il Player prefab deve avere NetworkObject + essere il
 /// "Player Prefab" di NetworkManager (setup NGO standard, non in codice). Su di
 /// esso convivono PlayerHealthSystem, PlayerStatusEffects (Rev BC) e
@@ -107,8 +120,25 @@ public class PlayerHealthSystem : NetworkBehaviour
         LifeState.Alive, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Server);
 
     public float CurrentHP => netCurrentHP.Value;
-    public float MaxHP => maxHP;
-    public float HealthPercent => maxHP > 0f ? netCurrentHP.Value / maxHP : 0f;
+
+    /// <summary>HP massimi di base (senza modificatori): valore di (ri)nascita. Rev BR.</summary>
+    public float BaseMaxHP => maxHP;
+
+    /// <summary>
+    /// HP massimi effettivi (Rev BR): base × moltiplicatore MaxHP degli stati attivi
+    /// (Combat Stim −30%). Uguale su server e client: deriva dalla maschera replicata.
+    /// Mai sotto 1 HP.
+    /// </summary>
+    public float MaxHP => Mathf.Max(1f, maxHP * StatMultiplier(StatKind.MaxHP));
+
+    public float HealthPercent
+    {
+        get
+        {
+            float max = MaxHP;
+            return max > 0f ? netCurrentHP.Value / max : 0f;
+        }
+    }
 
     /// <summary>Stato vitale corrente (replicato).</summary>
     public LifeState State => netLifeState.Value;
@@ -131,8 +161,8 @@ public class PlayerHealthSystem : NetworkBehaviour
     /// <summary>Fired SOLO per l'istanza locale quando il proprio LifeState cambia.</summary>
     public static event Action<LifeState> OnLocalLifeStateChanged;
 
-    // ── Riferimenti sibling (cachati a spawn) ──
-    private PlayerStatusEffects statusEffects;   // server: per applicare CompoundWounds
+    // ── Riferimenti sibling ──
+    private PlayerStatusEffects statusEffects;   // tutti (Awake): modificatori; server: CompoundWounds e pulizia al respawn
     private PlayerMedKit medKit;                  // server: kit medico svuotato al respawn (Rev BQ)
     private PlayerController playerController;    // owner: per congelare il movimento
 
@@ -149,6 +179,9 @@ public class PlayerHealthSystem : NetworkBehaviour
     private void Awake()
     {
         originalLayer = gameObject.layer;
+
+        // Rev BR: serve su TUTTI i client (MaxHP dinamico), non solo sul server.
+        statusEffects = GetComponent<PlayerStatusEffects>();
     }
 
     // ── Lifecycle NGO ──────────────────────────────────────────────────────
@@ -166,7 +199,6 @@ public class PlayerHealthSystem : NetworkBehaviour
             netLifeState.Value = LifeState.Alive;
             immuneUntil = 0f;
 
-            statusEffects = GetComponent<PlayerStatusEffects>();
             if (statusEffects == null)
                 Debug.LogError("[PlayerHealthSystem] PlayerStatusEffects mancante sullo stesso GameObject. " +
                                "Le Ferite Composte non potranno essere applicate alla rianimazione (D27). " +
@@ -187,7 +219,12 @@ public class PlayerHealthSystem : NetworkBehaviour
         {
             LocalInstance = this;
             playerController = GetComponent<PlayerController>();
-            OnLocalHealthChanged?.Invoke(netCurrentHP.Value, maxHP);
+
+            // Rev BR: un cambio di stati può cambiare l'HP max → la UI locale deve saperlo.
+            if (statusEffects != null)
+                statusEffects.OnActiveMaskChanged += HandleStatusMaskChanged;
+
+            OnLocalHealthChanged?.Invoke(netCurrentHP.Value, MaxHP);
             OnLocalLifeStateChanged?.Invoke(netLifeState.Value);
             ApplyOwnerFreeze(netLifeState.Value);
         }
@@ -197,6 +234,9 @@ public class PlayerHealthSystem : NetworkBehaviour
     {
         netCurrentHP.OnValueChanged -= HandleHPChanged;
         netLifeState.OnValueChanged -= HandleLifeStateChanged;
+
+        if (statusEffects != null)
+            statusEffects.OnActiveMaskChanged -= HandleStatusMaskChanged;
 
         if (activeByClientId.TryGetValue(OwnerClientId, out var registered) && registered == this)
             activeByClientId.Remove(OwnerClientId);
@@ -208,8 +248,19 @@ public class PlayerHealthSystem : NetworkBehaviour
     private void HandleHPChanged(float previous, float current)
     {
         if (IsOwner)
-            OnLocalHealthChanged?.Invoke(current, maxHP);
+            OnLocalHealthChanged?.Invoke(current, MaxHP);
     }
+
+    /// <summary>Rev BR — sull'owner: gli stati sono cambiati, forse anche l'HP max.</summary>
+    private void HandleStatusMaskChanged()
+    {
+        if (IsOwner)
+            OnLocalHealthChanged?.Invoke(netCurrentHP.Value, MaxHP);
+    }
+
+    /// <summary>Rev BR — moltiplicatore di una statistica dagli stati attivi (1 se mancano).</summary>
+    private float StatMultiplier(StatKind stat)
+        => statusEffects != null ? statusEffects.GetStatMultiplier(stat) : 1f;
 
     private void HandleLifeStateChanged(LifeState previous, LifeState current)
     {
@@ -283,7 +334,8 @@ public class PlayerHealthSystem : NetworkBehaviour
     /// Applica danno a questo giocatore. SERVER ONLY. Unico choke point verso il
     /// basso: combat futuro e DoT degli Stati passano di qui. A HP 0, se il player
     /// è ancora Alive, entra in Downed (Q2-a). Durante l'immunità post-rianimazione
-    /// (Rev BP-a) il danno è ignorato.
+    /// (Rev BP-a) il danno è ignorato. Rev BR: il danno è moltiplicato per il moltiplicatore
+    /// DamageTaken degli stati attivi (ordine: vivo → immunità → modificatore → sottrazione).
     /// </summary>
     public void ApplyDamage(float amount)
     {
@@ -298,6 +350,9 @@ public class PlayerHealthSystem : NetworkBehaviour
         if (netLifeState.Value != LifeState.Alive) return;   // già a terra/in respawn: nessun ulteriore danno
         if (IsImmuneServer) return;                          // Rev BP-a: immunità post-rianimazione
 
+        amount *= StatMultiplier(StatKind.DamageTaken);      // Rev BR: resistenze / vulnerabilità
+        if (amount <= 0f) return;
+
         netCurrentHP.Value = Mathf.Max(0f, netCurrentHP.Value - amount);
 
         if (netCurrentHP.Value <= 0f)
@@ -308,7 +363,7 @@ public class PlayerHealthSystem : NetworkBehaviour
 
     /// <summary>
     /// Ripristina HP a questo giocatore. SERVER ONLY. Choke point unico verso l'alto
-    /// (speculare ad ApplyDamage): cura solo se Alive, con clamp a maxHP. Ritorna gli
+    /// (speculare ad ApplyDamage): cura solo se Alive, con clamp a MaxHP (effettivo, Rev BR). Ritorna gli
     /// HP effettivamente ripristinati (0 se nulla è cambiato), così il chiamante può
     /// sapere se la cura ha avuto effetto senza rileggere lo stato.
     /// </summary>
@@ -325,11 +380,26 @@ public class PlayerHealthSystem : NetworkBehaviour
         if (netLifeState.Value != LifeState.Alive) return 0f;   // Downed/RespawnWait: la cura non rialza
 
         float before = netCurrentHP.Value;
-        float after = Mathf.Min(maxHP, before + amount);
+        float after = Mathf.Min(MaxHP, before + amount);
         if (after <= before) return 0f;
 
         netCurrentHP.Value = after;
         return after - before;
+    }
+
+    /// <summary>
+    /// Rev BR — taglia gli HP correnti all'HP max effettivo. SERVER ONLY. Chiamato da
+    /// PlayerStatusEffects quando la maschera cambia (Combat Stim: massimo −30%). Non alza mai
+    /// gli HP: se il massimo risale, gli HP tagliati non tornano (Q40-a). Nessun cambio di
+    /// LifeState: il massimo effettivo è sempre ≥ 1, quindi il taglio non porta a terra.
+    /// </summary>
+    public void ServerClampHPToMax()
+    {
+        if (!IsServer) return;
+
+        float max = MaxHP;
+        if (netCurrentHP.Value > max)
+            netCurrentHP.Value = max;
     }
 
     // ── Macchina a stati (SERVER) ─────────────────────────────────────────
@@ -358,6 +428,7 @@ public class PlayerHealthSystem : NetworkBehaviour
         if (!IsServer) return;
 
         // Clone = corpo nuovo (Q7-a in-place, Q8-a nessuna Ferita Composta, nessuna immunità).
+        // Rev BR: HP max di BASE — il clone nasce senza stati (ServerClearAll qui sotto).
         netCurrentHP.Value = maxHP;
         netLifeState.Value = LifeState.Alive;
         immuneUntil = 0f;
@@ -380,7 +451,7 @@ public class PlayerHealthSystem : NetworkBehaviour
     /// <summary>
     /// Tenta la rianimazione via defibrillatore. SERVER ONLY. Chiamato dal
     /// ReviveServerRpc di PlayerReviveTarget. First-completer-wins (Q4-a): riesce
-    /// solo se il player è ancora Downed. Su successo: HP = maxHP × frazione,
+    /// solo se il player è ancora Downed. Su successo: HP = MaxHP (effettivo) × frazione,
     /// stato → Alive, immunità al danno per immunitySeconds (Rev BP-a, profilo del
     /// rianimatore) e Ferite Composte (Q8-a). Ritorna true su successo.
     /// </summary>
@@ -393,7 +464,7 @@ public class PlayerHealthSystem : NetworkBehaviour
         immuneUntil = immunitySeconds > 0f ? Time.time + immunitySeconds : 0f;
 
         float frac = Mathf.Clamp01(hpRestoreFraction);
-        netCurrentHP.Value = Mathf.Max(1f, maxHP * frac);   // almeno 1 HP: rianimato = non subito ri-downed
+        netCurrentHP.Value = Mathf.Max(1f, MaxHP * frac);   // almeno 1 HP: rianimato = non subito ri-downed (Rev BR: max effettivo)
         netLifeState.Value = LifeState.Alive;
 
         // Ferite Composte SOLO alla rianimazione via defib (Q8-a). Stato pronto da Rev BC.
@@ -420,13 +491,13 @@ public class PlayerHealthSystem : NetworkBehaviour
         GUILayout.BeginArea(new Rect(280, y, 300, 130));
         GUILayout.BeginVertical("box");
         string immunity = IsImmuneServer ? $" · immune {immuneUntil - Time.time:F1}s" : "";
-        GUILayout.Label($"[Health] Client {OwnerClientId}: {netCurrentHP.Value:F0}/{maxHP:F0} — {netLifeState.Value}{immunity}");
+        GUILayout.Label($"[Health] Client {OwnerClientId}: {netCurrentHP.Value:F1}/{MaxHP:F0} — {netLifeState.Value}{immunity}");
         GUILayout.BeginHorizontal();
         if (GUILayout.Button("-10 danno")) ApplyDamage(10f);
         if (GUILayout.Button("+10 cura")) ApplyHeal(10f);   // Rev BO-a: passa dal choke point
         GUILayout.EndHorizontal();
         GUILayout.BeginHorizontal();
-        if (GUILayout.Button("Downed")) ApplyDamage(maxHP);
+        if (GUILayout.Button("Downed")) ApplyDamage(MaxHP * 10f);   // Rev BR: ×10 → a terra anche con resistenze
         if (GUILayout.Button("Revive 30%")) ServerTryRevive(0.30f);
         if (GUILayout.Button("Respawn")) ServerRespawn();
         GUILayout.EndHorizontal();
