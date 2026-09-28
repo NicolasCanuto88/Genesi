@@ -14,6 +14,8 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::DefibConfig
   defaultChannelSeconds: 4
   defaultHpRestoreFraction: 0.3
+  defaultImmunitySeconds: 0
   corpsmanChannelSeconds: 2
   corpsmanHpRestoreFraction: 0.6
-  placeholderStartingCharges: 3
+  corpsmanImmunitySeconds: 3
+  chargesByMedbayTier: 00000000030000000400000005000000

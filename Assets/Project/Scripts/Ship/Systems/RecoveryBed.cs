@@ -26,6 +26,19 @@ namespace SpaceSurvivor.Ship
     ///      gli HP del paziente ad ALMENO soglia% di maxHP (Q3-a, idempotente).
     ///   5. Il paziente si alza con Cancel. Le soglie già raggiunte restano.
     ///
+    /// FASI (Rev BP-b · Q20-a / Q21-a / Q22-a): una sessione di trattamento cura UNA
+    /// condizione (TreatmentPhase). Ordine proposto dalla console: prima gli stati
+    /// (Veleno → Radiazioni → Ferite Composte), poi gli HP (Trauma) — fermare il DoT
+    /// prima di curare. Il server accetta qualsiasi fase CURABILE ADESSO (l'ordine è
+    /// della console, non una regola), la memorizza per la sessione e al 100% di una
+    /// fase stato chiama PlayerStatusEffects.TryCure. Soglie 50/75 di una fase stato:
+    /// solo ritmo e tacche, nessun effetto. Fase Trauma: soglie come in BO-a.
+    /// Curabilità di uno stato: tier con CuresStatuses (MedbayConfig: T2+) E regola dello
+    /// stato (Ferite Composte T3+). Nessun vincolo sulla composizione della crew
+    /// (Q25-b): chiunque può operare, col malus Rev U se non è Corpsman.
+    /// Sdraiarsi: solo se c'è qualcosa da curare a questo tier (HP sotto il massimo o
+    /// uno stato curabile).
+    ///
     /// RESPONSABILITÀ (Rev BO-b): autorità server (occupazione, auto-cura, cure di
     /// soglia, regola di disponibilità del trattamento) + lato locale del PAZIENTE.
     /// Il lato locale dell'OPERATORE (PlayerController, tablet, Cancel, UI) vive nella
@@ -84,11 +97,38 @@ namespace SpaceSurvivor.Ship
             InProgress,
             /// <summary>Il candidato non è Alive.</summary>
             OperatorUnable,
-            /// <summary>Paziente con HP al massimo: niente da curare.</summary>
+            /// <summary>Paziente con HP al massimo e nessuno stato: niente da curare.</summary>
             PatientStable,
+            /// <summary>
+            /// Rev BP-b — HP al massimo, ma con stati che questo tier non cura (per esempio
+            /// Veleno a T1, Ferite Composte sotto T3).
+            /// </summary>
+            NotTreatableAtTier,
             /// <summary>Trattamento avviabile.</summary>
             Ready
         }
+
+        /// <summary>
+        /// Rev BP-b — la condizione curata da una sessione di trattamento (Q20-a: una
+        /// sessione, una condizione). Byte: viaggia nella RPC di richiesta.
+        /// </summary>
+        public enum TreatmentPhase : byte
+        {
+            None = 0,
+            /// <summary>HP: soglie 50/75/100 portano gli HP almeno a quella percentuale.</summary>
+            Hp = 1,
+            Poison = 2,
+            Radiation = 3,
+            CompoundWounds = 4
+        }
+
+        /// <summary>Q21-a — ordine delle fasi stato proposto dalla console (prima gli stati, poi gli HP).</summary>
+        private static readonly TreatmentPhase[] StatusPhaseOrder =
+        {
+            TreatmentPhase.Poison,
+            TreatmentPhase.Radiation,
+            TreatmentPhase.CompoundWounds
+        };
 
         [Header("Config")]
         [Tooltip("Asset MedbayConfig: tetto e velocità dell'auto-cura per tier, parametri del " +
@@ -149,6 +189,7 @@ namespace SpaceSurvivor.Ship
 
         // ── Stato server ──
         private float _autoHealAccumulator;
+        private TreatmentPhase _sessionPhase;   // Rev BP-b: fase accettata per la sessione in corso
 
         // ── Stato locale (client che è paziente di questo letto) ──
         private bool _localIsPatient;
@@ -244,7 +285,7 @@ namespace SpaceSurvivor.Ship
                 if (!TryGetAliveHealth(operatorId, out _))
                 {
                     LogV($"[RecoveryBed] {name}: operatore {operatorId} non più Alive/connesso → trattamento chiuso.");
-                    netOperator.Value = NoClient;
+                    ServerClearOperator();
                 }
                 else
                 {
@@ -279,9 +320,17 @@ namespace SpaceSurvivor.Ship
         private void ServerReleasePatient()
         {
             if (!IsServer) return;
-            netOperator.Value = NoClient;
+            ServerClearOperator();
             netPatient.Value = NoClient;
             _autoHealAccumulator = 0f;
+        }
+
+        /// <summary>Chiude la sessione lato server: nessun operatore, nessuna fase.</summary>
+        private void ServerClearOperator()
+        {
+            if (!IsServer) return;
+            netOperator.Value = NoClient;
+            _sessionPhase = TreatmentPhase.None;
         }
 
         private static bool TryGetAliveHealth(ulong clientId, out PlayerHealthSystem health)
@@ -310,23 +359,108 @@ namespace SpaceSurvivor.Ship
             if (candidateClientId == patient) return TreatmentAvailability.SelfIsPatient;
             if (netOperator.Value != NoClient) return TreatmentAvailability.InProgress;
             if (!TryGetAliveHealth(candidateClientId, out _)) return TreatmentAvailability.OperatorUnable;
-            if (!TryGetAliveHealth(patient, out PlayerHealthSystem patientHealth))
+            if (!TryGetAliveHealth(patient, out _))
                 return TreatmentAvailability.NoPatient;
-            if (patientHealth.CurrentHP >= patientHealth.MaxHP) return TreatmentAvailability.PatientStable;
+            if (GetNextPhase(patient) == TreatmentPhase.None)
+                return HasActiveStatus(patient)
+                    ? TreatmentAvailability.NotTreatableAtTier
+                    : TreatmentAvailability.PatientStable;
 
             return TreatmentAvailability.Ready;
+        }
+
+        // ── Fasi (Rev BP-b) — stesse regole su server e client ─────────────────
+
+        /// <summary>
+        /// Prossima fase da curare per il client indicato, nell'ordine Q21-a: prima gli
+        /// stati curabili a questo tier, poi gli HP. None se non c'è niente da curare (o
+        /// il client non è Alive). Legge solo stato replicato: vale su server e client.
+        /// </summary>
+        public TreatmentPhase GetNextPhase(ulong patientClientId)
+        {
+            if (!TryGetAliveHealth(patientClientId, out PlayerHealthSystem health)) return TreatmentPhase.None;
+
+            for (int i = 0; i < StatusPhaseOrder.Length; i++)
+            {
+                if (IsStatusPhaseTreatable(patientClientId, StatusPhaseOrder[i]))
+                    return StatusPhaseOrder[i];
+            }
+
+            return health.CurrentHP < health.MaxHP ? TreatmentPhase.Hp : TreatmentPhase.None;
+        }
+
+        /// <summary>
+        /// La fase indicata è curabile ADESSO sul client indicato? Il server la usa per
+        /// validare la richiesta della console (l'ordine resta della console).
+        /// </summary>
+        public bool IsPhaseTreatable(ulong patientClientId, TreatmentPhase phase)
+        {
+            if (!TryGetAliveHealth(patientClientId, out PlayerHealthSystem health)) return false;
+            if (phase == TreatmentPhase.Hp) return health.CurrentHP < health.MaxHP;
+            return IsStatusPhaseTreatable(patientClientId, phase);
+        }
+
+        /// <summary>
+        /// Fase stato curabile: il tier corrente cura gli stati (MedbayConfig), lo stato è
+        /// attivo (maschera replicata) e la sua regola ammette questo tier (Ferite Composte T3+).
+        /// </summary>
+        private bool IsStatusPhaseTreatable(ulong patientClientId, TreatmentPhase phase)
+        {
+            if (config == null) return false;
+            if (!TryGetStatus(phase, out StatusEffectType status)) return false;
+
+            int tier = MedbaySystem.CurrentTierOrDefault;
+            if (!config.GetTier(tier).CuresStatuses) return false;
+
+            return PlayerStatusEffects.TryGetByClientId(patientClientId, out PlayerStatusEffects effects)
+                   && effects != null
+                   && effects.IsActive(status)
+                   && effects.IsCurableAtMedbay(status, tier);
+        }
+
+        private static bool HasActiveStatus(ulong clientId)
+        {
+            return PlayerStatusEffects.TryGetByClientId(clientId, out PlayerStatusEffects effects)
+                   && effects != null
+                   && effects.ActiveMask != 0;
+        }
+
+        /// <summary>Stato di alterazione curato da una fase (false per None e Hp).</summary>
+        public static bool TryGetStatus(TreatmentPhase phase, out StatusEffectType status)
+        {
+            switch (phase)
+            {
+                case TreatmentPhase.Poison: status = StatusEffectType.Poison; return true;
+                case TreatmentPhase.Radiation: status = StatusEffectType.Radiation; return true;
+                case TreatmentPhase.CompoundWounds: status = StatusEffectType.CompoundWounds; return true;
+                default: status = default; return false;
+            }
+        }
+
+        /// <summary>Etichetta della fase per monitor e minigame (testi nuovi in inglese).</summary>
+        public static string PhaseLabel(TreatmentPhase phase)
+        {
+            switch (phase)
+            {
+                case TreatmentPhase.Hp: return "TRAUMA";
+                case TreatmentPhase.Poison: return "POISON";
+                case TreatmentPhase.Radiation: return "RADIATION";
+                case TreatmentPhase.CompoundWounds: return "COMPOUND WOUNDS";
+                default: return "—";
+            }
         }
 
         // ── API client della console (Rev BO-b) ────────────────────────────────
 
         /// <summary>
-        /// Chiede al server di diventare operatore. L'esito arriva come OperatorChanged
-        /// (accettata) oppure non arriva (rifiutata: la console resta sul dashboard).
+        /// Chiede al server di diventare operatore per la fase indicata (Rev BP-b). L'esito
+        /// arriva come OperatorChanged (accettata: la sessione cura QUELLA fase) oppure non
+        /// arriva (rifiutata: la console resta sul dashboard).
         /// </summary>
-        public bool RequestTreatment()
+        public bool RequestTreatment(TreatmentPhase phase)
         {
-            if (!IsSpawned || _despawning) return false;
-            RequestTreatRpc();
+            if (!IsSpawned || _despawning || phase == TreatmentPhase.None) return false;
+            RequestTreatRpc(phase);
             return true;
         }
 
@@ -355,10 +489,10 @@ namespace SpaceSurvivor.Ship
                 LogV($"[RecoveryBed] {name}: sdraio rifiutato a {sender} — letto occupato.");
                 return;
             }
-            if (!TryGetAliveHealth(sender, out PlayerHealthSystem health)) return;
-            if (health.CurrentHP >= health.MaxHP)
+            if (!TryGetAliveHealth(sender, out _)) return;
+            if (GetNextPhase(sender) == TreatmentPhase.None)
             {
-                LogV($"[RecoveryBed] {name}: sdraio rifiutato a {sender} — HP al massimo.");
+                LogV($"[RecoveryBed] {name}: sdraio rifiutato a {sender} — niente da curare a questo tier.");
                 return;
             }
 
@@ -375,7 +509,7 @@ namespace SpaceSurvivor.Ship
         }
 
         [Rpc(SendTo.Server)]
-        private void RequestTreatRpc(RpcParams rpcParams = default)
+        private void RequestTreatRpc(TreatmentPhase phase, RpcParams rpcParams = default)
         {
             if (!IsServer) return;
             ulong sender = rpcParams.Receive.SenderClientId;
@@ -386,9 +520,16 @@ namespace SpaceSurvivor.Ship
                 LogV($"[RecoveryBed] {name}: trattamento rifiutato a {sender} — {availability}.");
                 return;
             }
+            if (!IsPhaseTreatable(netPatient.Value, phase))
+            {
+                LogV($"[RecoveryBed] {name}: trattamento rifiutato a {sender} — fase {phase} non curabile adesso.");
+                return;
+            }
 
+            _sessionPhase = phase;
             netOperator.Value = sender;
             _autoHealAccumulator = 0f;
+            LogV($"[RecoveryBed] {name}: operatore {sender}, fase {phase}.");
         }
 
         [Rpc(SendTo.Server)]
@@ -396,15 +537,18 @@ namespace SpaceSurvivor.Ship
         {
             if (!IsServer) return;
             if (rpcParams.Receive.SenderClientId != netOperator.Value) return;
-            netOperator.Value = NoClient;
+            ServerClearOperator();
             _autoHealAccumulator = 0f;
         }
 
         /// <summary>
-        /// Effetto di soglia del trattamento (Q3-a). Chiamato dal minigame medico sul
-        /// client dell'operatore, eseguito sul server. Porta gli HP del paziente ad
-        /// ALMENO progressPct% di maxHP: idempotente, un duplicato non cura due volte.
-        /// Accettato solo dall'operatore corrente. A T1 cura solo HP.
+        /// Effetto di soglia del trattamento. Chiamato dal minigame medico sul client
+        /// dell'operatore a ogni soglia, eseguito sul server. L'effetto dipende dalla fase
+        /// della sessione (Rev BP-b), decisa dal server all'accettazione:
+        ///   - Hp (Q3-a): porta gli HP ad ALMENO progressPct% di maxHP;
+        ///   - fase stato (Q22-a): solo al 100%, PlayerStatusEffects.TryCure.
+        /// Idempotente in entrambi i casi (un duplicato non cura due volte). Accettato solo
+        /// dall'operatore corrente.
         /// </summary>
         [Rpc(SendTo.Server)]
         public void ApplyTreatmentThresholdRpc(float progressPct, RpcParams rpcParams = default)
@@ -417,8 +561,46 @@ namespace SpaceSurvivor.Ship
                 LogV($"[RecoveryBed] {name}: soglia {progressPct:F0}% ignorata — {sender} non è l'operatore.");
                 return;
             }
-            if (!TryGetAliveHealth(netPatient.Value, out PlayerHealthSystem patientHealth)) return;
 
+            ulong patient = netPatient.Value;
+            if (!TryGetAliveHealth(patient, out PlayerHealthSystem patientHealth)) return;
+
+            if (_sessionPhase == TreatmentPhase.Hp)
+            {
+                ServerApplyHpThreshold(patientHealth, progressPct);
+                return;
+            }
+
+            if (!TryGetStatus(_sessionPhase, out StatusEffectType status))
+            {
+                LogV($"[RecoveryBed] {name}: soglia {progressPct:F0}% ignorata — nessuna fase in corso.");
+                return;
+            }
+
+            // Q22-a: una fase stato cura solo al 100%. 50/75 cambiano solo ritmo e tacche.
+            if (progressPct < 100f)
+            {
+                LogV($"[RecoveryBed] {name}: soglia {progressPct:F0}% (fase {_sessionPhase}) — nessun effetto.");
+                return;
+            }
+
+            int tier = MedbaySystem.CurrentTierOrDefault;
+            if (config == null || !config.GetTier(tier).CuresStatuses)
+            {
+                LogV($"[RecoveryBed] {name}: T{tier} non cura gli stati — {status} resta.");
+                return;
+            }
+            if (!PlayerStatusEffects.TryGetByClientId(patient, out PlayerStatusEffects effects) || effects == null)
+                return;
+
+            bool cured = effects.TryCure(status, tier);
+            LogV($"[RecoveryBed] {name}: fase {_sessionPhase} al 100% → {(cured ? "curato" : "non curato")} " +
+                 $"(paziente {patient}, T{tier}).");
+        }
+
+        /// <summary>Fase Hp (Q3-a): HP del paziente ad ALMENO progressPct% di maxHP. SERVER.</summary>
+        private void ServerApplyHpThreshold(PlayerHealthSystem patientHealth, float progressPct)
+        {
             float target = patientHealth.MaxHP * Mathf.Clamp01(progressPct / 100f);
             float missing = target - patientHealth.CurrentHP;
             if (missing <= 0f) return;
@@ -554,7 +736,8 @@ namespace SpaceSurvivor.Ship
         // ── IInteractable ──────────────────────────────────────────────────────
 
         /// <summary>
-        /// Solo "Sdraiati": letto vuoto e giocatore locale ferito. Rev BO-b: il
+        /// Solo "Sdraiati": letto vuoto e giocatore locale con qualcosa da curare a questo
+        /// tier (Rev BP-b: HP sotto il massimo o uno stato curabile). Rev BO-b: il
         /// trattamento si avvia dalla console, quindi un letto occupato non offre prompt.
         /// Mai durante un uso in corso, nel cooldown, a tablet aperto o con il movimento
         /// già bloccato da altro (postazione, tablet, a terra).
@@ -569,7 +752,7 @@ namespace SpaceSurvivor.Ship
             if (!_localController.enabled) return false;
             if (_localTablet != null && _localTablet.IsBusy) return false;
 
-            return _localHealth.CurrentHP < _localHealth.MaxHP;
+            return GetNextPhase(_localHealth.OwnerClientId) != TreatmentPhase.None;
         }
 
         public string GetInteractionPrompt() => lieDownPrompt;
@@ -620,14 +803,23 @@ namespace SpaceSurvivor.Ship
             }
 
             string operatorLine = operatorId != NoClient
-                ? $"Operatore: client {operatorId} ({CrewRoles.ToDisplayName(PlayerCrewRole.GetRole(operatorId))})"
+                ? $"Operatore: client {operatorId} ({CrewRoles.ToDisplayName(PlayerCrewRole.GetRole(operatorId))}) · fase {_sessionPhase}"
                 : "Operatore: —";
+            string phaseLine = "Prossima fase: —";
+            if (patient != NoClient)
+            {
+                byte mask = PlayerStatusEffects.TryGetByClientId(patient, out PlayerStatusEffects fx) && fx != null
+                    ? fx.ActiveMask
+                    : (byte)0;
+                phaseLine = $"Prossima fase: {GetNextPhase(patient)} · maschera stati {mask}";
+            }
 
-            GUILayout.BeginArea(new Rect(600, 10, 340, 118));
+            GUILayout.BeginArea(new Rect(600, 10, 380, 140));
             GUILayout.BeginVertical("box");
             GUILayout.Label($"[RecoveryBed] {name} · T{MedbaySystem.CurrentTierOrDefault}");
             GUILayout.Label(patientLine);
             GUILayout.Label(operatorLine);
+            GUILayout.Label(phaseLine);
             GUILayout.Label(healLine);
             if (GUILayout.Button("Espelli paziente")) ServerReleasePatient();
             GUILayout.EndVertical();

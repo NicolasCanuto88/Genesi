@@ -3460,6 +3460,7 @@ MonoBehaviour:
   fallbackHpRestoreFraction: 0.3
   fallbackCorpsmanChannelSeconds: 2
   fallbackCorpsmanHpRestoreFraction: 0.6
+  fallbackCorpsmanImmunitySeconds: 3
   revivePrompt: '[{interact}] Rianima (tieni premuto)'
 --- !u!114 &5451365132181139867
 MonoBehaviour:

@@ -15,10 +15,10 @@ MonoBehaviour:
   type: 1
   displayName: Poison
   description: 
-  duration: 6
+  duration: 0
   effectKind: 1
-  tickInterval: 1
-  effectPerTick: 2
+  tickInterval: 4
+  effectPerTick: 1
   stackingPolicy: 2
   maxStacks: 3
   curableOnlyAtMedbayT3Plus: 0

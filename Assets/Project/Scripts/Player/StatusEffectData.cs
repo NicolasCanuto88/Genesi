@@ -50,14 +50,14 @@ public enum StackingPolicy
 /// "SpaceSurvivor/" nel menu Create.
 ///
 /// PERSISTENZA (Q7 Rev BC): duration &lt;= 0 ⇒ stato PERSISTENTE (non scade da solo).
-/// Ferite Composte usa questo: resta finche' non curato a medbay T3+ (hook placeholder).
-/// Radiazioni/Veleno usano duration &gt; 0 (scadono).
+/// Rev BP-b (Q23-a): TUTTI e tre gli stati sono persistenti. Veleno e Radiazioni
+/// restano finché non curati in Recovery Bay (T2+) o finché il giocatore non torna
+/// come clone (respawn = corpo nuovo, stati azzerati); Ferite Composte richiede T3+.
 ///
-/// SORGENTI FUORI SCOPE: gli hazard che applicano Radiazioni (ZoneManager/tempeste)
-/// e la medbay che cura Ferite Composte NON esistono ancora. Qui si costruisce solo
-/// lo stato + i seam. I valori numerici degli asset in Rev BC sono VALORI DI TEST
-/// (vedi guida Editor); i rate canonici GDD §9.6 (radiazioni -1/-5/-15 HP/min) si
-/// calibrano quando la sorgente verra' cablata.
+/// VALORI (Rev BP-b): DoT a ritmi di design — Radiazioni 1 HP ogni 12 s (≈ 5 HP/min,
+/// la "tempesta" di GDD §9.6), Veleno 1 HP ogni 4 s per stack (≈ 15 HP/min, max 3
+/// stack). Le sorgenti reali (hazard, tempeste, nemici) non esistono ancora: si
+/// ricalibrano quando verranno cablate. Oggi si applicano dall'overlay di debug.
 /// </summary>
 [CreateAssetMenu(fileName = "StatusEffectData_New",
                  menuName = "SpaceSurvivor/Status Effect Data")]

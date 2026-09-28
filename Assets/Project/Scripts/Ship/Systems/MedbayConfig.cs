@@ -9,10 +9,12 @@ namespace SpaceSurvivor.Ship
     /// di tuning o di upgrade hardcodato nel codice.
     ///
     /// CONTENUTO:
-    ///   - Tabella per tier (Q4): cosa fa il letto da solo a ciascun livello del
-    ///     modulo Medbay. Il tier corrente viene da MedbaySystem (NetworkVariable).
-    ///     A oggi solo T1 è di design (auto-cura fino al 50% degli HP massimi,
-    ///     GDD v0.9.39 Q4-a); T2–T4 sono SEGNAPOSTO uguali a T1, da definire in BP.
+    ///   - Tabella per tier (Q4): cosa fa il letto a ciascun livello del modulo Medbay.
+    ///     Il tier corrente viene da MedbaySystem (NetworkVariable).
+    ///       · Auto-cura fino al 50% degli HP massimi, 1 HP/s (GDD v0.9.39 Q4-a):
+    ///         uguale a tutti i tier (Rev BP-b: nessun miglioramento di design previsto).
+    ///       · Cura degli stati (Rev BP-b): T1 no, da T2 sì (Veleno, Radiazioni; Ferite
+    ///         Composte solo da T3, regola dello stato in PlayerStatusEffects).
     ///   - Auto-cura (Q5-a): cadenza dei tick server.
     ///   - Trattamento (minigame medico): decay e limite di tempo della sessione.
     ///   - Malus Rev U (Q6-a): moltiplicatori per un operatore NON-Corpsman. Il
@@ -21,8 +23,9 @@ namespace SpaceSurvivor.Ship
     /// NON QUI (di proposito):
     ///   - Le soglie di cura: con Q3-a la soglia N% porta gli HP almeno a N% di maxHP.
     ///     È la definizione della regola, non un valore di tuning.
-    ///   - Il costo di upgrade T2: si definisce in BP contro l'income missioni
-    ///     (800–2.000 cr lordi) e dipende dal Blocco 5 (upgrade nave).
+    ///   - Il costo degli upgrade: Rev BP-b (Q28-a) lo fissa solo nel GDD (T2 5.000 cr);
+    ///     la forma dei dati d'acquisto la decide il Blocco 5 (upgrade nave).
+    ///   - Cariche defib per tier: in DefibConfig (Rev BP-a).
     ///   - I parametri della sutura (archetipo 4): arrivano in BO-b.
     /// </summary>
     [CreateAssetMenu(menuName = "SpaceSurvivor/Medbay Config", fileName = "MedbayConfig")]
@@ -42,25 +45,32 @@ namespace SpaceSurvivor.Ship
             [Min(0f)]
             [SerializeField] private float autoHealPerSecond;
 
-            public TierData(float capFraction, float perSecond)
+            [Tooltip("Rev BP-b — il trattamento può curare gli stati di alterazione (una fase per " +
+                     "stato, cura al 100%). T1 no, T2+ sì. Ferite Composte richiede comunque T3+.")]
+            [SerializeField] private bool curesStatuses;
+
+            public TierData(float capFraction, float perSecond, bool curesStatuses)
             {
                 autoHealCapFraction = capFraction;
                 autoHealPerSecond = perSecond;
+                this.curesStatuses = curesStatuses;
             }
 
             public float AutoHealCapFraction => Mathf.Clamp01(autoHealCapFraction);
             public float AutoHealPerSecond => Mathf.Max(0f, autoHealPerSecond);
+            public bool CuresStatuses => curesStatuses;
         }
 
         [Header("Tabella per tier — indice 0 = T1 (Q4)")]
-        [Tooltip("Una riga per tier del modulo Medbay (T1..T4). T2–T4 sono SEGNAPOSTO uguali a T1 " +
-                 "finché BP non li definisce. Un tier oltre la tabella usa l'ultima riga.")]
-        [SerializeField] private TierData[] tiers =
+        [Tooltip("Una riga per tier del modulo Medbay (T1..T4). Auto-cura uguale a tutti i tier; " +
+                 "cura degli stati da T2 (Rev BP-b). Un tier oltre la tabella usa l'ultima riga.")]
+        [SerializeField]
+        private TierData[] tiers =
         {
-            new TierData(0.5f, 1f),   // T1 — di design (Q4-a)
-            new TierData(0.5f, 1f),   // T2 — segnaposto (BP)
-            new TierData(0.5f, 1f),   // T3 — segnaposto
-            new TierData(0.5f, 1f)    // T4 — segnaposto
+            new TierData(0.5f, 1f, false),   // T1 — solo HP (Q4-a)
+            new TierData(0.5f, 1f, true),    // T2 — + Veleno, Radiazioni (BP-b)
+            new TierData(0.5f, 1f, true),    // T3 — + Ferite Composte (regola dello stato)
+            new TierData(0.5f, 1f, true)     // T4 — cure multi-stato in ciclo unico: M4.5
         };
 
         [Header("Auto-cura — Q5-a")]
@@ -94,7 +104,7 @@ namespace SpaceSurvivor.Ship
         /// </summary>
         public TierData GetTier(int tier)
         {
-            if (tiers == null || tiers.Length == 0) return new TierData(0f, 0f);
+            if (tiers == null || tiers.Length == 0) return new TierData(0f, 0f, false);
             int index = Mathf.Clamp(tier - 1, 0, tiers.Length - 1);
             return tiers[index];
         }

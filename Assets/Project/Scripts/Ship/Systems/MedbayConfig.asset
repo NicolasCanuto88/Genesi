@@ -15,12 +15,16 @@ MonoBehaviour:
   tiers:
   - autoHealCapFraction: 0.5
     autoHealPerSecond: 1
+    curesStatuses: 0
   - autoHealCapFraction: 0.5
     autoHealPerSecond: 1
+    curesStatuses: 1
   - autoHealCapFraction: 0.5
     autoHealPerSecond: 1
+    curesStatuses: 1
   - autoHealCapFraction: 0.5
     autoHealPerSecond: 1
+    curesStatuses: 1
   autoHealTickInterval: 0.5
   treatmentDecayRate: 2
   treatmentTimeLimitSeconds: 60

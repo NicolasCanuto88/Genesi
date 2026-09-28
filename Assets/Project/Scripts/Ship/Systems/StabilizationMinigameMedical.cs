@@ -22,6 +22,10 @@ namespace SpaceSurvivor.Ship
     ///     ferita si cuce fino al progresso raggiunto, con tacche 50/75.
     ///   - Rev BO-d: preset più duro nello SO (Q17-b); il ruolo passa alla sutura
     ///     (ISutureSettings.OperatorIsCorpsman) per ridurre l'anello al non-Corpsman (Q18-c).
+    ///   - Rev BP-b: FASI (Q20-a). Ogni sessione cura una condizione (RecoveryBed.TreatmentPhase),
+    ///     ricevuta in Open e mostrata nel titolo. Stessa sutura per tutte le fasi (Q22-a). Il
+    ///     minigame riporta SEMPRE le soglie al letto: l'effetto per fase lo decide il server
+    ///     (Trauma: HP a ogni soglia; stato: cura solo al 100%).
     ///
     /// WIN-MODE: "repair" (default dei seam base, nessun override): il progresso sale da
     /// 0, soglie 50/75/100, al 100% la sessione si chiude con successo.
@@ -54,6 +58,7 @@ namespace SpaceSurvivor.Ship
         private RecoveryBed _bed;
         private MedbayConfig _config;
         private string _patientLabel = "PATIENT";
+        private RecoveryBed.TreatmentPhase _phase = RecoveryBed.TreatmentPhase.Hp;
         private bool _operatorIsCorpsman;
         private InputAction _lookAction;
 
@@ -63,22 +68,28 @@ namespace SpaceSurvivor.Ship
         // Testi (Rev BO-c — nuovi testi in inglese; localizzazione IT a parte).
         // I testi della base (grace, soglia, tempo scaduto) restano per ora in italiano (Q16-a).
         protected override string PromptText => "FOLLOW THE NEEDLE";
-        protected override string CompleteText => "PATIENT STABILIZED";
+        protected override string CompleteText =>
+            _phase == RecoveryBed.TreatmentPhase.Hp
+                ? "PATIENT STABILIZED"
+                : $"{RecoveryBed.PhaseLabel(_phase)} CURED";
 
         // ── API pubblica ─────────────────────────────────────────────────────────
 
         /// <summary>
         /// Apre la sessione di trattamento sul client dell'operatore. Chiamato dalla
         /// MedicalStation quando il server ha confermato questo client come operatore.
+        /// phase = la condizione accettata dal server per questa sessione (Rev BP-b).
         /// lookAction = azione Look del PlayerInput del giocatore seduto (Q6-a): muove il
         /// reticolo. Il ruolo dell'operatore viene fissato qui per tutta la sessione.
         /// </summary>
         public void Open(RecoveryBed bed, MedbayConfig config, string patientLabel,
-                         InputAction lookAction, Action onComplete, Action onInterrupted)
+                         RecoveryBed.TreatmentPhase phase, InputAction lookAction,
+                         Action onComplete, Action onInterrupted)
         {
             _bed = bed;
             _config = config;
             _patientLabel = string.IsNullOrEmpty(patientLabel) ? "PATIENT" : patientLabel;
+            _phase = phase == RecoveryBed.TreatmentPhase.None ? RecoveryBed.TreatmentPhase.Hp : phase;
             _lookAction = lookAction;
 
             var localRole = PlayerCrewRole.LocalInstance;
@@ -118,7 +129,8 @@ namespace SpaceSurvivor.Ship
 
         // ── Hook dominio ─────────────────────────────────────────────────────────
 
-        protected override string GetTargetDisplayName() => _patientLabel;
+        protected override string GetTargetDisplayName() =>
+            $"{_patientLabel} — {RecoveryBed.PhaseLabel(_phase)}";
 
         protected override float GetInitialDecayRate() =>
             _config != null ? _config.TreatmentDecayRate : 0f;
@@ -148,9 +160,10 @@ namespace SpaceSurvivor.Ship
                 return;
             }
 
-            // Server authority: la cura la applica il server (Q3-a, idempotente).
+            // Server authority: l'effetto lo decide il server secondo la fase della sessione
+            // (Trauma: HP a ogni soglia, Q3-a; stato: cura solo al 100%, Q22-a). Idempotente.
             _bed.ApplyTreatmentThresholdRpc(pct);
-            LogV($"[StabilizationMinigameMedical] soglia {pct:F0}% → ApplyTreatmentThresholdRpc");
+            LogV($"[StabilizationMinigameMedical] soglia {pct:F0}% (fase {_phase}) → ApplyTreatmentThresholdRpc");
         }
 
         // ── ISutureSettings (letti al momento dell'uso) ──────────────────────────
@@ -166,6 +179,9 @@ namespace SpaceSurvivor.Ship
         {
             // Hook dichiarato dalla base solo in Editor/Development: stesso guard qui.
             GUILayout.Label(_operatorIsCorpsman ? "Operatore: Corpsman" : "Operatore: non-Corpsman (Rev U)");
+            GUILayout.Label(_phase == RecoveryBed.TreatmentPhase.Hp
+                ? "Fase: Hp (soglie 50/75/100 → HP)"
+                : $"Fase: {_phase} (cura al 100%)");
             GUILayout.Label($"Ruolo: decay ×{GetRoleDecayMultiplier():F2} · punti ×{GetRolePointsMultiplier():F2}");
         }
 #endif

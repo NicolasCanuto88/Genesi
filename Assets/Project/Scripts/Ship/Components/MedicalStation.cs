@@ -35,6 +35,14 @@ using UnityEngine.InputSystem;
 /// della postazione: l'unico stato conteso (chi opera) è già server-authority sul letto.
 /// Due giocatori seduti insieme: uno solo diventa operatore, l'altro legge "IN PROGRESS".
 ///
+/// FASI (Rev BP-b · Q20-a / Q21-a): ogni sessione cura una condizione. La console
+/// sceglie la prossima fase con RecoveryBed.GetNextPhase (prima gli stati, poi gli HP),
+/// la mostra nella riga di stato ("PRESS {interact} TO TREAT POISON") e la chiede al
+/// server; il server la valida. Accettata, la console apre il minigame con la fase
+/// RICHIESTA (il server accetta esattamente quella o rifiuta). Finita una fase si torna
+/// al dashboard e la riga propone la successiva. Se restano solo stati che questo tier
+/// non cura, la riga lo dice (NotTreatableAtTier).
+///
 /// CANCEL A DUE TEMPI (Q11-a): con il trattamento aperto Cancel lo interrompe e torna al
 /// dashboard; senza trattamento Cancel alza il giocatore. Un solo consumatore per
 /// pressione (protocollo Rev AF/AG): il minigame non ascolta Cancel da sé.
@@ -91,7 +99,8 @@ public class MedicalStation : MonoBehaviour, IInteractable
     private const string StatusNoPatient = "NO PATIENT ON THE BED";
     private const string StatusInProgress = "TREATMENT IN PROGRESS";
     private const string StatusStable = "PATIENT STABLE";
-    private const string StatusReadyTemplate = "PATIENT READY — PRESS {interact} TO BEGIN TREATMENT";
+    private const string StatusNotTreatable = "CONDITION NOT TREATABLE AT THIS TIER";
+    private const string StatusReadyTemplate = "PATIENT READY — PRESS {interact} TO TREAT {phase}";
 
     // ===== STATO INTERNO =====
 
@@ -120,6 +129,10 @@ public class MedicalStation : MonoBehaviour, IInteractable
     // la pressione che chiude non deve riaprire).
     private float requestCooldown = 0f;
     private const float REQUEST_COOLDOWN = 0.5f;
+
+    // Rev BP-b — fase chiesta al server con l'ultima richiesta: se il server accetta,
+    // la sessione cura esattamente questa.
+    private RecoveryBed.TreatmentPhase requestedPhase = RecoveryBed.TreatmentPhase.None;
 
     private string lastStatusText;
 
@@ -364,8 +377,12 @@ public class MedicalStation : MonoBehaviour, IInteractable
         if (nm == null) return;
         if (bed.GetTreatmentAvailability(nm.LocalClientId) != RecoveryBed.TreatmentAvailability.Ready) return;
 
+        RecoveryBed.TreatmentPhase phase = bed.GetNextPhase(bed.PatientClientId);
+        if (phase == RecoveryBed.TreatmentPhase.None) return;
+
         requestCooldown = REQUEST_COOLDOWN;
-        bed.RequestTreatment();
+        requestedPhase = phase;
+        bed.RequestTreatment(phase);
     }
 
     /// <summary>
@@ -404,10 +421,16 @@ public class MedicalStation : MonoBehaviour, IInteractable
             return;
         }
 
+        // Rev BP-b: la fase accettata è quella richiesta. Ripiego (nessuna richiesta
+        // registrata): la prossima fase secondo lo stato replicato.
+        RecoveryBed.TreatmentPhase phase = requestedPhase != RecoveryBed.TreatmentPhase.None
+            ? requestedPhase
+            : bed.GetNextPhase(bed.PatientClientId);
+
         treatmentOpen = true;
         SetDashboardVisible(false);
 
-        treatmentMinigame.Open(bed, bed.Config, bed.PatientLabel, lookAction,
+        treatmentMinigame.Open(bed, bed.Config, bed.PatientLabel, phase, lookAction,
                                OnTreatmentComplete, OnTreatmentInterrupted);
     }
 
@@ -433,6 +456,7 @@ public class MedicalStation : MonoBehaviour, IInteractable
 
         treatmentOpen = false;
         requestCooldown = REQUEST_COOLDOWN;
+        requestedPhase = RecoveryBed.TreatmentPhase.None;
         lastStatusText = null;
 
         if (isUsingStation) SetDashboardVisible(true);
@@ -478,8 +502,13 @@ public class MedicalStation : MonoBehaviour, IInteractable
                 case RecoveryBed.TreatmentAvailability.PatientStable:
                     text = StatusStable;
                     break;
+                case RecoveryBed.TreatmentAvailability.NotTreatableAtTier:
+                    text = StatusNotTreatable;
+                    color = colorStatusBusy;
+                    break;
                 case RecoveryBed.TreatmentAvailability.Ready:
-                    text = FormatPrompt(StatusReadyTemplate);
+                    string phaseLabel = RecoveryBed.PhaseLabel(bed.GetNextPhase(bed.PatientClientId));
+                    text = FormatPrompt(StatusReadyTemplate.Replace("{phase}", phaseLabel));
                     color = colorStatusReady;
                     break;
             }
@@ -613,11 +642,13 @@ public class MedicalStation : MonoBehaviour, IInteractable
             ? bed.GetTreatmentAvailability(nm.LocalClientId).ToString()
             : "—";
 
-        GUILayout.BeginArea(new Rect(10, Screen.height - 110, 300, 100));
+        string nextPhase = bed != null ? bed.GetNextPhase(bed.PatientClientId).ToString() : "—";
+
+        GUILayout.BeginArea(new Rect(10, Screen.height - 130, 300, 120));
         GUILayout.BeginVertical("box");
         GUILayout.Label($"[MedicalStation] transizione={isTransitioning}");
-        GUILayout.Label($"Trattamento aperto: {treatmentOpen}");
-        GUILayout.Label($"Letto: {availability}");
+        GUILayout.Label($"Trattamento aperto: {treatmentOpen} · fase richiesta {requestedPhase}");
+        GUILayout.Label($"Letto: {availability} · prossima fase {nextPhase}");
         GUILayout.EndVertical();
         GUILayout.EndArea();
     }

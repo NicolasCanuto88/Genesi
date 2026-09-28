@@ -14,12 +14,22 @@ using UnityEngine;
 ///   possono trovare l'istanza di un membro specifico dato il suo clientId —
 ///   stesso identico pattern di PlayerHealthSystem.
 ///
-/// SCOPE DI REPLICA (Q3-a Rev BC): l'insieme degli stati attivi vive SOLO lato
-/// server (List non replicata). Il danno degli stati DoT e' comunque visibile
-/// cross-client perche' passa da PlayerHealthSystem.ApplyDamage, il cui HP e' gia'
-/// un NetworkVariable replicato. La replica dell'insieme stati (icone HUD) NON si
-/// costruisce ora: arriva con Corpsman/Downed/HUD stati, per non congelare al buio
-/// uno schema INetworkSerializable prima che esista una UI reale.
+/// SCOPE DI REPLICA (Q3-a Rev BC → Rev BP-b · Q24-a): l'insieme degli stati attivi
+/// (istanze, stack, timer) vive SOLO lato server. Da BP-b si replica una MASCHERA dei
+/// TIPI attivi (NetworkVariable&lt;byte&gt;, un bit per StatusEffectType): basta ai
+/// consumatori client reali — letto e console della Recovery Bay (quale fase curare,
+/// chi può sdraiarsi) e, in futuro, le icone stato dell'HUD. Stack e durate restano
+/// server-only finché una UI non li chiede. Il danno DoT è visibile cross-client
+/// perché passa da PlayerHealthSystem.ApplyDamage (HP replicati).
+///
+/// CURA IN MEDBAY (Rev BP-b): la regola "questo stato è curabile a questo tier" è una
+/// sola (CureAllowed): la usano TryCure (server, sull'istanza attiva) e
+/// IsCurableAtMedbay (server e client, sul catalogo). RecoveryBed aggiunge il vincolo
+/// del tier Medbay (MedbayConfig: T1 non cura stati).
+///
+/// RESPAWN (Rev BP-b): il clone è un corpo nuovo → ServerClearAll, chiamato da
+/// PlayerHealthSystem.ServerRespawn. Con Veleno e Radiazioni persistenti (Q23-a)
+/// senza pulizia il clone se li porterebbe dietro.
 ///
 /// TICK (Q1-a Rev BC): un solo Update() gated IsServer avanza i timer di tutti gli
 /// stati attivi con accumulatore per-stato. Nessuna coroutine.
@@ -32,11 +42,9 @@ using UnityEngine;
 /// FUORI SCOPE (non progettare prima della loro milestone):
 /// - Sorgenti hazard di Radiazioni → si cablano con ZoneManager/hazard chiamando
 ///   ApplyEffect(StatusEffectType.Radiation) su questa istanza via registro.
-/// - Medbay T3+ (cura Ferite Composte) → solo hook: TryCure(type, medbayTier)
-///   ritorna false per gli stati curableOnlyAtMedbayT3Plus finche' nessuno chiama
-///   con tier >= 3 (nessuna medbay esiste).
-/// - Morte &amp; Rianimazione (D27) → applichera' CompoundWounds via ApplyEffect alla
-///   rianimazione; qui lo stato e' gia' pronto.
+/// - Morte &amp; Rianimazione (D27): applica CompoundWounds alla rianimazione (attivo).
+/// - Medbay (Rev BP-b): TryCure(type, medbayTier) è chiamato da RecoveryBed al 100%
+///   di una fase stato. Ferite Composte resta curabile solo con tier &gt;= 3.
 ///
 /// ⚠️ VERIFICA EDITOR: aggiungere questo componente sullo STESSO GameObject radice
 /// del Player prefab dove sta PlayerHealthSystem; assegnare i 3 asset
@@ -60,6 +68,22 @@ public class PlayerStatusEffects : NetworkBehaviour
     }
 
     private readonly List<ActiveEffect> _active = new List<ActiveEffect>();
+
+    // ── Maschera replicata dei TIPI attivi (Rev BP-b · Q24-a) — server scrive, tutti leggono ──
+    private readonly NetworkVariable<byte> netActiveMask = new NetworkVariable<byte>(
+        0, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Server);
+
+    /// <summary>
+    /// Rev BP-b — maschera dei tipi attivi (bit = 1 &lt;&lt; (int)StatusEffectType).
+    /// Replicata: leggibile su server e client.
+    /// </summary>
+    public byte ActiveMask => netActiveMask.Value;
+
+    /// <summary>
+    /// Rev BP-b — true se almeno un'istanza del tipo è attiva. Legge la maschera
+    /// replicata: vale su server E client (a differenza di HasEffect, server-only).
+    /// </summary>
+    public bool IsActive(StatusEffectType type) => (netActiveMask.Value & MaskBit(type)) != 0;
 
     // ── Sibling HP cachato (server) ──
     private PlayerHealthSystem _health;
@@ -96,6 +120,7 @@ public class PlayerStatusEffects : NetworkBehaviour
 
         if (IsServer)
         {
+            netActiveMask.Value = 0;
             _health = GetComponent<PlayerHealthSystem>();
             if (_health == null)
                 Debug.LogError("[PlayerStatusEffects] PlayerHealthSystem mancante sullo stesso GameObject " +
@@ -123,6 +148,7 @@ public class PlayerStatusEffects : NetworkBehaviour
         if (_active.Count == 0) return;
 
         float dt = Time.deltaTime;
+        bool expired = false;
 
         for (int i = _active.Count - 1; i >= 0; i--)
         {
@@ -150,9 +176,12 @@ public class PlayerStatusEffects : NetworkBehaviour
                 {
                     LogV($"Scaduto: {e.data.type} ({e.data.displayName})");
                     _active.RemoveAt(i);
+                    expired = true;
                 }
             }
         }
+
+        if (expired) SyncMask();
     }
 
     // ── API server: applicazione ─────────────────────────────────────────────
@@ -187,59 +216,61 @@ public class PlayerStatusEffects : NetworkBehaviour
         switch (data.stackingPolicy)
         {
             case StackingPolicy.RefreshDuration:
-            {
-                ActiveEffect existing = FindActive(data.type);
-                if (existing != null)
                 {
-                    existing.remaining = data.duration;
-                    LogV($"Refresh durata: {data.type}");
+                    ActiveEffect existing = FindActive(data.type);
+                    if (existing != null)
+                    {
+                        existing.remaining = data.duration;
+                        LogV($"Refresh durata: {data.type}");
+                    }
+                    else
+                    {
+                        _active.Add(NewInstance(data, 1));
+                        LogV($"Applicato (refresh policy): {data.type}");
+                    }
+                    break;
                 }
-                else
-                {
-                    _active.Add(NewInstance(data, 1));
-                    LogV($"Applicato (refresh policy): {data.type}");
-                }
-                break;
-            }
 
             case StackingPolicy.StackIntensity:
-            {
-                ActiveEffect existing = FindActive(data.type);
-                if (existing != null)
                 {
-                    existing.stacks = Mathf.Min(existing.stacks + 1, Mathf.Max(1, data.maxStacks));
-                    existing.remaining = data.duration; // rinnova la durata
-                    LogV($"Stack intensita': {data.type} → {existing.stacks}");
+                    ActiveEffect existing = FindActive(data.type);
+                    if (existing != null)
+                    {
+                        existing.stacks = Mathf.Min(existing.stacks + 1, Mathf.Max(1, data.maxStacks));
+                        existing.remaining = data.duration; // rinnova la durata
+                        LogV($"Stack intensita': {data.type} → {existing.stacks}");
+                    }
+                    else
+                    {
+                        _active.Add(NewInstance(data, 1));
+                        LogV($"Applicato (intensity policy): {data.type} → 1");
+                    }
+                    break;
                 }
-                else
-                {
-                    _active.Add(NewInstance(data, 1));
-                    LogV($"Applicato (intensity policy): {data.type} → 1");
-                }
-                break;
-            }
 
             case StackingPolicy.StackIndependent:
-            {
-                int count = CountActive(data.type);
-                if (count < Mathf.Max(1, data.maxStacks))
                 {
-                    _active.Add(NewInstance(data, 1));
-                    LogV($"Applicato (independent policy): {data.type} → istanze {count + 1}");
-                }
-                else
-                {
-                    // Al cap: rinnova l'istanza con meno tempo residuo (comportamento definito, non silenzioso).
-                    ActiveEffect soonest = FindSoonestExpiring(data.type);
-                    if (soonest != null && !soonest.data.IsPersistent)
+                    int count = CountActive(data.type);
+                    if (count < Mathf.Max(1, data.maxStacks))
                     {
-                        soonest.remaining = data.duration;
-                        LogV($"Independent al cap ({data.maxStacks}): rinnovata l'istanza piu' vicina a scadere.");
+                        _active.Add(NewInstance(data, 1));
+                        LogV($"Applicato (independent policy): {data.type} → istanze {count + 1}");
                     }
+                    else
+                    {
+                        // Al cap: rinnova l'istanza con meno tempo residuo (comportamento definito, non silenzioso).
+                        ActiveEffect soonest = FindSoonestExpiring(data.type);
+                        if (soonest != null && !soonest.data.IsPersistent)
+                        {
+                            soonest.remaining = data.duration;
+                            LogV($"Independent al cap ({data.maxStacks}): rinnovata l'istanza piu' vicina a scadere.");
+                        }
+                    }
+                    break;
                 }
-                break;
-            }
         }
+
+        SyncMask();
     }
 
     // ── API server: rimozione / cura / query ──────────────────────────────────
@@ -250,13 +281,26 @@ public class PlayerStatusEffects : NetworkBehaviour
         if (!IsServer) return;
         int removed = _active.RemoveAll(e => e.data.type == type);
         if (removed > 0) LogV($"Rimosso: {type} (x{removed})");
+        SyncMask();
     }
 
     /// <summary>
-    /// Tentativo di cura via medbay (hook placeholder Rev BC). SERVER ONLY.
-    /// Se lo stato e' curableOnlyAtMedbayT3Plus e medbayTier &lt; 3 ⇒ false (non curato).
-    /// Nessuna medbay esiste ancora: in pratica ritorna false per Ferite Composte
-    /// finche' la Fase medbay non chiamera' con tier &gt;= 3.
+    /// Rev BP-b — rimuove TUTTI gli stati, senza vincoli di curabilità. SERVER ONLY.
+    /// Chiamato da PlayerHealthSystem.ServerRespawn: il clone è un corpo nuovo.
+    /// </summary>
+    public void ServerClearAll()
+    {
+        if (!IsServer) return;
+        if (_active.Count > 0) LogV($"Pulizia totale: {_active.Count} istanze rimosse.");
+        _active.Clear();
+        SyncMask();
+    }
+
+    /// <summary>
+    /// Cura via medbay. SERVER ONLY. Chiamato da RecoveryBed al 100% di una fase stato
+    /// (Rev BP-b). Regola unica CureAllowed: uno stato curableOnlyAtMedbayT3Plus con
+    /// medbayTier &lt; 3 ⇒ false (non curato). Il vincolo "T1 non cura stati" è del
+    /// letto (MedbayConfig), non di questo componente.
     /// </summary>
     public bool TryCure(StatusEffectType type, int medbayTier)
     {
@@ -265,7 +309,7 @@ public class PlayerStatusEffects : NetworkBehaviour
         ActiveEffect any = FindActive(type);
         if (any == null) return false;
 
-        if (any.data.curableOnlyAtMedbayT3Plus && medbayTier < 3)
+        if (!CureAllowed(any.data, medbayTier))
         {
             LogV($"Cura negata: {type} richiede medbay T3+ (tier fornito {medbayTier}).");
             return false;
@@ -275,10 +319,34 @@ public class PlayerStatusEffects : NetworkBehaviour
         return true;
     }
 
-    /// <summary>true se almeno un'istanza del tipo e' attiva. SERVER ONLY (stato non replicato).</summary>
+    /// <summary>true se almeno un'istanza del tipo e' attiva. SERVER ONLY (vedi IsActive per i client).</summary>
     public bool HasEffect(StatusEffectType type) => IsServer && FindActive(type) != null;
 
+    /// <summary>
+    /// Rev BP-b — lo stato di questo tipo sarebbe curabile da una medbay del tier
+    /// indicato? Legge il CATALOGO (serializzato sul prefab): vale su server E client.
+    /// Stessa regola di TryCure. Tipo assente dal catalogo ⇒ false.
+    /// </summary>
+    public bool IsCurableAtMedbay(StatusEffectType type, int medbayTier)
+        => CureAllowed(FindInCatalog(type), medbayTier);
+
+    /// <summary>Regola unica di curabilità per tier (Rev BC · BP-b).</summary>
+    private static bool CureAllowed(StatusEffectData data, int medbayTier)
+        => data != null && (!data.curableOnlyAtMedbayT3Plus || medbayTier >= 3);
+
     // ── Helper interni ────────────────────────────────────────────────────────
+
+    private static byte MaskBit(StatusEffectType type) => (byte)(1 << (int)type);
+
+    /// <summary>Ricalcola la maschera replicata dai tipi attivi. SERVER ONLY. Scrive solo se cambia.</summary>
+    private void SyncMask()
+    {
+        if (!IsServer) return;
+        byte mask = 0;
+        for (int i = 0; i < _active.Count; i++)
+            mask |= MaskBit(_active[i].data.type);
+        if (netActiveMask.Value != mask) netActiveMask.Value = mask;
+    }
 
     private ActiveEffect NewInstance(StatusEffectData data, int stacks) => new ActiveEffect
     {
@@ -338,9 +406,9 @@ public class PlayerStatusEffects : NetworkBehaviour
         // stessa banda verticale per OwnerClientId.
         float y = 310 + (OwnerClientId * 90f);
 
-        GUILayout.BeginArea(new Rect(570, y, 340, 150));
+        GUILayout.BeginArea(new Rect(570, y, 340, 175));
         GUILayout.BeginVertical("box");
-        GUILayout.Label($"[PlayerStatusEffects] Client {OwnerClientId} — attivi: {_active.Count}");
+        GUILayout.Label($"[PlayerStatusEffects] Client {OwnerClientId} — attivi: {_active.Count} · mask {netActiveMask.Value}");
 
         GUILayout.BeginHorizontal();
         if (GUILayout.Button("Rad")) ApplyEffect(StatusEffectType.Radiation);
@@ -351,6 +419,7 @@ public class PlayerStatusEffects : NetworkBehaviour
         GUILayout.BeginHorizontal();
         if (GUILayout.Button("- Rad")) RemoveEffect(StatusEffectType.Radiation);
         if (GUILayout.Button("- Vel")) RemoveEffect(StatusEffectType.Poison);
+        if (GUILayout.Button("- Tutti")) ServerClearAll();
         GUILayout.EndHorizontal();
 
         GUILayout.BeginHorizontal();

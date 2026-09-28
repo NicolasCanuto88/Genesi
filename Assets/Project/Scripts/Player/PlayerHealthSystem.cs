@@ -47,6 +47,10 @@ using UnityEngine;
 /// Stato SOLO server (nessun consumatore client oggi). Azzerata a terra e al respawn:
 /// il clone non la eredita.
 ///
+/// STATI AL RESPAWN (Rev BP-b): ServerRespawn azzera anche gli stati di alterazione
+/// (PlayerStatusEffects.ServerClearAll). Con Veleno e Radiazioni persistenti il clone
+/// non deve ereditarli. La rianimazione via defib invece li conserva (stesso corpo).
+///
 /// CURA (Rev BO-a): ApplyHeal è il choke point server-only VERSO L'ALTO, speculare
 /// ad ApplyDamage. Lo usano la Recovery Bay (auto-cura e soglie del trattamento) e,
 /// in futuro, Medikit (BQ) e bomba curativa. Cura SOLO un giocatore Alive: un
@@ -346,6 +350,10 @@ public class PlayerHealthSystem : NetworkBehaviour
         netCurrentHP.Value = maxHP;
         netLifeState.Value = LifeState.Alive;
         immuneUntil = 0f;
+
+        // Rev BP-b: nessuno stato di alterazione sul clone (Veleno/Radiazioni sono persistenti).
+        if (statusEffects != null)
+            statusEffects.ServerClearAll();
     }
 
     /// <summary>

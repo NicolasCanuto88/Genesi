@@ -7921,7 +7921,7 @@ MonoBehaviour:
   lieDownPrompt: Sdraiati sul lettino
   requestCooldown: 0.5
   exitCooldown: 1
-  showDebugUI: 0
+  showDebugUI: 1
   logVerbose: 0
 --- !u!1 &144250550
 GameObject:
@@ -21351,7 +21351,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::SpaceSurvivor.Ship.MedbaySystem
   ShowTopMostFoldoutHeaderGroup: 1
   debugStartTier: 1
-  showDebugUI: 0
+  showDebugUI: 1
 --- !u!1 &363068783
 GameObject:
   m_ObjectHideFlags: 0
@@ -356222,7 +356222,7 @@ MonoBehaviour:
   snapTransitionSpeed: 5
   cameraTransitionSpeed: 8
   playerInputReference: {fileID: 0}
-  showDebugUI: 0
+  showDebugUI: 1
 --- !u!65 &4630247312995441663
 BoxCollider:
   m_ObjectHideFlags: 0

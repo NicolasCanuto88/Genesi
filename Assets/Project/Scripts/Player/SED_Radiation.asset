@@ -15,9 +15,9 @@ MonoBehaviour:
   type: 0
   displayName: Radiation
   description: 
-  duration: 8
+  duration: 0
   effectKind: 1
-  tickInterval: 1
+  tickInterval: 12
   effectPerTick: 1
   stackingPolicy: 0
   maxStacks: 1
