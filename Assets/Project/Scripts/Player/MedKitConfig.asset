@@ -1,0 +1,26 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: d1b0cdb47eed291469e1a72b3e33765e, type: 3}
+  m_Name: MedKitConfig
+  m_EditorClassIdentifier: Assembly-CSharp::MedKitConfig
+  capMedkitBase: 2
+  capMedkitAdvanced: 1
+  capAntidote: 1
+  baseHealAmount: 25
+  advancedHealAmount: 50
+  defaultChannelSeconds: 3
+  defaultEffectMultiplier: 0.6
+  corpsmanChannelSeconds: 1.5
+  corpsmanEffectMultiplier: 1
+  targetRange: 2.5
+  maxMoveDistance: 1
+  feedbackHoldSeconds: 2

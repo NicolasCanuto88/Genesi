@@ -1,3 +1,4 @@
+using SpaceSurvivor.Ship;
 using TMPro;
 using UnityEngine;
 
@@ -13,12 +14,14 @@ using UnityEngine;
 /// l'evento statico OnLocalHealthChanged — stesso identico pattern già usato
 /// per i crediti personali (LocalCharacterProfile.OnPersonalCreditsChanged).
 ///
+/// KIT MEDICO (Rev BQ · Q30-a): la riga che era lo stub dell'inventario personale
+/// mostra il contenuto del kit medico personale (PlayerMedKit.LocalInstance), aggiornato
+/// all'apertura e in tempo reale via l'evento statico OnLocalKitChanged. Il kit NON è
+/// l'inventario personale dei collezionabili (zaino + stiva, non ancora progettato):
+/// quando esisterà, questa riga ne diventerà una parte. Testo di gioco in inglese.
+///
 /// DATI ANCORA STUB (da agganciare quando i sistemi corrispondenti esisteranno):
-///   - Inventario personale → dipende da: sistema di inventario personale per-player
-///                             (concettualmente diverso da InventorySystem, che è
-///                             lo stock CONDIVISO di materiali di riparazione della
-///                             nave — Monitor 3. Non ancora progettato.)
-///   - Skill tree           → dipende da: Progressione Personaggio, GDD §10 (da completare)
+///   - Skill tree → dipende da: Progressione Personaggio, GDD §10 (da completare)
 ///
 /// ⚠️ Se PlayerHealthSystem.LocalInstance è null al momento di Open() (Player
 /// locale non ancora spawnato in rete, o componente non ancora aggiunto al
@@ -39,8 +42,12 @@ public class ProfileTabUI : MonoBehaviour, IDashboardPanel
              "per non perdere il riferimento UI già assegnato sul prefab del Tablet.")]
     [SerializeField] private TextMeshProUGUI hpStubLabel;
 
-    [Header("Placeholder — finché i sistemi corrispondenti non esistono")]
+    [Header("Kit medico personale (Rev BQ)")]
+    [Tooltip("Stesso campo già presente nell'Inspector (ex stub dell'inventario personale) — non " +
+             "rinominato per non perdere il riferimento UI già assegnato sul prefab del Tablet.")]
     [SerializeField] private TextMeshProUGUI inventoryStubLabel;
+
+    [Header("Placeholder — finché i sistemi corrispondenti non esistono")]
     [SerializeField] private TextMeshProUGUI skillStubLabel;
 
     [Header("Status Colors (HP) — default già sensati, nessuna modifica Inspector richiesta")]
@@ -53,12 +60,14 @@ public class ProfileTabUI : MonoBehaviour, IDashboardPanel
         RefreshStaticInfo();
         LocalCharacterProfile.OnPersonalCreditsChanged += OnCreditsChanged;
         PlayerHealthSystem.OnLocalHealthChanged += OnHealthChanged;
+        PlayerMedKit.OnLocalKitChanged += RefreshMedKit;
     }
 
     public void Close()
     {
         LocalCharacterProfile.OnPersonalCreditsChanged -= OnCreditsChanged;
         PlayerHealthSystem.OnLocalHealthChanged -= OnHealthChanged;
+        PlayerMedKit.OnLocalKitChanged -= RefreshMedKit;
     }
 
     private void RefreshStaticInfo()
@@ -79,11 +88,28 @@ public class ProfileTabUI : MonoBehaviour, IDashboardPanel
         else if (hpStubLabel != null)
             hpStubLabel.text = "—"; // PlayerHealthSystem locale non ancora spawnato
 
-        if (inventoryStubLabel != null)
-            inventoryStubLabel.text = "Inventario personale — sistema non ancora implementato";
+        RefreshMedKit();
 
         if (skillStubLabel != null)
             skillStubLabel.text = "Skill tree — da definire (GDD §10)";
+    }
+
+    /// <summary>Rev BQ — contenuto del kit medico personale (conteggio / capienza per tipo).</summary>
+    private void RefreshMedKit()
+    {
+        if (inventoryStubLabel == null) return;
+
+        PlayerMedKit kit = PlayerMedKit.LocalInstance;
+        if (kit == null)
+        {
+            inventoryStubLabel.text = "—"; // kit locale non ancora spawnato
+            return;
+        }
+
+        inventoryStubLabel.text =
+            $"Medical kit — Medkit {kit.GetCount(ItemType.MedkitBase)}/{kit.GetCap(ItemType.MedkitBase)}" +
+            $" · Advanced {kit.GetCount(ItemType.MedkitAdvanced)}/{kit.GetCap(ItemType.MedkitAdvanced)}" +
+            $" · Antidote {kit.GetCount(ItemType.Antidote)}/{kit.GetCap(ItemType.Antidote)}";
     }
 
     private void OnCreditsChanged(int newAmount)

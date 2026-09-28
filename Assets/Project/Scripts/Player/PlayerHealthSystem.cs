@@ -51,9 +51,13 @@ using UnityEngine;
 /// (PlayerStatusEffects.ServerClearAll). Con Veleno e Radiazioni persistenti il clone
 /// non deve ereditarli. La rianimazione via defib invece li conserva (stesso corpo).
 ///
+/// KIT AL RESPAWN (Rev BQ · Q30-a): ServerRespawn svuota anche il kit medico personale
+/// (PlayerMedKit.ServerClearKit): il clone nasce senza kit. La rianimazione lo conserva.
+///
 /// CURA (Rev BO-a): ApplyHeal è il choke point server-only VERSO L'ALTO, speculare
-/// ad ApplyDamage. Lo usano la Recovery Bay (auto-cura e soglie del trattamento) e,
-/// in futuro, Medikit (BQ) e bomba curativa. Cura SOLO un giocatore Alive: un
+/// ad ApplyDamage. Lo usano la Recovery Bay (auto-cura e soglie del trattamento), il
+/// medikit in campo (PlayerMedKit, Rev BQ) e, in futuro, la bomba curativa. Cura SOLO un
+/// giocatore Alive: un
 /// Downed si rialza col defibrillatore, non con la cura. Le due eccezioni restano
 /// le transizioni della macchina a stati (ServerTryRevive / ServerRespawn), che
 /// impostano HP come parte del cambio di stato.
@@ -129,6 +133,7 @@ public class PlayerHealthSystem : NetworkBehaviour
 
     // ── Riferimenti sibling (cachati a spawn) ──
     private PlayerStatusEffects statusEffects;   // server: per applicare CompoundWounds
+    private PlayerMedKit medKit;                  // server: kit medico svuotato al respawn (Rev BQ)
     private PlayerController playerController;    // owner: per congelare il movimento
 
     // ── Timer server ──
@@ -166,6 +171,12 @@ public class PlayerHealthSystem : NetworkBehaviour
                 Debug.LogError("[PlayerHealthSystem] PlayerStatusEffects mancante sullo stesso GameObject. " +
                                "Le Ferite Composte non potranno essere applicate alla rianimazione (D27). " +
                                "Aggiungere PlayerStatusEffects sul root del Player prefab.");
+
+            medKit = GetComponent<PlayerMedKit>();
+            if (medKit == null)
+                Debug.LogError("[PlayerHealthSystem] PlayerMedKit mancante sullo stesso GameObject. " +
+                               "Il clone non potrà ripartire con il kit vuoto (Rev BQ). " +
+                               "Aggiungere PlayerMedKit sul root del Player prefab.");
         }
 
         activeByClientId[OwnerClientId] = this;
@@ -354,6 +365,10 @@ public class PlayerHealthSystem : NetworkBehaviour
         // Rev BP-b: nessuno stato di alterazione sul clone (Veleno/Radiazioni sono persistenti).
         if (statusEffects != null)
             statusEffects.ServerClearAll();
+
+        // Rev BQ: il clone nasce senza kit medico personale (Q30-a).
+        if (medKit != null)
+            medKit.ServerClearKit();
     }
 
     /// <summary>

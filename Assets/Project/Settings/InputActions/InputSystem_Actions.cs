@@ -253,6 +253,24 @@ public partial class @InputSystem_Actions: IInputActionCollection2, IDisposable
                     ""processors"": """",
                     ""interactions"": """",
                     ""initialStateCheck"": true
+                },
+                {
+                    ""name"": ""UseMedkit"",
+                    ""type"": ""Button"",
+                    ""id"": ""ae82ec18-2747-4fee-bc8a-4be181de4e30"",
+                    ""expectedControlType"": """",
+                    ""processors"": """",
+                    ""interactions"": """",
+                    ""initialStateCheck"": false
+                },
+                {
+                    ""name"": ""UseAntidote"",
+                    ""type"": ""Button"",
+                    ""id"": ""b578caca-1530-4e36-827b-73b6946e661e"",
+                    ""expectedControlType"": """",
+                    ""processors"": """",
+                    ""interactions"": """",
+                    ""initialStateCheck"": false
                 }
             ],
             ""bindings"": [
@@ -871,6 +889,50 @@ public partial class @InputSystem_Actions: IInputActionCollection2, IDisposable
                     ""action"": ""Throttle"",
                     ""isComposite"": false,
                     ""isPartOfComposite"": true
+                },
+                {
+                    ""name"": """",
+                    ""id"": ""fd3a9d50-31a7-4e4d-b12e-bd75910b0a40"",
+                    ""path"": ""<Keyboard>/h"",
+                    ""interactions"": """",
+                    ""processors"": """",
+                    ""groups"": """",
+                    ""action"": ""UseMedkit"",
+                    ""isComposite"": false,
+                    ""isPartOfComposite"": false
+                },
+                {
+                    ""name"": """",
+                    ""id"": ""9183406c-3889-4b76-9f4c-c15cd340cc9c"",
+                    ""path"": ""<Gamepad>/dpad/down"",
+                    ""interactions"": """",
+                    ""processors"": """",
+                    ""groups"": """",
+                    ""action"": ""UseMedkit"",
+                    ""isComposite"": false,
+                    ""isPartOfComposite"": false
+                },
+                {
+                    ""name"": """",
+                    ""id"": ""d0507f00-d3f6-4bbc-9dcb-ff5d2ee626e7"",
+                    ""path"": ""<Keyboard>/j"",
+                    ""interactions"": """",
+                    ""processors"": """",
+                    ""groups"": """",
+                    ""action"": ""UseAntidote"",
+                    ""isComposite"": false,
+                    ""isPartOfComposite"": false
+                },
+                {
+                    ""name"": """",
+                    ""id"": ""0d04764c-350a-4a35-97e1-b7b95ad6a66b"",
+                    ""path"": ""<Gamepad>/dpad/up"",
+                    ""interactions"": """",
+                    ""processors"": """",
+                    ""groups"": """",
+                    ""action"": ""UseAntidote"",
+                    ""isComposite"": false,
+                    ""isPartOfComposite"": false
                 }
             ]
         },
@@ -1951,6 +2013,8 @@ public partial class @InputSystem_Actions: IInputActionCollection2, IDisposable
         m_Player_RepairKey_3 = m_Player.FindAction("RepairKey_3", throwIfNotFound: true);
         m_Player_ToggleTablet = m_Player.FindAction("ToggleTablet", throwIfNotFound: true);
         m_Player_Throttle = m_Player.FindAction("Throttle", throwIfNotFound: true);
+        m_Player_UseMedkit = m_Player.FindAction("UseMedkit", throwIfNotFound: true);
+        m_Player_UseAntidote = m_Player.FindAction("UseAntidote", throwIfNotFound: true);
         // UI
         m_UI = asset.FindActionMap("UI", throwIfNotFound: true);
         m_UI_Navigate = m_UI.FindAction("Navigate", throwIfNotFound: true);
@@ -2081,6 +2145,8 @@ public partial class @InputSystem_Actions: IInputActionCollection2, IDisposable
     private readonly InputAction m_Player_RepairKey_3;
     private readonly InputAction m_Player_ToggleTablet;
     private readonly InputAction m_Player_Throttle;
+    private readonly InputAction m_Player_UseMedkit;
+    private readonly InputAction m_Player_UseAntidote;
     /// <summary>
     /// Provides access to input actions defined in input action map "Player".
     /// </summary>
@@ -2165,6 +2231,14 @@ public partial class @InputSystem_Actions: IInputActionCollection2, IDisposable
         /// </summary>
         public InputAction @Throttle => m_Wrapper.m_Player_Throttle;
         /// <summary>
+        /// Provides access to the underlying input action "Player/UseMedkit".
+        /// </summary>
+        public InputAction @UseMedkit => m_Wrapper.m_Player_UseMedkit;
+        /// <summary>
+        /// Provides access to the underlying input action "Player/UseAntidote".
+        /// </summary>
+        public InputAction @UseAntidote => m_Wrapper.m_Player_UseAntidote;
+        /// <summary>
         /// Provides access to the underlying input action map instance.
         /// </summary>
         public InputActionMap Get() { return m_Wrapper.m_Player; }
@@ -2244,6 +2318,12 @@ public partial class @InputSystem_Actions: IInputActionCollection2, IDisposable
             @Throttle.started += instance.OnThrottle;
             @Throttle.performed += instance.OnThrottle;
             @Throttle.canceled += instance.OnThrottle;
+            @UseMedkit.started += instance.OnUseMedkit;
+            @UseMedkit.performed += instance.OnUseMedkit;
+            @UseMedkit.canceled += instance.OnUseMedkit;
+            @UseAntidote.started += instance.OnUseAntidote;
+            @UseAntidote.performed += instance.OnUseAntidote;
+            @UseAntidote.canceled += instance.OnUseAntidote;
         }
 
         /// <summary>
@@ -2309,6 +2389,12 @@ public partial class @InputSystem_Actions: IInputActionCollection2, IDisposable
             @Throttle.started -= instance.OnThrottle;
             @Throttle.performed -= instance.OnThrottle;
             @Throttle.canceled -= instance.OnThrottle;
+            @UseMedkit.started -= instance.OnUseMedkit;
+            @UseMedkit.performed -= instance.OnUseMedkit;
+            @UseMedkit.canceled -= instance.OnUseMedkit;
+            @UseAntidote.started -= instance.OnUseAntidote;
+            @UseAntidote.performed -= instance.OnUseAntidote;
+            @UseAntidote.canceled -= instance.OnUseAntidote;
         }
 
         /// <summary>
@@ -3100,6 +3186,20 @@ public partial class @InputSystem_Actions: IInputActionCollection2, IDisposable
         /// <seealso cref="UnityEngine.InputSystem.InputAction.performed" />
         /// <seealso cref="UnityEngine.InputSystem.InputAction.canceled" />
         void OnThrottle(InputAction.CallbackContext context);
+        /// <summary>
+        /// Method invoked when associated input action "UseMedkit" is either <see cref="UnityEngine.InputSystem.InputAction.started" />, <see cref="UnityEngine.InputSystem.InputAction.performed" /> or <see cref="UnityEngine.InputSystem.InputAction.canceled" />.
+        /// </summary>
+        /// <seealso cref="UnityEngine.InputSystem.InputAction.started" />
+        /// <seealso cref="UnityEngine.InputSystem.InputAction.performed" />
+        /// <seealso cref="UnityEngine.InputSystem.InputAction.canceled" />
+        void OnUseMedkit(InputAction.CallbackContext context);
+        /// <summary>
+        /// Method invoked when associated input action "UseAntidote" is either <see cref="UnityEngine.InputSystem.InputAction.started" />, <see cref="UnityEngine.InputSystem.InputAction.performed" /> or <see cref="UnityEngine.InputSystem.InputAction.canceled" />.
+        /// </summary>
+        /// <seealso cref="UnityEngine.InputSystem.InputAction.started" />
+        /// <seealso cref="UnityEngine.InputSystem.InputAction.performed" />
+        /// <seealso cref="UnityEngine.InputSystem.InputAction.canceled" />
+        void OnUseAntidote(InputAction.CallbackContext context);
     }
     /// <summary>
     /// Interface to implement callback methods for all input action callbacks associated with input actions defined by "UI" which allows adding and removing callbacks.
