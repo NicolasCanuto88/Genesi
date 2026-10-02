@@ -12,8 +12,9 @@ using UnityEngine.InputSystem;
 /// moltiplicatore viene dalla maschera replicata degli stati, quindi è già noto qui senza
 /// RPC. Le scale non sono influenzate (Ladder gestisce la salita).
 ///
-/// STAMINA (Rev BR): RefillStamina riporta la stamina al massimo. La chiamerà l'Adrenaline
-/// (BR-b) sul client proprietario, dove vive la stamina.
+/// STAMINA (Rev BR): RefillStamina riporta la stamina al massimo. La chiama l'Adrenaline
+/// (PlayerMedKit, Rev BR-b) sul client proprietario, dove vive la stamina. MaxStamina serve al
+/// kit per non consumare un'Adrenaline con HP e stamina già pieni.
 /// </summary>
 [RequireComponent(typeof(CharacterController))]
 [RequireComponent(typeof(PlayerInput))]
@@ -65,6 +66,7 @@ public class PlayerController : MonoBehaviour
 
     // Properties
     public float CurrentStamina => currentStamina;
+    public float MaxStamina => maxStamina;   // Rev BR-b: blocco preventivo dell'Adrenaline (Q47-a)
     public bool IsSprinting => sprintPressed && currentStamina > 0 && moveInput.magnitude > 0.1f;
     public bool IsCrouching => crouchToggled;
     public Transform CameraTransform => cameraTransform;

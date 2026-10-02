@@ -36053,6 +36053,9 @@ MonoBehaviour:
   startMedkitAdvanced: 2
   startO2EmergencyTanks: 3
   startAntidote: 2
+  startAdrenaline: 4
+  startHazmatInjection: 2
+  startCombatStim: 3
   showDebugUI: 0
 --- !u!4 &591589294
 Transform:

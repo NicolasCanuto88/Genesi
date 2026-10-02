@@ -53,6 +53,25 @@ using UnityEngine.InputSystem;
 /// FEEDBACK (Q36-a): una riga di testo sotto il mirino (feedbackText, solo owner):
 /// avanzamento durante il canale, esito per FeedbackHoldSeconds dopo. Testi in inglese.
 ///
+/// DROGHE (Rev BR-b · workshop StatModifier Q41–Q50, tutte "a"): tre contatori replicati in
+/// più (Adrenaline, Hazmat, Combat Stim), stessa capienza da SO e stesso armadietto.
+/// - INPUT: "UseDrug" (K / D-pad destra) usa la droga SELEZIONATA; "CycleDrug" (L / D-pad
+///   sinistra) passa alla successiva tra quelle PRESENTI nel kit, in ordine fisso
+///   Adrenaline → Hazmat → Combat Stim (Q46-a). La selezione è solo locale (owner): al server
+///   arriva il tipo nell'RPC d'uso, come per i medikit.
+/// - BERSAGLIO: Adrenaline e Hazmat solo su se stessi (auto-somministrate); Combat Stim sul
+///   compagno sotto il mirino, altrimenti su se stessi (regola Q31-a).
+/// - CANALE: lo stesso profilo di ruolo dei medikit (Corpsman 1,5 s, altri 3 s).
+/// - EFFETTI (server): Adrenaline +HP da SO uguali per tutti e stamina piena (RPC d'esito al
+///   proprietario, dove vive la stamina); Hazmat e Combat Stim applicano gli stati buff di
+///   PlayerStatusEffects (valori negli asset SED_*). La Combat Stim di un non-Corpsman dura
+///   il 60% (moltiplicatore del profilo, Q43-a).
+/// - CONSUMO (Q47-a): sempre, a canale completo con bersaglio vivo. Unico blocco preventivo:
+///   Adrenaline con HP e stamina già pieni (lo sa il client).
+/// - TIER (Q48-a): sotto Medbay T2 l'armadietto non versa Combat Stim (capienza di
+///   rifornimento 0, il kit risulta pieno senza) e lo dice nell'esito. Le stim già nel kit
+///   restano usabili.
+///
 /// AUTORITÀ: le RPC verso il server accettano solo il proprietario del kit
 /// (SenderClientId == OwnerClientId). Il server rilegge tutto: item disponibile,
 /// bersaglio vivo, qualcosa da curare, profilo di ruolo (mai dichiarato dal client).
@@ -92,6 +111,33 @@ public class PlayerMedKit : NetworkBehaviour
     private readonly NetworkVariable<byte> netAntidote = new NetworkVariable<byte>(
         0, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Server);
 
+    // Rev BR-b — droghe
+    private readonly NetworkVariable<byte> netAdrenaline = new NetworkVariable<byte>(
+        0, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Server);
+    private readonly NetworkVariable<byte> netHazmat = new NetworkVariable<byte>(
+        0, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Server);
+    private readonly NetworkVariable<byte> netCombatStim = new NetworkVariable<byte>(
+        0, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Server);
+
+    /// <summary>Tutti i tipi che il kit può contenere (rifornimento, pienezza, debug).</summary>
+    private static readonly ItemType[] KitTypes =
+    {
+        ItemType.MedkitBase,
+        ItemType.MedkitAdvanced,
+        ItemType.Antidote,
+        ItemType.Adrenaline,
+        ItemType.HazmatInjection,
+        ItemType.CombatStim
+    };
+
+    /// <summary>Rev BR-b (Q46-a) — droghe nell'ordine fisso del ciclo di selezione.</summary>
+    private static readonly ItemType[] DrugOrder =
+    {
+        ItemType.Adrenaline,
+        ItemType.HazmatInjection,
+        ItemType.CombatStim
+    };
+
     /// <summary>
     /// Stati curati dall'antidoto (Q34-a). Decisione di design, non tuning: le Ferite
     /// Composte NON ci sono e non devono entrarci (restano alla Recovery Bay T3).
@@ -112,7 +158,10 @@ public class PlayerMedKit : NetworkBehaviour
     public static bool TryGetByClientId(ulong clientId, out PlayerMedKit instance)
         => activeByClientId.TryGetValue(clientId, out instance);
 
-    /// <summary>Fired SOLO sul client proprietario quando il contenuto del proprio kit cambia.</summary>
+    /// <summary>
+    /// Fired SOLO sul client proprietario quando il contenuto del proprio kit cambia, o quando
+    /// cambia la droga selezionata (Rev BR-b).
+    /// </summary>
     public static event Action OnLocalKitChanged;
 
     // ── Esiti (server → owner) ──
@@ -123,7 +172,8 @@ public class PlayerMedKit : NetworkBehaviour
         NothingToTreat = 2,
         NoItem = 3,
         TargetInvalid = 4,
-        Failed = 5
+        Failed = 5,
+        DrugApplied = 6   // Rev BR-b
     }
 
     private enum RestockResult : byte
@@ -137,7 +187,8 @@ public class PlayerMedKit : NetworkBehaviour
     private enum UseKind : byte
     {
         Medkit = 0,
-        Antidote = 1
+        Antidote = 1,
+        Drug = 2   // Rev BR-b: la droga selezionata
     }
 
     // ── Riferimenti sibling ──
@@ -157,6 +208,9 @@ public class PlayerMedKit : NetworkBehaviour
     private Vector3 channelStartPosition;
     private string channelLabel = string.Empty;
 
+    // ── Selezione droga (solo owner, Rev BR-b · Q46-a) ──
+    private ItemType selectedDrug = ItemType.Adrenaline;
+
     // ── Feedback (solo owner) ──
     private float feedbackTimer;
 
@@ -169,21 +223,63 @@ public class PlayerMedKit : NetworkBehaviour
     {
         switch (type)
         {
-            case ItemType.MedkitBase:     return netMedkitBase.Value;
+            case ItemType.MedkitBase: return netMedkitBase.Value;
             case ItemType.MedkitAdvanced: return netMedkitAdvanced.Value;
-            case ItemType.Antidote:       return netAntidote.Value;
-            default:                      return 0;
+            case ItemType.Antidote: return netAntidote.Value;
+            case ItemType.Adrenaline: return netAdrenaline.Value;
+            case ItemType.HazmatInjection: return netHazmat.Value;
+            case ItemType.CombatStim: return netCombatStim.Value;
+            default: return 0;
         }
     }
 
     /// <summary>Capienza del kit per il tipo indicato (da MedKitConfig). Senza config → 0.</summary>
     public int GetCap(ItemType type) => config != null ? config.CapFor(type) : 0;
 
-    /// <summary>true se nessun tipo del kit ha spazio libero (anche senza config).</summary>
-    public bool IsFull =>
-        GetCount(ItemType.MedkitBase) >= GetCap(ItemType.MedkitBase) &&
-        GetCount(ItemType.MedkitAdvanced) >= GetCap(ItemType.MedkitAdvanced) &&
-        GetCount(ItemType.Antidote) >= GetCap(ItemType.Antidote);
+    /// <summary>
+    /// Rev BR-b (Q48-a) — capienza ai fini del RIFORNIMENTO: 0 se il tier della Medbay è sotto il
+    /// minimo del tipo (Combat Stim sotto T2). Vale su server e client (tier replicato).
+    /// </summary>
+    public int GetRestockCap(ItemType type)
+    {
+        if (config == null) return 0;
+        return MedbaySystem.CurrentTierOrDefault >= config.MinMedbayTierFor(type) ? config.CapFor(type) : 0;
+    }
+
+    /// <summary>
+    /// true se nessun tipo del kit può ricevere altro dall'armadietto (anche senza config).
+    /// Rev BR-b: considera la capienza di rifornimento, quindi sotto T2 il kit è pieno senza stim.
+    /// </summary>
+    public bool IsFull
+    {
+        get
+        {
+            for (int i = 0; i < KitTypes.Length; i++)
+                if (GetCount(KitTypes[i]) < GetRestockCap(KitTypes[i])) return false;
+            return true;
+        }
+    }
+
+    /// <summary>
+    /// Rev BR-b — droga selezionata dal proprietario (solo owner). Se nel kit non c'è nessuna
+    /// droga, HasSelectedDrug è false.
+    /// </summary>
+    public ItemType SelectedDrug => selectedDrug;
+
+    /// <summary>Rev BR-b — true se la droga selezionata è presente nel kit (solo owner).</summary>
+    public bool HasSelectedDrug => GetCount(selectedDrug) > 0;
+
+    /// <summary>Rev BR-b — nome di gioco della droga (testi in inglese).</summary>
+    public static string DrugLabel(ItemType type)
+    {
+        switch (type)
+        {
+            case ItemType.Adrenaline: return "Adrenaline";
+            case ItemType.HazmatInjection: return "Hazmat";
+            case ItemType.CombatStim: return "Combat Stim";
+            default: return type.ToString();
+        }
+    }
 
     // ── Lifecycle NGO ──────────────────────────────────────────────────────────
 
@@ -195,6 +291,9 @@ public class PlayerMedKit : NetworkBehaviour
         netMedkitBase.OnValueChanged += HandleKitChanged;
         netMedkitAdvanced.OnValueChanged += HandleKitChanged;
         netAntidote.OnValueChanged += HandleKitChanged;
+        netAdrenaline.OnValueChanged += HandleKitChanged;
+        netHazmat.OnValueChanged += HandleKitChanged;
+        netCombatStim.OnValueChanged += HandleKitChanged;
 
         if (IsServer)
         {
@@ -202,6 +301,9 @@ public class PlayerMedKit : NetworkBehaviour
             netMedkitBase.Value = 0;
             netMedkitAdvanced.Value = 0;
             netAntidote.Value = 0;
+            netAdrenaline.Value = 0;
+            netHazmat.Value = 0;
+            netCombatStim.Value = 0;
 
             if (config == null)
                 Debug.LogError("[PlayerMedKit] MedKitConfig non assegnato sul Player prefab: il kit medico " +
@@ -234,6 +336,9 @@ public class PlayerMedKit : NetworkBehaviour
         netMedkitBase.OnValueChanged -= HandleKitChanged;
         netMedkitAdvanced.OnValueChanged -= HandleKitChanged;
         netAntidote.OnValueChanged -= HandleKitChanged;
+        netAdrenaline.OnValueChanged -= HandleKitChanged;
+        netHazmat.OnValueChanged -= HandleKitChanged;
+        netCombatStim.OnValueChanged -= HandleKitChanged;
 
         if (activeByClientId.TryGetValue(OwnerClientId, out var registered) && registered == this)
             activeByClientId.Remove(OwnerClientId);
@@ -247,8 +352,13 @@ public class PlayerMedKit : NetworkBehaviour
 
     private void HandleKitChanged(byte previous, byte current)
     {
-        if (IsOwner)
-            OnLocalKitChanged?.Invoke();
+        if (!IsOwner) return;
+
+        // Rev BR-b (Q46-a): se la droga selezionata è finita, passa alla successiva presente.
+        if (GetCount(selectedDrug) <= 0)
+            SelectNextDrug(selectedDrug, includeCurrent: false);
+
+        OnLocalKitChanged?.Invoke();
     }
 
     // ── Input (SendMessages di PlayerInput — Q35-a) ────────────────────────────
@@ -267,6 +377,74 @@ public class PlayerMedKit : NetworkBehaviour
             TryBeginUse(UseKind.Antidote);
     }
 
+    /// <summary>Rev BR-b — azione "UseDrug" (K / D-pad destra): usa la droga selezionata.</summary>
+    public void OnUseDrug(InputValue value)
+    {
+        if (value.isPressed)
+            TryBeginUse(UseKind.Drug);
+    }
+
+    /// <summary>
+    /// Rev BR-b — azione "CycleDrug" (L / D-pad sinistra): seleziona la droga successiva tra
+    /// quelle presenti nel kit (Q46-a). Ignorata negli stessi casi dell'uso (postazione,
+    /// tablet, letto, a terra) e durante un canale.
+    /// </summary>
+    public void OnCycleDrug(InputValue value)
+    {
+        if (!value.isPressed) return;
+        if (!IsOwner || !IsSpawned) return;
+        if (channeling || !CanUseLocally()) return;
+
+        if (!SelectNextDrug(selectedDrug, includeCurrent: false))
+        {
+            SetFeedback("No drugs in kit — restock at the medical locker", HoldSeconds);
+            return;
+        }
+
+        SetFeedback($"Drug: {DrugLabel(selectedDrug)} ({GetCount(selectedDrug)})", HoldSeconds);
+        OnLocalKitChanged?.Invoke();
+    }
+
+    /// <summary>
+    /// Rev BR-b — seleziona la prima droga presente nel kit a partire da quella DOPO "from"
+    /// (o da "from" stessa se includeCurrent), nell'ordine DrugOrder, ciclando. Ritorna false
+    /// se il kit non contiene droghe (la selezione resta invariata).
+    /// </summary>
+    private bool SelectNextDrug(ItemType from, bool includeCurrent)
+    {
+        int start = Array.IndexOf(DrugOrder, from);
+        if (start < 0) start = 0;
+
+        for (int step = includeCurrent ? 0 : 1; step <= DrugOrder.Length; step++)
+        {
+            ItemType candidate = DrugOrder[(start + step) % DrugOrder.Length];
+            if (GetCount(candidate) > 0)
+            {
+                selectedDrug = candidate;
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /// <summary>Rev BR-b — Adrenaline e Hazmat sono auto-somministrate: sempre su se stessi.</summary>
+    private static bool IsSelfOnly(ItemType drug)
+        => drug == ItemType.Adrenaline || drug == ItemType.HazmatInjection;
+
+    /// <summary>
+    /// Rev BR-b — stato buff applicato dalla droga (decisione di design, non tuning). Adrenaline
+    /// non ha stato: il suo effetto è istantaneo.
+    /// </summary>
+    private static bool TryGetDrugStatus(ItemType drug, out StatusEffectType status)
+    {
+        switch (drug)
+        {
+            case ItemType.HazmatInjection: status = StatusEffectType.Hazmat; return true;
+            case ItemType.CombatStim: status = StatusEffectType.CombatStim; return true;
+            default: status = default; return false;
+        }
+    }
+
     // ── Avvio del canale (owner) ───────────────────────────────────────────────
 
     private void TryBeginUse(UseKind kind)
@@ -281,8 +459,16 @@ public class PlayerMedKit : NetworkBehaviour
             return;
         }
 
+        // Rev BR-b: la droga si risolve PRIMA del bersaglio (Adrenaline e Hazmat solo su se stessi).
+        if (kind == UseKind.Drug && !SelectNextDrug(selectedDrug, includeCurrent: true))
+        {
+            SetFeedback("No drugs — restock at the medical locker", HoldSeconds);
+            return;
+        }
+        bool selfOnly = kind == UseKind.Drug && IsSelfOnly(selectedDrug);
+
         // Q31-a: compagno vivo sotto il mirino entro la portata, altrimenti se stessi.
-        PlayerHealthSystem looked = FindLookedPlayer();
+        PlayerHealthSystem looked = selfOnly ? null : FindLookedPlayer();
         PlayerHealthSystem target = health;
         bool onSelf = true;
         if (looked != null)
@@ -316,6 +502,22 @@ public class PlayerMedKit : NetworkBehaviour
                 return;
             }
             channelLabel = onSelf ? "Using medkit" : $"Treating {who}";
+        }
+        else if (kind == UseKind.Drug)
+        {
+            item = selectedDrug;
+
+            // Q47-a: unico blocco preventivo — Adrenaline con HP e stamina già pieni.
+            if (item == ItemType.Adrenaline &&
+                health.MaxHP - health.CurrentHP <= 0.01f &&
+                controller != null && controller.CurrentStamina >= controller.MaxStamina)
+            {
+                SetFeedback("Already at full health and stamina", HoldSeconds);
+                return;
+            }
+
+            string drug = DrugLabel(item);
+            channelLabel = onSelf ? $"Injecting {drug}" : $"Injecting {drug} — {who}";
         }
         else
         {
@@ -538,7 +740,7 @@ public class PlayerMedKit : NetworkBehaviour
         }
 
         UseResult result = ServerApplyUse(item, targetClientId, out float healed, out byte curedMask);
-        UseResultOwnerRpc(result, targetClientId, healed, curedMask);
+        UseResultOwnerRpc(result, item, targetClientId, healed, curedMask);
     }
 
     /// <summary>Validazione ed effetto dell'uso. SERVER ONLY. Consuma l'item solo se ha avuto effetto.</summary>
@@ -554,6 +756,9 @@ public class PlayerMedKit : NetworkBehaviour
         if (!PlayerHealthSystem.TryGetByClientId(targetClientId, out PlayerHealthSystem target) ||
             target == null || !target.IsAlive)
             return UseResult.TargetInvalid;
+
+        if (IsDrug(item))
+            return ServerApplyDrug(item, targetClientId, out healed);
 
         if (item == ItemType.Antidote)
         {
@@ -586,14 +791,68 @@ public class PlayerMedKit : NetworkBehaviour
         return UseResult.Healed;
     }
 
+    /// <summary>Rev BR-b — il tipo è una droga del kit.</summary>
+    private static bool IsDrug(ItemType item) => Array.IndexOf(DrugOrder, item) >= 0;
+
+    /// <summary>
+    /// Rev BR-b — effetto di una droga. SERVER ONLY. Chiamato da ServerApplyUse dopo i controlli
+    /// comuni (config, chi usa è vivo, item nel kit, bersaglio vivo). Consumo sempre (Q47-a).
+    /// </summary>
+    private UseResult ServerApplyDrug(ItemType item, ulong targetClientId, out float healed)
+    {
+        healed = 0f;
+
+        // Auto-somministrate: il bersaglio dichiarato dal client deve essere il proprietario.
+        if (IsSelfOnly(item) && targetClientId != OwnerClientId)
+            return UseResult.TargetInvalid;
+
+        if (item == ItemType.Adrenaline)
+        {
+            // HP uguali per tutti (Q43-a). La stamina si riempie sul proprietario (RPC d'esito).
+            healed = health.ApplyHeal(config.AdrenalineHealAmount);
+            ServerSetCount(item, GetCount(item) - 1);
+            LogV($"Adrenaline: +{healed:F1} HP, stamina piena.");
+            return UseResult.DrugApplied;
+        }
+
+        if (!TryGetDrugStatus(item, out StatusEffectType status)) return UseResult.Failed;
+        if (!PlayerStatusEffects.TryGetByClientId(targetClientId, out PlayerStatusEffects effects) ||
+            effects == null)
+            return UseResult.TargetInvalid;
+
+        // Combat Stim (Q43-a): durata × effetto del profilo di chi inietta (non-Corpsman 60%).
+        // Hazmat: auto-somministrata, durata piena per tutti.
+        float durationScale = item == ItemType.CombatStim
+            ? ResolveProfile(OwnerClientId).EffectMultiplier
+            : 1f;
+
+        effects.ApplyEffect(status, durationScale);
+        ServerSetCount(item, GetCount(item) - 1);
+        LogV($"{item} su client {targetClientId} (durata ×{durationScale:F2}).");
+        return UseResult.DrugApplied;
+    }
+
     [Rpc(SendTo.Owner)]
-    private void UseResultOwnerRpc(UseResult result, ulong targetClientId, float healed, byte curedMask)
+    private void UseResultOwnerRpc(UseResult result, ItemType item, ulong targetClientId, float healed, byte curedMask)
     {
         bool onSelf = targetClientId == OwnerClientId;
         string suffix = onSelf ? string.Empty : $" ({CrewRoles.ToDisplayName(PlayerCrewRole.GetRole(targetClientId))})";
 
         switch (result)
         {
+            case UseResult.DrugApplied:
+                if (item == ItemType.Adrenaline)
+                {
+                    if (controller != null) controller.RefillStamina();   // Rev BR-b: la stamina vive qui
+                    SetFeedback(healed > 0f
+                        ? $"Adrenaline: +{Mathf.RoundToInt(healed)} HP, stamina restored"
+                        : "Adrenaline: stamina restored", HoldSeconds);
+                }
+                else
+                {
+                    SetFeedback($"{DrugLabel(item)} active{suffix}", HoldSeconds);
+                }
+                break;
             case UseResult.Healed:
                 SetFeedback($"+{Mathf.RoundToInt(healed)} HP{suffix}", HoldSeconds);
                 break;
@@ -647,17 +906,25 @@ public class PlayerMedKit : NetworkBehaviour
 
         if (health == null || !health.IsAlive) return;
 
-        RestockResult result = ServerRestockFromShip(out int takenBase, out int takenAdvanced, out int takenAntidote);
-        RestockResultOwnerRpc(result, (byte)takenBase, (byte)takenAdvanced, (byte)takenAntidote);
+        RestockResult result = ServerRestockFromShip(out RestockTaken taken);
+        RestockResultOwnerRpc(result, taken.Base, taken.Advanced, taken.Antidote,
+                              taken.Adrenaline, taken.Hazmat, taken.CombatStim, taken.StimBlockedByTier);
+    }
+
+    /// <summary>Rev BR-b — pezzi prelevati dalla stiva in un rifornimento (solo server).</summary>
+    private struct RestockTaken
+    {
+        public byte Base, Advanced, Antidote, Adrenaline, Hazmat, CombatStim;
+        public bool StimBlockedByTier;   // Q48-a: c'erano stim in stiva e spazio nel kit, ma tier troppo basso
     }
 
     /// <summary>
     /// Riempie il kit fino alla capienza prelevando dalla stiva (InventorySystem.TryConsume).
     /// SERVER ONLY. Trasferimento esplicito: quello che entra nel kit esce dalla stiva.
     /// </summary>
-    private RestockResult ServerRestockFromShip(out int takenBase, out int takenAdvanced, out int takenAntidote)
+    private RestockResult ServerRestockFromShip(out RestockTaken taken)
     {
-        takenBase = takenAdvanced = takenAntidote = 0;
+        taken = default;
 
         if (!IsServer || config == null) return RestockResult.Failed;
         InventorySystem inventory = InventorySystem.Instance;
@@ -667,21 +934,31 @@ public class PlayerMedKit : NetworkBehaviour
             return RestockResult.Failed;
         }
 
+        // Q48-a: segnala la stim bloccata dal tier (spazio nel kit e scorte in stiva, ma Medbay sotto il minimo).
+        taken.StimBlockedByTier = GetRestockCap(ItemType.CombatStim) == 0 &&
+                                  GetCount(ItemType.CombatStim) < GetCap(ItemType.CombatStim) &&
+                                  inventory.GetQuantity(ItemType.CombatStim) > 0;
+
         if (IsFull) return RestockResult.KitFull;
 
-        takenBase = TakeFromShip(inventory, ItemType.MedkitBase);
-        takenAdvanced = TakeFromShip(inventory, ItemType.MedkitAdvanced);
-        takenAntidote = TakeFromShip(inventory, ItemType.Antidote);
+        taken.Base = TakeFromShip(inventory, ItemType.MedkitBase);
+        taken.Advanced = TakeFromShip(inventory, ItemType.MedkitAdvanced);
+        taken.Antidote = TakeFromShip(inventory, ItemType.Antidote);
+        taken.Adrenaline = TakeFromShip(inventory, ItemType.Adrenaline);
+        taken.Hazmat = TakeFromShip(inventory, ItemType.HazmatInjection);
+        taken.CombatStim = TakeFromShip(inventory, ItemType.CombatStim);
 
-        if (takenBase + takenAdvanced + takenAntidote == 0) return RestockResult.NoSupplies;
+        int total = taken.Base + taken.Advanced + taken.Antidote + taken.Adrenaline + taken.Hazmat + taken.CombatStim;
+        if (total == 0) return RestockResult.NoSupplies;
 
-        LogV($"Rifornito dalla stiva: base +{takenBase}, avanzato +{takenAdvanced}, antidoto +{takenAntidote}.");
+        LogV($"Rifornito dalla stiva: base +{taken.Base}, avanzato +{taken.Advanced}, antidoto +{taken.Antidote}, " +
+             $"adrenaline +{taken.Adrenaline}, hazmat +{taken.Hazmat}, stim +{taken.CombatStim}.");
         return RestockResult.Restocked;
     }
 
-    private int TakeFromShip(InventorySystem inventory, ItemType type)
+    private byte TakeFromShip(InventorySystem inventory, ItemType type)
     {
-        int space = GetCap(type) - GetCount(type);
+        int space = GetRestockCap(type) - GetCount(type);   // Rev BR-b: capienza di rifornimento (tier)
         if (space <= 0) return 0;
 
         int take = Mathf.Min(space, inventory.GetQuantity(type));
@@ -689,26 +966,35 @@ public class PlayerMedKit : NetworkBehaviour
         if (!inventory.TryConsume(type, take)) return 0;
 
         ServerSetCount(type, GetCount(type) + take);
-        return take;
+        return (byte)Mathf.Clamp(take, 0, 255);
     }
 
     [Rpc(SendTo.Owner)]
-    private void RestockResultOwnerRpc(RestockResult result, byte takenBase, byte takenAdvanced, byte takenAntidote)
+    private void RestockResultOwnerRpc(RestockResult result, byte takenBase, byte takenAdvanced, byte takenAntidote,
+                                       byte takenAdrenaline, byte takenHazmat, byte takenStim, bool stimBlockedByTier)
     {
+        // Rev BR-b (Q48-a): nota sulla stim bloccata dal tier, in coda a qualsiasi esito.
+        string stimNote = stimBlockedByTier
+            ? $" · Combat Stim needs Medbay T{(config != null ? config.MinMedbayTierFor(ItemType.CombatStim) : 2)}"
+            : string.Empty;
+
         switch (result)
         {
             case RestockResult.Restocked:
-                var parts = new List<string>(3);
+                var parts = new List<string>(6);
                 if (takenBase > 0) parts.Add($"+{takenBase} medkit");
                 if (takenAdvanced > 0) parts.Add($"+{takenAdvanced} advanced medkit");
                 if (takenAntidote > 0) parts.Add($"+{takenAntidote} antidote");
-                SetFeedback("Kit restocked: " + string.Join(", ", parts), HoldSeconds);
+                if (takenAdrenaline > 0) parts.Add($"+{takenAdrenaline} adrenaline");
+                if (takenHazmat > 0) parts.Add($"+{takenHazmat} Hazmat");
+                if (takenStim > 0) parts.Add($"+{takenStim} Combat Stim");
+                SetFeedback("Kit restocked: " + string.Join(", ", parts) + stimNote, HoldSeconds);
                 break;
             case RestockResult.KitFull:
-                SetFeedback("Medical kit already full", HoldSeconds);
+                SetFeedback("Medical kit already full" + stimNote, HoldSeconds);
                 break;
             case RestockResult.NoSupplies:
-                SetFeedback("No medical supplies aboard", HoldSeconds);
+                SetFeedback("No medical supplies aboard" + stimNote, HoldSeconds);
                 break;
             default:
                 SetFeedback("Restock failed", HoldSeconds);
@@ -728,6 +1014,9 @@ public class PlayerMedKit : NetworkBehaviour
         netMedkitBase.Value = 0;
         netMedkitAdvanced.Value = 0;
         netAntidote.Value = 0;
+        netAdrenaline.Value = 0;
+        netHazmat.Value = 0;
+        netCombatStim.Value = 0;
         LogV("Kit svuotato.");
     }
 
@@ -737,9 +1026,12 @@ public class PlayerMedKit : NetworkBehaviour
         byte clamped = (byte)Mathf.Clamp(value, 0, 255);
         switch (type)
         {
-            case ItemType.MedkitBase:     netMedkitBase.Value = clamped; break;
+            case ItemType.MedkitBase: netMedkitBase.Value = clamped; break;
             case ItemType.MedkitAdvanced: netMedkitAdvanced.Value = clamped; break;
-            case ItemType.Antidote:       netAntidote.Value = clamped; break;
+            case ItemType.Antidote: netAntidote.Value = clamped; break;
+            case ItemType.Adrenaline: netAdrenaline.Value = clamped; break;
+            case ItemType.HazmatInjection: netHazmat.Value = clamped; break;
+            case ItemType.CombatStim: netCombatStim.Value = clamped; break;
             default:
                 Debug.LogError($"[PlayerMedKit] ItemType {type} non appartiene al kit medico.");
                 break;
@@ -783,27 +1075,32 @@ public class PlayerMedKit : NetworkBehaviour
         if (!showDebugUI) return;
         if (!IsServer || !IsSpawned) return;
 
-        // Accanto al pannello di PlayerStatusEffects (x 570–910), stessa banda per OwnerClientId.
-        float y = 310 + (OwnerClientId * 90f);
+        // Rev BR-b: accanto al pannello di PlayerStatusEffects (x 570–930 da Rev BR-a), stessa
+        // banda per OwnerClientId (passo 250).
+        float y = 310 + (OwnerClientId * 250f);
 
-        GUILayout.BeginArea(new Rect(920, y, 300, 85));
+        GUILayout.BeginArea(new Rect(940, y, 320, 110));
         GUILayout.BeginVertical("box");
         GUILayout.Label($"[PlayerMedKit] Client {OwnerClientId} — base {GetCount(ItemType.MedkitBase)}/" +
                         $"{GetCap(ItemType.MedkitBase)} · avanz. {GetCount(ItemType.MedkitAdvanced)}/" +
                         $"{GetCap(ItemType.MedkitAdvanced)} · antid. {GetCount(ItemType.Antidote)}/" +
                         $"{GetCap(ItemType.Antidote)}");
+        GUILayout.Label($"Droghe — adren. {GetCount(ItemType.Adrenaline)}/{GetCap(ItemType.Adrenaline)} · " +
+                        $"hazmat {GetCount(ItemType.HazmatInjection)}/{GetCap(ItemType.HazmatInjection)} · " +
+                        $"stim {GetCount(ItemType.CombatStim)}/{GetCap(ItemType.CombatStim)} " +
+                        $"(rifornibili {GetRestockCap(ItemType.CombatStim)})");
 
         GUILayout.BeginHorizontal();
         if (GUILayout.Button("Dalla stiva"))
         {
-            RestockResult result = ServerRestockFromShip(out int b, out int a, out int x);
-            RestockResultOwnerRpc(result, (byte)b, (byte)a, (byte)x);
+            RestockResult result = ServerRestockFromShip(out RestockTaken t);
+            RestockResultOwnerRpc(result, t.Base, t.Advanced, t.Antidote, t.Adrenaline, t.Hazmat, t.CombatStim,
+                                  t.StimBlockedByTier);
         }
-        if (GUILayout.Button("Pieno (gratis)"))
+        if (GUILayout.Button("Pieno (gratis)"))   // debug: ignora il tier della Medbay
         {
-            ServerSetCount(ItemType.MedkitBase, GetCap(ItemType.MedkitBase));
-            ServerSetCount(ItemType.MedkitAdvanced, GetCap(ItemType.MedkitAdvanced));
-            ServerSetCount(ItemType.Antidote, GetCap(ItemType.Antidote));
+            for (int i = 0; i < KitTypes.Length; i++)
+                ServerSetCount(KitTypes[i], GetCap(KitTypes[i]));
         }
         if (GUILayout.Button("Svuota")) ServerClearKit();
         GUILayout.EndHorizontal();

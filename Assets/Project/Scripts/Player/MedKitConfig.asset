@@ -15,8 +15,13 @@ MonoBehaviour:
   capMedkitBase: 2
   capMedkitAdvanced: 1
   capAntidote: 1
+  capAdrenaline: 2
+  capHazmatInjection: 1
+  capCombatStim: 2
   baseHealAmount: 25
   advancedHealAmount: 50
+  adrenalineHealAmount: 15
+  combatStimMinMedbayTier: 2
   defaultChannelSeconds: 3
   defaultEffectMultiplier: 0.6
   corpsmanChannelSeconds: 1.5
