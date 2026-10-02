@@ -271,6 +271,24 @@ public partial class @InputSystem_Actions: IInputActionCollection2, IDisposable
                     ""processors"": """",
                     ""interactions"": """",
                     ""initialStateCheck"": false
+                },
+                {
+                    ""name"": ""UseDrug"",
+                    ""type"": ""Button"",
+                    ""id"": ""99ba2b8b-0677-40e8-b97b-22aed7b1b329"",
+                    ""expectedControlType"": """",
+                    ""processors"": """",
+                    ""interactions"": """",
+                    ""initialStateCheck"": false
+                },
+                {
+                    ""name"": ""CycleDrug"",
+                    ""type"": ""Button"",
+                    ""id"": ""2965d012-524b-4b86-9f4e-bf5c6c71454e"",
+                    ""expectedControlType"": """",
+                    ""processors"": """",
+                    ""interactions"": """",
+                    ""initialStateCheck"": false
                 }
             ],
             ""bindings"": [
@@ -931,6 +949,50 @@ public partial class @InputSystem_Actions: IInputActionCollection2, IDisposable
                     ""processors"": """",
                     ""groups"": """",
                     ""action"": ""UseAntidote"",
+                    ""isComposite"": false,
+                    ""isPartOfComposite"": false
+                },
+                {
+                    ""name"": """",
+                    ""id"": ""25105ec1-5d3d-498b-954d-64ea3bd20b86"",
+                    ""path"": ""<Keyboard>/k"",
+                    ""interactions"": """",
+                    ""processors"": """",
+                    ""groups"": """",
+                    ""action"": ""UseDrug"",
+                    ""isComposite"": false,
+                    ""isPartOfComposite"": false
+                },
+                {
+                    ""name"": """",
+                    ""id"": ""becaa5e0-5917-4555-b777-268fbb9a4381"",
+                    ""path"": ""<Gamepad>/dpad/right"",
+                    ""interactions"": """",
+                    ""processors"": """",
+                    ""groups"": """",
+                    ""action"": ""UseDrug"",
+                    ""isComposite"": false,
+                    ""isPartOfComposite"": false
+                },
+                {
+                    ""name"": """",
+                    ""id"": ""fa2ec2e0-04e1-40c3-a310-9e9d4cc47d2c"",
+                    ""path"": ""<Keyboard>/l"",
+                    ""interactions"": """",
+                    ""processors"": """",
+                    ""groups"": """",
+                    ""action"": ""CycleDrug"",
+                    ""isComposite"": false,
+                    ""isPartOfComposite"": false
+                },
+                {
+                    ""name"": """",
+                    ""id"": ""513655f9-cd10-4035-885c-147af64cf644"",
+                    ""path"": ""<Gamepad>/dpad/left"",
+                    ""interactions"": """",
+                    ""processors"": """",
+                    ""groups"": """",
+                    ""action"": ""CycleDrug"",
                     ""isComposite"": false,
                     ""isPartOfComposite"": false
                 }
@@ -2015,6 +2077,8 @@ public partial class @InputSystem_Actions: IInputActionCollection2, IDisposable
         m_Player_Throttle = m_Player.FindAction("Throttle", throwIfNotFound: true);
         m_Player_UseMedkit = m_Player.FindAction("UseMedkit", throwIfNotFound: true);
         m_Player_UseAntidote = m_Player.FindAction("UseAntidote", throwIfNotFound: true);
+        m_Player_UseDrug = m_Player.FindAction("UseDrug", throwIfNotFound: true);
+        m_Player_CycleDrug = m_Player.FindAction("CycleDrug", throwIfNotFound: true);
         // UI
         m_UI = asset.FindActionMap("UI", throwIfNotFound: true);
         m_UI_Navigate = m_UI.FindAction("Navigate", throwIfNotFound: true);
@@ -2147,6 +2211,8 @@ public partial class @InputSystem_Actions: IInputActionCollection2, IDisposable
     private readonly InputAction m_Player_Throttle;
     private readonly InputAction m_Player_UseMedkit;
     private readonly InputAction m_Player_UseAntidote;
+    private readonly InputAction m_Player_UseDrug;
+    private readonly InputAction m_Player_CycleDrug;
     /// <summary>
     /// Provides access to input actions defined in input action map "Player".
     /// </summary>
@@ -2239,6 +2305,14 @@ public partial class @InputSystem_Actions: IInputActionCollection2, IDisposable
         /// </summary>
         public InputAction @UseAntidote => m_Wrapper.m_Player_UseAntidote;
         /// <summary>
+        /// Provides access to the underlying input action "Player/UseDrug".
+        /// </summary>
+        public InputAction @UseDrug => m_Wrapper.m_Player_UseDrug;
+        /// <summary>
+        /// Provides access to the underlying input action "Player/CycleDrug".
+        /// </summary>
+        public InputAction @CycleDrug => m_Wrapper.m_Player_CycleDrug;
+        /// <summary>
         /// Provides access to the underlying input action map instance.
         /// </summary>
         public InputActionMap Get() { return m_Wrapper.m_Player; }
@@ -2324,6 +2398,12 @@ public partial class @InputSystem_Actions: IInputActionCollection2, IDisposable
             @UseAntidote.started += instance.OnUseAntidote;
             @UseAntidote.performed += instance.OnUseAntidote;
             @UseAntidote.canceled += instance.OnUseAntidote;
+            @UseDrug.started += instance.OnUseDrug;
+            @UseDrug.performed += instance.OnUseDrug;
+            @UseDrug.canceled += instance.OnUseDrug;
+            @CycleDrug.started += instance.OnCycleDrug;
+            @CycleDrug.performed += instance.OnCycleDrug;
+            @CycleDrug.canceled += instance.OnCycleDrug;
         }
 
         /// <summary>
@@ -2395,6 +2475,12 @@ public partial class @InputSystem_Actions: IInputActionCollection2, IDisposable
             @UseAntidote.started -= instance.OnUseAntidote;
             @UseAntidote.performed -= instance.OnUseAntidote;
             @UseAntidote.canceled -= instance.OnUseAntidote;
+            @UseDrug.started -= instance.OnUseDrug;
+            @UseDrug.performed -= instance.OnUseDrug;
+            @UseDrug.canceled -= instance.OnUseDrug;
+            @CycleDrug.started -= instance.OnCycleDrug;
+            @CycleDrug.performed -= instance.OnCycleDrug;
+            @CycleDrug.canceled -= instance.OnCycleDrug;
         }
 
         /// <summary>
@@ -3200,6 +3286,20 @@ public partial class @InputSystem_Actions: IInputActionCollection2, IDisposable
         /// <seealso cref="UnityEngine.InputSystem.InputAction.performed" />
         /// <seealso cref="UnityEngine.InputSystem.InputAction.canceled" />
         void OnUseAntidote(InputAction.CallbackContext context);
+        /// <summary>
+        /// Method invoked when associated input action "UseDrug" is either <see cref="UnityEngine.InputSystem.InputAction.started" />, <see cref="UnityEngine.InputSystem.InputAction.performed" /> or <see cref="UnityEngine.InputSystem.InputAction.canceled" />.
+        /// </summary>
+        /// <seealso cref="UnityEngine.InputSystem.InputAction.started" />
+        /// <seealso cref="UnityEngine.InputSystem.InputAction.performed" />
+        /// <seealso cref="UnityEngine.InputSystem.InputAction.canceled" />
+        void OnUseDrug(InputAction.CallbackContext context);
+        /// <summary>
+        /// Method invoked when associated input action "CycleDrug" is either <see cref="UnityEngine.InputSystem.InputAction.started" />, <see cref="UnityEngine.InputSystem.InputAction.performed" /> or <see cref="UnityEngine.InputSystem.InputAction.canceled" />.
+        /// </summary>
+        /// <seealso cref="UnityEngine.InputSystem.InputAction.started" />
+        /// <seealso cref="UnityEngine.InputSystem.InputAction.performed" />
+        /// <seealso cref="UnityEngine.InputSystem.InputAction.canceled" />
+        void OnCycleDrug(InputAction.CallbackContext context);
     }
     /// <summary>
     /// Interface to implement callback methods for all input action callbacks associated with input actions defined by "UI" which allows adding and removing callbacks.

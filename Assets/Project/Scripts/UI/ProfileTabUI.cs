@@ -94,7 +94,10 @@ public class ProfileTabUI : MonoBehaviour, IDashboardPanel
             skillStubLabel.text = "Skill tree — da definire (GDD §10)";
     }
 
-    /// <summary>Rev BQ — contenuto del kit medico personale (conteggio / capienza per tipo).</summary>
+    /// <summary>
+    /// Rev BQ — contenuto del kit medico personale (conteggio / capienza per tipo).
+    /// Rev BR-b — seconda riga con le droghe e la droga selezionata (CycleDrug).
+    /// </summary>
     private void RefreshMedKit()
     {
         if (inventoryStubLabel == null) return;
@@ -106,10 +109,16 @@ public class ProfileTabUI : MonoBehaviour, IDashboardPanel
             return;
         }
 
+        string selected = kit.HasSelectedDrug ? PlayerMedKit.DrugLabel(kit.SelectedDrug) : "—";
+
         inventoryStubLabel.text =
             $"Medical kit — Medkit {kit.GetCount(ItemType.MedkitBase)}/{kit.GetCap(ItemType.MedkitBase)}" +
             $" · Advanced {kit.GetCount(ItemType.MedkitAdvanced)}/{kit.GetCap(ItemType.MedkitAdvanced)}" +
-            $" · Antidote {kit.GetCount(ItemType.Antidote)}/{kit.GetCap(ItemType.Antidote)}";
+            $" · Antidote {kit.GetCount(ItemType.Antidote)}/{kit.GetCap(ItemType.Antidote)}" +
+            $"\nDrugs — Adrenaline {kit.GetCount(ItemType.Adrenaline)}/{kit.GetCap(ItemType.Adrenaline)}" +
+            $" · Hazmat {kit.GetCount(ItemType.HazmatInjection)}/{kit.GetCap(ItemType.HazmatInjection)}" +
+            $" · Combat Stim {kit.GetCount(ItemType.CombatStim)}/{kit.GetCap(ItemType.CombatStim)}" +
+            $" · Selected: {selected}";
     }
 
     private void OnCreditsChanged(int newAmount)

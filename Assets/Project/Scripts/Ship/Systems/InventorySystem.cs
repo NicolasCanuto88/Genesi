@@ -9,7 +9,7 @@ namespace SpaceSurvivor.Ship
     /// Gestisce le quantità di tutti i materiali a bordo.
     ///
     /// RESPONSABILITÀ:
-    ///   - Traccia 10 tipi di item (6 Engineering + 4 Medical)
+    ///   - Traccia 13 tipi di item (6 Engineering + 7 Medical: 4 scorte + 3 droghe, Rev BR-b)
     ///   - Ogni quantità è una NetworkVariable (server authority, tutti leggono)
     ///   - Espone TryConsume / AddItem / GetQuantity / HasEnough
     ///   - Notifica l'UI via evento statico OnQuantityChanged
@@ -58,9 +58,18 @@ namespace SpaceSurvivor.Ship
         private readonly NetworkVariable<int> _qtyAntidote =
             new(0, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Server);
 
+        // Rev BR-b — droghe del Corpsman (prelevate dall'armadietto medico nel kit personale)
+        private readonly NetworkVariable<int> _qtyAdrenaline =
+            new(0, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Server);
+        private readonly NetworkVariable<int> _qtyHazmatInjection =
+            new(0, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Server);
+        private readonly NetworkVariable<int> _qtyCombatStim =
+            new(0, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Server);
+
         // ── Catalog ──────────────────────────────────────────────────────
-        [Header("Item Catalog (tutti e 10 gli ItemData)")]
-        [Tooltip("Assegna un InventoryItemData per ogni ItemType. L'ordine non conta.")]
+        [Header("Item Catalog (InventoryItemData)")]
+        [Tooltip("Assegna un InventoryItemData per ogni ItemType. L'ordine non conta. Un tipo senza asset " +
+                 "usa il massimo di ripiego (99): è il caso delle droghe di Rev BR-b (Q49-a).")]
         [SerializeField] private InventoryItemData[] itemCatalog;
 
         // ── Quantità iniziali (test/debug) ───────────────────────────────
@@ -75,6 +84,9 @@ namespace SpaceSurvivor.Ship
         [SerializeField] private int startMedkitAdvanced = 2;
         [SerializeField] private int startO2EmergencyTanks = 3;
         [SerializeField] private int startAntidote = 2;
+        [SerializeField] private int startAdrenaline = 4;        // Rev BR-b
+        [SerializeField] private int startHazmatInjection = 2;   // Rev BR-b
+        [SerializeField] private int startCombatStim = 3;        // Rev BR-b
 
         // ── Evento pubblico (tutti i client) ─────────────────────────────
         /// <summary>
@@ -100,6 +112,9 @@ namespace SpaceSurvivor.Ship
             _qtyMedkitAdvanced.OnValueChanged += OnMedkitAdvancedChanged;
             _qtyO2EmergencyTank.OnValueChanged += OnO2EmergencyTankChanged;
             _qtyAntidote.OnValueChanged += OnAntidoteChanged;
+            _qtyAdrenaline.OnValueChanged += OnAdrenalineChanged;
+            _qtyHazmatInjection.OnValueChanged += OnHazmatInjectionChanged;
+            _qtyCombatStim.OnValueChanged += OnCombatStimChanged;
 
             if (IsServer)
                 InitStartingQuantities();
@@ -119,6 +134,9 @@ namespace SpaceSurvivor.Ship
             _qtyMedkitAdvanced.OnValueChanged -= OnMedkitAdvancedChanged;
             _qtyO2EmergencyTank.OnValueChanged -= OnO2EmergencyTankChanged;
             _qtyAntidote.OnValueChanged -= OnAntidoteChanged;
+            _qtyAdrenaline.OnValueChanged -= OnAdrenalineChanged;
+            _qtyHazmatInjection.OnValueChanged -= OnHazmatInjectionChanged;
+            _qtyCombatStim.OnValueChanged -= OnCombatStimChanged;
 
             if (Instance == this) Instance = null;
         }
@@ -136,6 +154,9 @@ namespace SpaceSurvivor.Ship
         private void OnMedkitAdvancedChanged(int _, int v) => FireChanged(ItemType.MedkitAdvanced, v);
         private void OnO2EmergencyTankChanged(int _, int v) => FireChanged(ItemType.O2EmergencyTank, v);
         private void OnAntidoteChanged(int _, int v) => FireChanged(ItemType.Antidote, v);
+        private void OnAdrenalineChanged(int _, int v) => FireChanged(ItemType.Adrenaline, v);
+        private void OnHazmatInjectionChanged(int _, int v) => FireChanged(ItemType.HazmatInjection, v);
+        private void OnCombatStimChanged(int _, int v) => FireChanged(ItemType.CombatStim, v);
 
         private static void FireChanged(ItemType type, int qty)
             => OnQuantityChanged?.Invoke(type, qty);
@@ -153,6 +174,9 @@ namespace SpaceSurvivor.Ship
             _qtyMedkitAdvanced.Value = Mathf.Max(0, startMedkitAdvanced);
             _qtyO2EmergencyTank.Value = Mathf.Max(0, startO2EmergencyTanks);
             _qtyAntidote.Value = Mathf.Max(0, startAntidote);
+            _qtyAdrenaline.Value = Mathf.Max(0, startAdrenaline);
+            _qtyHazmatInjection.Value = Mathf.Max(0, startHazmatInjection);
+            _qtyCombatStim.Value = Mathf.Max(0, startCombatStim);
         }
 
         // ── API pubblica ──────────────────────────────────────────────────
@@ -239,6 +263,9 @@ namespace SpaceSurvivor.Ship
             ItemType.MedkitAdvanced => _qtyMedkitAdvanced,
             ItemType.O2EmergencyTank => _qtyO2EmergencyTank,
             ItemType.Antidote => _qtyAntidote,
+            ItemType.Adrenaline => _qtyAdrenaline,
+            ItemType.HazmatInjection => _qtyHazmatInjection,
+            ItemType.CombatStim => _qtyCombatStim,
             _ => throw new ArgumentOutOfRangeException(
                                                nameof(type), type,
                                                "ItemType non gestito in InventorySystem")
@@ -254,7 +281,7 @@ namespace SpaceSurvivor.Ship
         {
             if (!showDebugUI) return;
 
-            GUILayout.BeginArea(new Rect(10, 200, 210, 340));
+            GUILayout.BeginArea(new Rect(10, 200, 210, 400));   // Rev BR-b: 13 righe
             GUILayout.BeginVertical("box");
             GUILayout.Label($"[Inventory] {(IsServer ? "SERVER" : "CLIENT")}");
 

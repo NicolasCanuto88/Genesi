@@ -20,11 +20,21 @@ using UnityEngine;
 ///     canale (1 m).
 ///   - Q36-a — durata della riga di feedback dopo un esito (2 s).
 ///
+/// DROGHE (Rev BR-b · workshop StatModifier, tutte "a"):
+///   - capienza per droga (Adrenaline 2, Hazmat 1, Combat Stim 2);
+///   - Adrenaline: HP nominali (+15), uguali per tutti i ruoli (Q43-a);
+///   - tier minimo della Medbay per prelevare la Combat Stim all'armadietto (T2, Q48-a);
+///   - per la Combat Stim di un non-Corpsman la DURATA è moltiplicata per l'effetto del
+///     profilo di default (0.6 → 18 s su 30, Q43-a). Durata ed effetti delle droghe stanno
+///     negli asset SED_Hazmat / SED_CombatStim, non qui.
+///
 /// NON QUI (decisioni di design, non tuning):
 ///   - quali stati cura l'antidoto (Veleno e Radiazioni, mai Ferite Composte — Q34-a):
 ///     costante documentata in PlayerMedKit;
 ///   - la scelta automatica base/avanzato (Q35-a): usa AdvancedHealAmount come soglia
-///     degli HP mancanti.
+///     degli HP mancanti;
+///   - quale stato applica ogni droga e chi può esserne il bersaglio (Rev BR-b): costanti
+///     documentate in PlayerMedKit.
 /// </summary>
 [CreateAssetMenu(menuName = "SpaceSurvivor/MedKit Config", fileName = "MedKitConfig")]
 public class MedKitConfig : ScriptableObject
@@ -43,6 +53,19 @@ public class MedKitConfig : ScriptableObject
     [Min(0)]
     [SerializeField] private int capAntidote = 1;
 
+    [Header("Capienza del kit personale — droghe (Rev BR-b)")]
+    [Tooltip("Dosi di Adrenaline che un giocatore può portare.")]
+    [Min(0)]
+    [SerializeField] private int capAdrenaline = 2;
+
+    [Tooltip("Dosi di Hazmat che un giocatore può portare.")]
+    [Min(0)]
+    [SerializeField] private int capHazmatInjection = 1;
+
+    [Tooltip("Combat Stim che un giocatore può portare.")]
+    [Min(0)]
+    [SerializeField] private int capCombatStim = 2;
+
     [Header("Medikit — HP nominali (Q33-a)")]
     [Tooltip("HP ripristinati dal medikit base con effetto pieno (Corpsman). Gli altri ruoli " +
              "applicano il moltiplicatore del proprio profilo.")]
@@ -54,11 +77,22 @@ public class MedKitConfig : ScriptableObject
     [Min(0f)]
     [SerializeField] private float advancedHealAmount = 50f;
 
+    [Header("Droghe (Rev BR-b)")]
+    [Tooltip("HP ripristinati dall'Adrenaline, uguali per tutti i ruoli (Q43-a). La stamina torna piena.")]
+    [Min(0f)]
+    [SerializeField] private float adrenalineHealAmount = 15f;
+
+    [Tooltip("Tier minimo della Medbay per prelevare Combat Stim all'armadietto (Q48-a). Sotto questo tier " +
+             "la sua capienza di rifornimento vale 0; le stim già nel kit restano usabili.")]
+    [Range(1, 4)]
+    [SerializeField] private int combatStimMinMedbayTier = 2;
+
     [Header("Profilo di DEFAULT (non-Corpsman, malus Rev U)")]
     [Tooltip("Durata del canale di medikit e antidoto per chi non è Corpsman, in secondi.")]
     [SerializeField] private float defaultChannelSeconds = 3f;
 
-    [Tooltip("Frazione dell'effetto del medikit per chi non è Corpsman (0.6 = 60% degli HP nominali).")]
+    [Tooltip("Frazione dell'effetto del medikit per chi non è Corpsman (0.6 = 60% degli HP nominali). " +
+             "Per la Combat Stim è la frazione della DURATA (Rev BR-b · Q43-a).")]
     [Min(0f)]
     [SerializeField] private float defaultEffectMultiplier = 0.6f;
 
@@ -66,7 +100,8 @@ public class MedKitConfig : ScriptableObject
     [Tooltip("Durata del canale di medikit e antidoto per il Corpsman, in secondi.")]
     [SerializeField] private float corpsmanChannelSeconds = 1.5f;
 
-    [Tooltip("Frazione dell'effetto del medikit per il Corpsman (1 = HP nominali pieni).")]
+    [Tooltip("Frazione dell'effetto del medikit per il Corpsman (1 = HP nominali pieni). " +
+             "Per la Combat Stim è la frazione della durata.")]
     [Min(0f)]
     [SerializeField] private float corpsmanEffectMultiplier = 1f;
 
@@ -86,6 +121,7 @@ public class MedKitConfig : ScriptableObject
 
     public float BaseHealAmount => Mathf.Max(0f, baseHealAmount);
     public float AdvancedHealAmount => Mathf.Max(0f, advancedHealAmount);
+    public float AdrenalineHealAmount => Mathf.Max(0f, adrenalineHealAmount);
     public float TargetRange => Mathf.Max(0.1f, targetRange);
     public float MaxMoveDistance => Mathf.Max(0.05f, maxMoveDistance);
     public float FeedbackHoldSeconds => Mathf.Max(0f, feedbackHoldSeconds);
@@ -95,10 +131,26 @@ public class MedKitConfig : ScriptableObject
     {
         switch (type)
         {
-            case ItemType.MedkitBase:     return Mathf.Clamp(capMedkitBase, 0, 255);
+            case ItemType.MedkitBase: return Mathf.Clamp(capMedkitBase, 0, 255);
             case ItemType.MedkitAdvanced: return Mathf.Clamp(capMedkitAdvanced, 0, 255);
-            case ItemType.Antidote:       return Mathf.Clamp(capAntidote, 0, 255);
-            default:                      return 0;
+            case ItemType.Antidote: return Mathf.Clamp(capAntidote, 0, 255);
+            case ItemType.Adrenaline: return Mathf.Clamp(capAdrenaline, 0, 255);
+            case ItemType.HazmatInjection: return Mathf.Clamp(capHazmatInjection, 0, 255);
+            case ItemType.CombatStim: return Mathf.Clamp(capCombatStim, 0, 255);
+            default: return 0;
+        }
+    }
+
+    /// <summary>
+    /// Rev BR-b (Q48-a) — tier minimo della Medbay per prelevare il tipo all'armadietto.
+    /// Solo la Combat Stim ha un vincolo (T2); tutto il resto è disponibile da T1.
+    /// </summary>
+    public int MinMedbayTierFor(ItemType type)
+    {
+        switch (type)
+        {
+            case ItemType.CombatStim: return Mathf.Clamp(combatStimMinMedbayTier, 1, 4);
+            default: return 1;
         }
     }
 
@@ -107,9 +159,9 @@ public class MedKitConfig : ScriptableObject
     {
         switch (type)
         {
-            case ItemType.MedkitBase:     return BaseHealAmount;
+            case ItemType.MedkitBase: return BaseHealAmount;
             case ItemType.MedkitAdvanced: return AdvancedHealAmount;
-            default:                      return 0f;
+            default: return 0f;
         }
     }
 
