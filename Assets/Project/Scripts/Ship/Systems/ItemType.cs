@@ -27,8 +27,11 @@ namespace SpaceSurvivor.Ship
         HazmatInjection = 11,
         CombatStim = 12,
 
+        // ── Medical: bomba curativa del Corpsman (Rev BS-b · Q65-a) ──
+        HealingGrenade = 13,
+
         // ── Sentinel — SEMPRE ULTIMA ─────────────────
-        COUNT = 13
+        COUNT = 14
     }
 
     public enum ItemCategory { Engineering, Medical }

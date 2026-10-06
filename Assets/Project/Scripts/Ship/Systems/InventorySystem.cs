@@ -9,7 +9,8 @@ namespace SpaceSurvivor.Ship
     /// Gestisce le quantità di tutti i materiali a bordo.
     ///
     /// RESPONSABILITÀ:
-    ///   - Traccia 13 tipi di item (6 Engineering + 7 Medical: 4 scorte + 3 droghe, Rev BR-b)
+    ///   - Traccia 14 tipi di item (6 Engineering + 8 Medical: 4 scorte + 3 droghe, Rev BR-b, + bomba
+    ///     curativa, Rev BS-b)
     ///   - Ogni quantità è una NetworkVariable (server authority, tutti leggono)
     ///   - Espone TryConsume / AddItem / GetQuantity / HasEnough
     ///   - Notifica l'UI via evento statico OnQuantityChanged
@@ -66,10 +67,15 @@ namespace SpaceSurvivor.Ship
         private readonly NetworkVariable<int> _qtyCombatStim =
             new(0, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Server);
 
+        // Rev BS-b — bomba curativa del Corpsman (prelevata dall'armadietto medico nel kit personale)
+        private readonly NetworkVariable<int> _qtyHealingGrenade =
+            new(0, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Server);
+
         // ── Catalog ──────────────────────────────────────────────────────
         [Header("Item Catalog (InventoryItemData)")]
         [Tooltip("Assegna un InventoryItemData per ogni ItemType. L'ordine non conta. Un tipo senza asset " +
-                 "usa il massimo di ripiego (99): è il caso delle droghe di Rev BR-b (Q49-a).")]
+                 "usa il massimo di ripiego (99): è il caso delle droghe di Rev BR-b (Q49-a) " +
+                 "e della bomba curativa di Rev BS-b (Q65-a).")]
         [SerializeField] private InventoryItemData[] itemCatalog;
 
         // ── Quantità iniziali (test/debug) ───────────────────────────────
@@ -87,6 +93,7 @@ namespace SpaceSurvivor.Ship
         [SerializeField] private int startAdrenaline = 4;        // Rev BR-b
         [SerializeField] private int startHazmatInjection = 2;   // Rev BR-b
         [SerializeField] private int startCombatStim = 3;        // Rev BR-b
+        [SerializeField] private int startHealingGrenade = 3;    // Rev BS-b
 
         // ── Evento pubblico (tutti i client) ─────────────────────────────
         /// <summary>
@@ -115,6 +122,7 @@ namespace SpaceSurvivor.Ship
             _qtyAdrenaline.OnValueChanged += OnAdrenalineChanged;
             _qtyHazmatInjection.OnValueChanged += OnHazmatInjectionChanged;
             _qtyCombatStim.OnValueChanged += OnCombatStimChanged;
+            _qtyHealingGrenade.OnValueChanged += OnHealingGrenadeChanged;
 
             if (IsServer)
                 InitStartingQuantities();
@@ -137,6 +145,7 @@ namespace SpaceSurvivor.Ship
             _qtyAdrenaline.OnValueChanged -= OnAdrenalineChanged;
             _qtyHazmatInjection.OnValueChanged -= OnHazmatInjectionChanged;
             _qtyCombatStim.OnValueChanged -= OnCombatStimChanged;
+            _qtyHealingGrenade.OnValueChanged -= OnHealingGrenadeChanged;
 
             if (Instance == this) Instance = null;
         }
@@ -157,6 +166,7 @@ namespace SpaceSurvivor.Ship
         private void OnAdrenalineChanged(int _, int v) => FireChanged(ItemType.Adrenaline, v);
         private void OnHazmatInjectionChanged(int _, int v) => FireChanged(ItemType.HazmatInjection, v);
         private void OnCombatStimChanged(int _, int v) => FireChanged(ItemType.CombatStim, v);
+        private void OnHealingGrenadeChanged(int _, int v) => FireChanged(ItemType.HealingGrenade, v);
 
         private static void FireChanged(ItemType type, int qty)
             => OnQuantityChanged?.Invoke(type, qty);
@@ -177,6 +187,7 @@ namespace SpaceSurvivor.Ship
             _qtyAdrenaline.Value = Mathf.Max(0, startAdrenaline);
             _qtyHazmatInjection.Value = Mathf.Max(0, startHazmatInjection);
             _qtyCombatStim.Value = Mathf.Max(0, startCombatStim);
+            _qtyHealingGrenade.Value = Mathf.Max(0, startHealingGrenade);
         }
 
         // ── API pubblica ──────────────────────────────────────────────────
@@ -266,6 +277,7 @@ namespace SpaceSurvivor.Ship
             ItemType.Adrenaline => _qtyAdrenaline,
             ItemType.HazmatInjection => _qtyHazmatInjection,
             ItemType.CombatStim => _qtyCombatStim,
+            ItemType.HealingGrenade => _qtyHealingGrenade,
             _ => throw new ArgumentOutOfRangeException(
                                                nameof(type), type,
                                                "ItemType non gestito in InventorySystem")
@@ -281,7 +293,7 @@ namespace SpaceSurvivor.Ship
         {
             if (!showDebugUI) return;
 
-            GUILayout.BeginArea(new Rect(10, 200, 210, 400));   // Rev BR-b: 13 righe
+            GUILayout.BeginArea(new Rect(10, 200, 210, 425));   // Rev BS-b: 14 righe
             GUILayout.BeginVertical("box");
             GUILayout.Label($"[Inventory] {(IsServer ? "SERVER" : "CLIENT")}");
 

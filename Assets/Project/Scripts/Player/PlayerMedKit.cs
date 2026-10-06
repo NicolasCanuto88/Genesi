@@ -72,6 +72,13 @@ using UnityEngine.InputSystem;
 ///   rifornimento 0, il kit risulta pieno senza) e lo dice nell'esito. Le stim già nel kit
 ///   restano usabili.
 ///
+/// BOMBA CURATIVA (Rev BS-b · workshop bomba curativa Q51–Q67, tutte come raccomandate): un
+/// contatore replicato in più (HealingGrenade), capienza da SO, stesso armadietto, nessun tier
+/// minimo (Q65-a). Il kit la PORTA soltanto: la lancia PlayerThrower (G / RB), che sul server la
+/// consuma con ServerTryConsume solo se il lancio parte e usa ProfileFor per il moltiplicatore di
+/// ruolo (Q57-a). Mira e kit si escludono (Q66-a): durante la mira H/J/K/L sono ignorati, durante
+/// un canale la mira non si apre (IsChanneling).
+///
 /// AUTORITÀ: le RPC verso il server accettano solo il proprietario del kit
 /// (SenderClientId == OwnerClientId). Il server rilegge tutto: item disponibile,
 /// bersaglio vivo, qualcosa da curare, profilo di ruolo (mai dichiarato dal client).
@@ -119,6 +126,10 @@ public class PlayerMedKit : NetworkBehaviour
     private readonly NetworkVariable<byte> netCombatStim = new NetworkVariable<byte>(
         0, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Server);
 
+    // Rev BS-b — bomba curativa (la lancia PlayerThrower; il kit la porta)
+    private readonly NetworkVariable<byte> netHealingGrenade = new NetworkVariable<byte>(
+        0, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Server);
+
     /// <summary>Tutti i tipi che il kit può contenere (rifornimento, pienezza, debug).</summary>
     private static readonly ItemType[] KitTypes =
     {
@@ -127,7 +138,8 @@ public class PlayerMedKit : NetworkBehaviour
         ItemType.Antidote,
         ItemType.Adrenaline,
         ItemType.HazmatInjection,
-        ItemType.CombatStim
+        ItemType.CombatStim,
+        ItemType.HealingGrenade   // Rev BS-b
     };
 
     /// <summary>Rev BR-b (Q46-a) — droghe nell'ordine fisso del ciclo di selezione.</summary>
@@ -197,6 +209,7 @@ public class PlayerMedKit : NetworkBehaviour
     private InteractionSystem interaction;   // owner: niente kit durante un'interazione continua
     private TabletStation tablet;            // owner: niente kit a tablet aperto
     private Transform cameraTransform;       // owner: origine del raggio di mira
+    private PlayerThrower thrower;           // owner: niente kit durante la mira (Rev BS-b · Q66-a)
 
     // ── Canale (solo owner) ──
     private bool channeling;
@@ -229,6 +242,7 @@ public class PlayerMedKit : NetworkBehaviour
             case ItemType.Adrenaline: return netAdrenaline.Value;
             case ItemType.HazmatInjection: return netHazmat.Value;
             case ItemType.CombatStim: return netCombatStim.Value;
+            case ItemType.HealingGrenade: return netHealingGrenade.Value;
             default: return 0;
         }
     }
@@ -259,6 +273,18 @@ public class PlayerMedKit : NetworkBehaviour
             return true;
         }
     }
+
+    /// <summary>
+    /// Rev BS-b (Q66-a) — true mentre il proprietario incanala medikit, antidoto o droga (solo
+    /// owner). PlayerThrower non apre la mira finché è true.
+    /// </summary>
+    public bool IsChanneling => channeling;
+
+    /// <summary>
+    /// Rev BS-b (Q57-a) — profilo di ruolo del client indicato (Corpsman oppure default). Stesso
+    /// calcolo dei medikit; PlayerThrower ne usa il moltiplicatore per la cura del campo.
+    /// </summary>
+    public MedKitProfile ProfileFor(ulong userClientId) => ResolveProfile(userClientId);
 
     /// <summary>
     /// Rev BR-b — droga selezionata dal proprietario (solo owner). Se nel kit non c'è nessuna
@@ -294,6 +320,7 @@ public class PlayerMedKit : NetworkBehaviour
         netAdrenaline.OnValueChanged += HandleKitChanged;
         netHazmat.OnValueChanged += HandleKitChanged;
         netCombatStim.OnValueChanged += HandleKitChanged;
+        netHealingGrenade.OnValueChanged += HandleKitChanged;
 
         if (IsServer)
         {
@@ -304,6 +331,7 @@ public class PlayerMedKit : NetworkBehaviour
             netAdrenaline.Value = 0;
             netHazmat.Value = 0;
             netCombatStim.Value = 0;
+            netHealingGrenade.Value = 0;
 
             if (config == null)
                 Debug.LogError("[PlayerMedKit] MedKitConfig non assegnato sul Player prefab: il kit medico " +
@@ -316,6 +344,7 @@ public class PlayerMedKit : NetworkBehaviour
             controller = GetComponent<PlayerController>();
             interaction = GetComponent<InteractionSystem>();
             tablet = GetComponent<TabletStation>();
+            thrower = GetComponent<PlayerThrower>();
             Camera cam = GetComponentInChildren<Camera>();
             cameraTransform = cam != null ? cam.transform : null;
 
@@ -339,6 +368,7 @@ public class PlayerMedKit : NetworkBehaviour
         netAdrenaline.OnValueChanged -= HandleKitChanged;
         netHazmat.OnValueChanged -= HandleKitChanged;
         netCombatStim.OnValueChanged -= HandleKitChanged;
+        netHealingGrenade.OnValueChanged -= HandleKitChanged;
 
         if (activeByClientId.TryGetValue(OwnerClientId, out var registered) && registered == this)
             activeByClientId.Remove(OwnerClientId);
@@ -674,7 +704,8 @@ public class PlayerMedKit : NetworkBehaviour
 
     /// <summary>
     /// Si può avviare un uso: vivo, movimento libero (non a postazione, tablet, letto o a
-    /// terra), tablet chiuso, nessuna interazione continua in corso (per esempio il defib).
+    /// terra), tablet chiuso, nessuna interazione continua in corso (per esempio il defib),
+    /// nessuna mira di lancio aperta (Rev BS-b · Q66-a).
     /// </summary>
     private bool CanUseLocally()
     {
@@ -682,6 +713,7 @@ public class PlayerMedKit : NetworkBehaviour
         if (controller == null || !controller.enabled) return false;
         if (tablet != null && tablet.IsBusy) return false;
         if (interaction != null && interaction.IsInteracting) return false;
+        if (thrower != null && thrower.IsAiming) return false;
         return true;
     }
 
@@ -908,13 +940,14 @@ public class PlayerMedKit : NetworkBehaviour
 
         RestockResult result = ServerRestockFromShip(out RestockTaken taken);
         RestockResultOwnerRpc(result, taken.Base, taken.Advanced, taken.Antidote,
-                              taken.Adrenaline, taken.Hazmat, taken.CombatStim, taken.StimBlockedByTier);
+                              taken.Adrenaline, taken.Hazmat, taken.CombatStim, taken.HealingGrenade,
+                              taken.StimBlockedByTier);
     }
 
-    /// <summary>Rev BR-b — pezzi prelevati dalla stiva in un rifornimento (solo server).</summary>
+    /// <summary>Rev BR-b — pezzi prelevati dalla stiva in un rifornimento (solo server). Rev BS-b: + bomba.</summary>
     private struct RestockTaken
     {
-        public byte Base, Advanced, Antidote, Adrenaline, Hazmat, CombatStim;
+        public byte Base, Advanced, Antidote, Adrenaline, Hazmat, CombatStim, HealingGrenade;
         public bool StimBlockedByTier;   // Q48-a: c'erano stim in stiva e spazio nel kit, ma tier troppo basso
     }
 
@@ -947,12 +980,15 @@ public class PlayerMedKit : NetworkBehaviour
         taken.Adrenaline = TakeFromShip(inventory, ItemType.Adrenaline);
         taken.Hazmat = TakeFromShip(inventory, ItemType.HazmatInjection);
         taken.CombatStim = TakeFromShip(inventory, ItemType.CombatStim);
+        taken.HealingGrenade = TakeFromShip(inventory, ItemType.HealingGrenade);   // Rev BS-b
 
-        int total = taken.Base + taken.Advanced + taken.Antidote + taken.Adrenaline + taken.Hazmat + taken.CombatStim;
+        int total = taken.Base + taken.Advanced + taken.Antidote + taken.Adrenaline + taken.Hazmat + taken.CombatStim +
+                    taken.HealingGrenade;
         if (total == 0) return RestockResult.NoSupplies;
 
         LogV($"Rifornito dalla stiva: base +{taken.Base}, avanzato +{taken.Advanced}, antidoto +{taken.Antidote}, " +
-             $"adrenaline +{taken.Adrenaline}, hazmat +{taken.Hazmat}, stim +{taken.CombatStim}.");
+             $"adrenaline +{taken.Adrenaline}, hazmat +{taken.Hazmat}, stim +{taken.CombatStim}, " +
+             $"bomba +{taken.HealingGrenade}.");
         return RestockResult.Restocked;
     }
 
@@ -971,7 +1007,8 @@ public class PlayerMedKit : NetworkBehaviour
 
     [Rpc(SendTo.Owner)]
     private void RestockResultOwnerRpc(RestockResult result, byte takenBase, byte takenAdvanced, byte takenAntidote,
-                                       byte takenAdrenaline, byte takenHazmat, byte takenStim, bool stimBlockedByTier)
+                                       byte takenAdrenaline, byte takenHazmat, byte takenStim, byte takenGrenade,
+                                       bool stimBlockedByTier)
     {
         // Rev BR-b (Q48-a): nota sulla stim bloccata dal tier, in coda a qualsiasi esito.
         string stimNote = stimBlockedByTier
@@ -981,13 +1018,14 @@ public class PlayerMedKit : NetworkBehaviour
         switch (result)
         {
             case RestockResult.Restocked:
-                var parts = new List<string>(6);
+                var parts = new List<string>(7);
                 if (takenBase > 0) parts.Add($"+{takenBase} medkit");
                 if (takenAdvanced > 0) parts.Add($"+{takenAdvanced} advanced medkit");
                 if (takenAntidote > 0) parts.Add($"+{takenAntidote} antidote");
                 if (takenAdrenaline > 0) parts.Add($"+{takenAdrenaline} adrenaline");
                 if (takenHazmat > 0) parts.Add($"+{takenHazmat} Hazmat");
                 if (takenStim > 0) parts.Add($"+{takenStim} Combat Stim");
+                if (takenGrenade > 0) parts.Add($"+{takenGrenade} Healing Grenade");   // Rev BS-b
                 SetFeedback("Kit restocked: " + string.Join(", ", parts) + stimNote, HoldSeconds);
                 break;
             case RestockResult.KitFull:
@@ -1017,7 +1055,22 @@ public class PlayerMedKit : NetworkBehaviour
         netAdrenaline.Value = 0;
         netHazmat.Value = 0;
         netCombatStim.Value = 0;
+        netHealingGrenade.Value = 0;
         LogV("Kit svuotato.");
+    }
+
+    /// <summary>
+    /// Rev BS-b — toglie un pezzo del tipo indicato dal kit. SERVER ONLY. Lo usa PlayerThrower per
+    /// la bomba curativa, solo dopo un lancio partito. false se il kit non ne contiene.
+    /// </summary>
+    public bool ServerTryConsume(ItemType type)
+    {
+        if (!IsServer) return false;
+        int count = GetCount(type);
+        if (count <= 0) return false;
+        ServerSetCount(type, count - 1);
+        LogV($"Consumato {type} fuori dal canale (rimasti {count - 1}).");
+        return true;
     }
 
     private void ServerSetCount(ItemType type, int value)
@@ -1032,6 +1085,7 @@ public class PlayerMedKit : NetworkBehaviour
             case ItemType.Adrenaline: netAdrenaline.Value = clamped; break;
             case ItemType.HazmatInjection: netHazmat.Value = clamped; break;
             case ItemType.CombatStim: netCombatStim.Value = clamped; break;
+            case ItemType.HealingGrenade: netHealingGrenade.Value = clamped; break;
             default:
                 Debug.LogError($"[PlayerMedKit] ItemType {type} non appartiene al kit medico.");
                 break;
@@ -1079,7 +1133,7 @@ public class PlayerMedKit : NetworkBehaviour
         // banda per OwnerClientId (passo 250).
         float y = 310 + (OwnerClientId * 250f);
 
-        GUILayout.BeginArea(new Rect(940, y, 320, 110));
+        GUILayout.BeginArea(new Rect(940, y, 320, 130));   // Rev BS-b: riga della bomba
         GUILayout.BeginVertical("box");
         GUILayout.Label($"[PlayerMedKit] Client {OwnerClientId} — base {GetCount(ItemType.MedkitBase)}/" +
                         $"{GetCap(ItemType.MedkitBase)} · avanz. {GetCount(ItemType.MedkitAdvanced)}/" +
@@ -1089,13 +1143,14 @@ public class PlayerMedKit : NetworkBehaviour
                         $"hazmat {GetCount(ItemType.HazmatInjection)}/{GetCap(ItemType.HazmatInjection)} · " +
                         $"stim {GetCount(ItemType.CombatStim)}/{GetCap(ItemType.CombatStim)} " +
                         $"(rifornibili {GetRestockCap(ItemType.CombatStim)})");
+        GUILayout.Label($"Bomba curativa {GetCount(ItemType.HealingGrenade)}/{GetCap(ItemType.HealingGrenade)}");
 
         GUILayout.BeginHorizontal();
         if (GUILayout.Button("Dalla stiva"))
         {
             RestockResult result = ServerRestockFromShip(out RestockTaken t);
             RestockResultOwnerRpc(result, t.Base, t.Advanced, t.Antidote, t.Adrenaline, t.Hazmat, t.CombatStim,
-                                  t.StimBlockedByTier);
+                                  t.HealingGrenade, t.StimBlockedByTier);
         }
         if (GUILayout.Button("Pieno (gratis)"))   // debug: ignora il tier della Medbay
         {

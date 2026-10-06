@@ -28,6 +28,11 @@ using UnityEngine;
 ///     profilo di default (0.6 → 18 s su 30, Q43-a). Durata ed effetti delle droghe stanno
 ///     negli asset SED_Hazmat / SED_CombatStim, non qui.
 ///
+/// BOMBA CURATIVA (Rev BS-b · Q65-a): solo la capienza nel kit (1), nessun tier minimo. Volo,
+/// raggio, durata e cura del campo stanno nell'asset TD_HealingGrenade (ThrowableData); il
+/// moltiplicatore di un non-Corpsman è quello del profilo di default (Q57-a, applicato alla
+/// cura del campo).
+///
 /// NON QUI (decisioni di design, non tuning):
 ///   - quali stati cura l'antidoto (Veleno e Radiazioni, mai Ferite Composte — Q34-a):
 ///     costante documentata in PlayerMedKit;
@@ -65,6 +70,11 @@ public class MedKitConfig : ScriptableObject
     [Tooltip("Combat Stim che un giocatore può portare.")]
     [Min(0)]
     [SerializeField] private int capCombatStim = 2;
+
+    [Header("Capienza del kit personale — bomba curativa (Rev BS-b)")]
+    [Tooltip("Bombe curative che un giocatore può portare. Si lanciano con PlayerThrower (G / RB).")]
+    [Min(0)]
+    [SerializeField] private int capHealingGrenade = 1;
 
     [Header("Medikit — HP nominali (Q33-a)")]
     [Tooltip("HP ripristinati dal medikit base con effetto pieno (Corpsman). Gli altri ruoli " +
@@ -137,13 +147,15 @@ public class MedKitConfig : ScriptableObject
             case ItemType.Adrenaline: return Mathf.Clamp(capAdrenaline, 0, 255);
             case ItemType.HazmatInjection: return Mathf.Clamp(capHazmatInjection, 0, 255);
             case ItemType.CombatStim: return Mathf.Clamp(capCombatStim, 0, 255);
+            case ItemType.HealingGrenade: return Mathf.Clamp(capHealingGrenade, 0, 255);
             default: return 0;
         }
     }
 
     /// <summary>
     /// Rev BR-b (Q48-a) — tier minimo della Medbay per prelevare il tipo all'armadietto.
-    /// Solo la Combat Stim ha un vincolo (T2); tutto il resto è disponibile da T1.
+    /// Solo la Combat Stim ha un vincolo (T2); tutto il resto è disponibile da T1 (compresa la
+    /// bomba curativa, loadout T1 — Rev BS-b · Q65-a).
     /// </summary>
     public int MinMedbayTierFor(ItemType type)
     {
@@ -165,7 +177,10 @@ public class MedKitConfig : ScriptableObject
         }
     }
 
-    /// <summary>Profilo di ruolo dell'utilizzatore: Corpsman oppure default (malus Rev U).</summary>
+    /// <summary>
+    /// Profilo di ruolo dell'utilizzatore: Corpsman oppure default (malus Rev U). Rev BS-b: il
+    /// moltiplicatore vale anche per la cura del campo della bomba curativa (Q57-a).
+    /// </summary>
     public MedKitProfile ProfileFor(bool isCorpsman)
     {
         return isCorpsman

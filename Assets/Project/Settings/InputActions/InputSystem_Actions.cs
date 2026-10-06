@@ -289,6 +289,15 @@ public partial class @InputSystem_Actions: IInputActionCollection2, IDisposable
                     ""processors"": """",
                     ""interactions"": """",
                     ""initialStateCheck"": false
+                },
+                {
+                    ""name"": ""ThrowGrenade"",
+                    ""type"": ""Button"",
+                    ""id"": ""0fe9eed6-530d-49a5-b588-72cfa0268621"",
+                    ""expectedControlType"": """",
+                    ""processors"": """",
+                    ""interactions"": ""Press(behavior=2)"",
+                    ""initialStateCheck"": false
                 }
             ],
             ""bindings"": [
@@ -993,6 +1002,28 @@ public partial class @InputSystem_Actions: IInputActionCollection2, IDisposable
                     ""processors"": """",
                     ""groups"": """",
                     ""action"": ""CycleDrug"",
+                    ""isComposite"": false,
+                    ""isPartOfComposite"": false
+                },
+                {
+                    ""name"": """",
+                    ""id"": ""f035d697-3109-4c5f-9633-96c5580d9fbc"",
+                    ""path"": ""<Keyboard>/g"",
+                    ""interactions"": """",
+                    ""processors"": """",
+                    ""groups"": """",
+                    ""action"": ""ThrowGrenade"",
+                    ""isComposite"": false,
+                    ""isPartOfComposite"": false
+                },
+                {
+                    ""name"": """",
+                    ""id"": ""075c17ff-0ceb-4f39-9333-2de40cb86d70"",
+                    ""path"": ""<Gamepad>/rightShoulder"",
+                    ""interactions"": """",
+                    ""processors"": """",
+                    ""groups"": """",
+                    ""action"": ""ThrowGrenade"",
                     ""isComposite"": false,
                     ""isPartOfComposite"": false
                 }
@@ -2079,6 +2110,7 @@ public partial class @InputSystem_Actions: IInputActionCollection2, IDisposable
         m_Player_UseAntidote = m_Player.FindAction("UseAntidote", throwIfNotFound: true);
         m_Player_UseDrug = m_Player.FindAction("UseDrug", throwIfNotFound: true);
         m_Player_CycleDrug = m_Player.FindAction("CycleDrug", throwIfNotFound: true);
+        m_Player_ThrowGrenade = m_Player.FindAction("ThrowGrenade", throwIfNotFound: true);
         // UI
         m_UI = asset.FindActionMap("UI", throwIfNotFound: true);
         m_UI_Navigate = m_UI.FindAction("Navigate", throwIfNotFound: true);
@@ -2213,6 +2245,7 @@ public partial class @InputSystem_Actions: IInputActionCollection2, IDisposable
     private readonly InputAction m_Player_UseAntidote;
     private readonly InputAction m_Player_UseDrug;
     private readonly InputAction m_Player_CycleDrug;
+    private readonly InputAction m_Player_ThrowGrenade;
     /// <summary>
     /// Provides access to input actions defined in input action map "Player".
     /// </summary>
@@ -2313,6 +2346,10 @@ public partial class @InputSystem_Actions: IInputActionCollection2, IDisposable
         /// </summary>
         public InputAction @CycleDrug => m_Wrapper.m_Player_CycleDrug;
         /// <summary>
+        /// Provides access to the underlying input action "Player/ThrowGrenade".
+        /// </summary>
+        public InputAction @ThrowGrenade => m_Wrapper.m_Player_ThrowGrenade;
+        /// <summary>
         /// Provides access to the underlying input action map instance.
         /// </summary>
         public InputActionMap Get() { return m_Wrapper.m_Player; }
@@ -2404,6 +2441,9 @@ public partial class @InputSystem_Actions: IInputActionCollection2, IDisposable
             @CycleDrug.started += instance.OnCycleDrug;
             @CycleDrug.performed += instance.OnCycleDrug;
             @CycleDrug.canceled += instance.OnCycleDrug;
+            @ThrowGrenade.started += instance.OnThrowGrenade;
+            @ThrowGrenade.performed += instance.OnThrowGrenade;
+            @ThrowGrenade.canceled += instance.OnThrowGrenade;
         }
 
         /// <summary>
@@ -2481,6 +2521,9 @@ public partial class @InputSystem_Actions: IInputActionCollection2, IDisposable
             @CycleDrug.started -= instance.OnCycleDrug;
             @CycleDrug.performed -= instance.OnCycleDrug;
             @CycleDrug.canceled -= instance.OnCycleDrug;
+            @ThrowGrenade.started -= instance.OnThrowGrenade;
+            @ThrowGrenade.performed -= instance.OnThrowGrenade;
+            @ThrowGrenade.canceled -= instance.OnThrowGrenade;
         }
 
         /// <summary>
@@ -3300,6 +3343,13 @@ public partial class @InputSystem_Actions: IInputActionCollection2, IDisposable
         /// <seealso cref="UnityEngine.InputSystem.InputAction.performed" />
         /// <seealso cref="UnityEngine.InputSystem.InputAction.canceled" />
         void OnCycleDrug(InputAction.CallbackContext context);
+        /// <summary>
+        /// Method invoked when associated input action "ThrowGrenade" is either <see cref="UnityEngine.InputSystem.InputAction.started" />, <see cref="UnityEngine.InputSystem.InputAction.performed" /> or <see cref="UnityEngine.InputSystem.InputAction.canceled" />.
+        /// </summary>
+        /// <seealso cref="UnityEngine.InputSystem.InputAction.started" />
+        /// <seealso cref="UnityEngine.InputSystem.InputAction.performed" />
+        /// <seealso cref="UnityEngine.InputSystem.InputAction.canceled" />
+        void OnThrowGrenade(InputAction.CallbackContext context);
     }
     /// <summary>
     /// Interface to implement callback methods for all input action callbacks associated with input actions defined by "UI" which allows adding and removing callbacks.
