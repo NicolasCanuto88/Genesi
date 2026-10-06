@@ -3,6 +3,14 @@ using UnityEngine;
 /// <summary>
 /// Ladder climbing system - INPUT HANDLED BY PLAYERCONTROLLER
 /// This component only provides climbing logic, PlayerController feeds it input via Input System
+///
+/// VISUALE (Rev BT-b · Q79-a): HandleClimbing riceve la rotazione già convertita in GRADI da
+/// PlayerController (mouse: pixel × sensibilità; stick: velocità angolare × deltaTime), quindi in
+/// salita la sensibilità è la stessa che a piedi. lookScale (default 1) è solo un moltiplicatore
+/// relativo. Il vecchio campo cameraLookSpeed (0.1 nelle due scale di Game.unity) moltiplicava
+/// l'input grezzo — pixel del mouse o deflessione dello stick — e non è più letto: il valore
+/// serializzato in scena viene ignorato e sparisce al prossimo salvataggio della scena.
+/// File convertito in UTF-8 in Rev BT-b (era Windows-1252).
 /// </summary>
 [RequireComponent(typeof(BoxCollider))]
 public class Ladder : MonoBehaviour, IInteractable
@@ -20,7 +28,12 @@ public class Ladder : MonoBehaviour, IInteractable
     [SerializeField] private Transform bottomExitPoint;
 
     [Header("Camera")]
-    [SerializeField] private float cameraLookSpeed = 2f;
+    // Rev BT-b: sostituito da lookScale (l'input ora arriva in gradi da PlayerController).
+    // [SerializeField] private float cameraLookSpeed = 2f;
+    [Tooltip("Moltiplicatore della rotazione verticale in salita, relativo alla visuale a piedi " +
+             "(1 = stessa sensibilità). Rev BT-b.")]
+    [Min(0f)]
+    [SerializeField] private float lookScale = 1f;
     [SerializeField] private float maxLookAngle = 60f;
     [SerializeField] private float cameraDistanceFromLadder = 0.5f;
 
@@ -104,9 +117,11 @@ public class Ladder : MonoBehaviour, IInteractable
     // ===== PUBLIC METHODS FOR PLAYERCONTROLLER =====
 
     /// <summary>
-    /// Called by PlayerController every frame when on ladder
+    /// Called by PlayerController every frame when on ladder.
+    /// lookDegrees: rotazione di questo frame in gradi, già convertita da PlayerController
+    /// (Rev BT-b). Qui si usa solo la componente verticale.
     /// </summary>
-    public void HandleClimbing(float verticalInput, Vector2 lookInput)
+    public void HandleClimbing(float verticalInput, Vector2 lookDegrees)
     {
         if (currentPlayer == null) return;
 
@@ -141,8 +156,8 @@ public class Ladder : MonoBehaviour, IInteractable
         lockedPos.z = ladderPos.z + (offsetDir.z * cameraDistanceFromLadder);
         currentPlayer.transform.position = lockedPos;
 
-        // Camera look (from PlayerController lookInput)
-        HandleCameraLook(lookInput);
+        // Camera look (from PlayerController, already in degrees — Rev BT-b)
+        HandleCameraLook(lookDegrees);
     }
 
     /// <summary>
@@ -237,11 +252,11 @@ public class Ladder : MonoBehaviour, IInteractable
         LogV("[Ladder] Player exited");
     }
 
-    private void HandleCameraLook(Vector2 lookInput)
+    private void HandleCameraLook(Vector2 lookDegrees)
     {
         if (playerCamera == null) return;
 
-        verticalRotation -= lookInput.y * cameraLookSpeed;
+        verticalRotation -= lookDegrees.y * lookScale;
         verticalRotation = Mathf.Clamp(verticalRotation, -maxLookAngle, maxLookAngle);
 
         playerCamera.localRotation = Quaternion.Euler(verticalRotation, 0f, 0f);

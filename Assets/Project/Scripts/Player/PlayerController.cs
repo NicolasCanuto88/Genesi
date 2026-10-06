@@ -34,12 +34,31 @@ using UnityEngine.InputSystem;
 /// DEBUG (Rev BT-a · Q74-a): l'azione "Debug" non ha più binding (lo spazio è stato tolto).
 /// OnDebug resta come guardia: solo Editor/Development Build, e nessuna eccezione se
 /// DeguAndTest o il suo pannello mancano.
+///
+/// VISUALE (Rev BT-b · Q78-a, Q79-a): l'azione "Look" porta due grandezze diverse.
+/// - Mouse: spostamento in pixel nel frame → gradi = pixel × lookSensitivity. Invariato.
+/// - Stick (e ogni dispositivo non mouse): deflessione −1…1 → velocità angolare. Gradi nel
+///   frame = curva(|stick|) × stickLookSpeed × deltaTime, con curva = |stick|^stickLookExponent
+///   applicata al modulo (la direzione resta quella dello stick).
+/// Prima di Rev BT-b anche lo stick era moltiplicato per lookSensitivity a ogni frame: al massimo
+/// 0.15° per frame, cioè ~9°/s a 60 fps, e velocità diversa a seconda del frame rate.
+/// Il dispositivo si riconosce da lookAction.activeControl.device (stesso schema di
+/// SutureInteraction, Rev BO-c, e PilotStation, Rev T): nessun accesso a Mouse.current.
+/// La conversione in gradi (ComputeLookDegrees) avviene qui una volta per frame e serve anche la
+/// scala: Ladder.HandleClimbing riceve gradi, quindi la sensibilità è la stessa a piedi e in
+/// salita. I tre valori sono comfort dell'utente (Q72-a): restano sul componente, destinati al
+/// menu opzioni.
+///
+/// CROUCH (Rev BT-b · Q81-a): OnCrouch è ignorato a componente disattivato (vedi OnCrouch).
+/// Prima, uscendo da una postazione con B (Cancel, stesso tasto di Crouch sul gamepad) il
+/// giocatore si ritrovava accovacciato.
 /// </summary>
 [RequireComponent(typeof(CharacterController))]
 [RequireComponent(typeof(PlayerInput))]
 public class PlayerController : MonoBehaviour
 {
     private const string SprintActionName = "Sprint";
+    private const string LookActionName = "Look";
 
     [Header("Movement (Rev BT-a — valori da SO)")]
     [Tooltip("Velocità, accelerazione, stamina e gravità. Asset: Assets/Project/Scripts/Player/" +
@@ -47,9 +66,20 @@ public class PlayerController : MonoBehaviour
     [SerializeField] private PlayerMovementConfig movementConfig;
 
     [Header("Look")]
-    [SerializeField] private float lookSensitivity = 2f;
+    [Tooltip("Mouse: gradi di rotazione per pixel di spostamento. Vale anche sulla scala (Rev BT-b).")]
+    [SerializeField] private float lookSensitivity = 0.15f;
     [SerializeField] private float lookSmoothness = 10f;
     [SerializeField] private float maxLookAngle = 85f;
+
+    [Header("Look — Stick (Rev BT-b)")]
+    [Tooltip("Stick: velocità di rotazione a fondo corsa, in gradi al secondo. Indipendente dal frame rate.")]
+    [Min(0f)]
+    [SerializeField] private float stickLookSpeed = 180f;
+
+    [Tooltip("Stick: curva di risposta. 1 = lineare; valori più alti danno più precisione vicino al " +
+             "centro (1.5 → a metà corsa circa il 35% della velocità massima).")]
+    [Range(1f, 3f)]
+    [SerializeField] private float stickLookExponent = 1.5f;
 
     [Header("References")]
     [SerializeField] private Transform cameraTransform;
@@ -62,6 +92,7 @@ public class PlayerController : MonoBehaviour
     private PlayerInput playerInput;
     private PlayerStatusEffects statusEffects;   // Rev BR: moltiplicatore di velocità (può mancare fuori dal Player prefab)
     private InputAction sprintAction;            // Rev BT-a: rete di sicurezza sul rilascio dello sprint
+    private InputAction lookAction;              // Rev BT-b: dispositivo che guida la visuale (mouse o stick)
 
     // Input values
     private Vector2 moveInput;
@@ -74,6 +105,7 @@ public class PlayerController : MonoBehaviour
     private float currentStamina;
     private float verticalRotation;
     private float verticalVelocity; // Separate vertical velocity for gravity
+    private bool lookFromMouse;     // Rev BT-b: solo per l'overlay di debug (dispositivo dell'ultimo frame)
 
     // Properties
     public float CurrentStamina => currentStamina;
@@ -167,17 +199,20 @@ public class PlayerController : MonoBehaviour
         // Rev BT-a: rete di sicurezza sul rilascio dello sprint, anche sulla scala.
         VerifySprintRelease();
 
+        // Rev BT-b: input della visuale convertito in gradi una volta per frame (mouse o stick).
+        Vector2 lookDegrees = ComputeLookDegrees();
+
         // Check if on ladder
         if (currentLadder != null && currentLadder.IsPlayerOnLadder)
         {
-            // On ladder - send input to ladder
-            currentLadder.HandleClimbing(moveInput.y, lookInput);
+            // On ladder - send input to ladder (Rev BT-b: gradi, stessa sensibilità che a piedi)
+            currentLadder.HandleClimbing(moveInput.y, lookDegrees);
         }
         else
         {
             // Normal movement
             HandleMovement();
-            HandleLook();
+            HandleLook(lookDegrees);
             HandleStamina();
         }
     }
@@ -263,17 +298,42 @@ public class PlayerController : MonoBehaviour
         characterController.Move(finalVelocity * Time.deltaTime);
     }
 
-    private void HandleLook()
+    /// <summary>
+    /// Rev BT-b (Q78-a) — converte l'input della visuale in gradi di rotazione per questo frame.
+    /// Mouse: pixel × lookSensitivity (come prima). Stick: velocità angolare con curva di risposta
+    /// sul modulo, × deltaTime. Il dispositivo viene da lookAction.activeControl: senza azione o
+    /// senza controllo attivo si usa il ramo stick, come SutureInteraction (il valore resta
+    /// comunque limitato a stickLookSpeed).
+    /// </summary>
+    private Vector2 ComputeLookDegrees()
+    {
+        if (lookAction == null && playerInput != null && playerInput.actions != null)
+            lookAction = playerInput.actions.FindAction(LookActionName, throwIfNotFound: false);
+
+        lookFromMouse = lookAction != null && lookAction.activeControl?.device is Mouse;
+
+        if (lookFromMouse)
+            return lookInput * lookSensitivity;
+
+        float deflection = lookInput.magnitude;
+        if (deflection <= 0f)
+            return Vector2.zero;
+
+        float curved = Mathf.Pow(Mathf.Min(deflection, 1f), stickLookExponent);
+        return (lookInput / deflection) * (curved * stickLookSpeed * Time.deltaTime);
+    }
+
+    private void HandleLook(Vector2 lookDegrees)
     {
         // Only look when cursor is locked
         if (Cursor.lockState != CursorLockMode.Locked)
             return;
 
         // Horizontal rotation (player body)
-        transform.Rotate(Vector3.up * lookInput.x * lookSensitivity);
+        transform.Rotate(Vector3.up * lookDegrees.x);
 
         // Vertical rotation (camera only)
-        verticalRotation -= lookInput.y * lookSensitivity;
+        verticalRotation -= lookDegrees.y;
         verticalRotation = Mathf.Clamp(verticalRotation, -maxLookAngle, maxLookAngle);
 
         if (cameraTransform != null)
@@ -320,8 +380,19 @@ public class PlayerController : MonoBehaviour
         sprintPressed = value.isPressed;
     }
 
+    /// <summary>
+    /// Azione "Crouch" (C / B), interruttore.
+    /// Rev BT-b (Q81-a): ignorata quando questo componente è disattivato. PlayerInput usa
+    /// SendMessages, che raggiunge anche i componenti disattivati: seduti a una postazione, al
+    /// tablet, sul letto o in un pannello di riparazione (tutti contesti che disattivano
+    /// PlayerController), il B che chiude il contesto (Cancel, stesso tasto) arrivava qui e
+    /// accovacciava il giocatore, e lo stesso faceva C. L'evento arriva prima dell'Update che
+    /// riattiva il controller, quindi la guardia lo scarta.
+    /// </summary>
     public void OnCrouch(InputValue value)
     {
+        if (!isActiveAndEnabled) return;
+
         if (value.isPressed)
         {
             crouchToggled = !crouchToggled;
@@ -370,6 +441,7 @@ public class PlayerController : MonoBehaviour
         GUI.Label(new Rect(10, 30, 300, 20), $"Speed: {currentVelocity.magnitude:F2} m/s (×{MoveSpeedMultiplier:F2})");
         GUI.Label(new Rect(10, 50, 300, 20), $"Sprinting: {IsSprinting}");
         GUI.Label(new Rect(10, 70, 300, 20), $"Crouching: {IsCrouching}");
+        GUI.Label(new Rect(10, 90, 300, 20), $"Look: {(lookFromMouse ? "mouse" : "stick")}");   // Rev BT-b
 #endif
     }
 }
