@@ -1,0 +1,24 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: ed2f27e943d9b3d439ef6220abd080a5, type: 3}
+  m_Name: PlayerMovementConfig
+  m_EditorClassIdentifier: Assembly-CSharp::PlayerMovementConfig
+  walkSpeed: 3
+  sprintSpeed: 5.5
+  crouchSpeed: 1.5
+  acceleration: 10
+  deceleration: 10
+  maxStamina: 100
+  sprintStaminaDrain: 20
+  staminaRecovery: 15
+  gravity: 20
+  terminalVelocity: -50

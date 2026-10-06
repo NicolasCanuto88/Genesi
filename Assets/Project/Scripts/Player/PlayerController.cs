@@ -15,31 +15,41 @@ using UnityEngine.InputSystem;
 /// STAMINA (Rev BR): RefillStamina riporta la stamina al massimo. La chiama l'Adrenaline
 /// (PlayerMedKit, Rev BR-b) sul client proprietario, dove vive la stamina. MaxStamina serve al
 /// kit per non consumare un'Adrenaline con HP e stamina già pieni.
+///
+/// VALORI DA SO (Rev BT-a · Q72-a): velocità, accelerazione, stamina e gravità vengono da
+/// PlayerMovementConfig (campo movementConfig). Senza asset il componente ne crea uno con i
+/// default e lo segnala a log: il giocatore si muove comunque. Sensibilità, morbidezza e angolo
+/// della visuale restano qui (comfort dell'utente, non bilanciamento).
+///
+/// SPRINT (Rev BT-a · Q71-a): l'azione "Sprint" ha l'interazione Press "Press And Release"
+/// (Press(behavior=2), stessa soluzione di ThrowGrenade in Rev BS-a). PlayerInput chiama
+/// OnSprint alla pressione E al rilascio, quindi sprintPressed segue il tasto su tastiera e
+/// gamepad. Rete di sicurezza (VerifySprintRelease): se il flag è acceso ma l'azione non risulta
+/// più premuta (InputAction.IsPressed), si spegne — copre un rilascio perso, per esempio mentre
+/// il componente era disattivato a una postazione. Prima di Rev BT-a l'azione era un Button
+/// senza interazione, OnSprint arrivava solo alla pressione e il rilascio era ricavato da
+/// Keyboard.current (Shift): lo sprint del gamepad si spegneva subito con una tastiera
+/// collegata. Ora nessun accesso diretto ai dispositivi (invariante di input).
+///
+/// DEBUG (Rev BT-a · Q74-a): l'azione "Debug" non ha più binding (lo spazio è stato tolto).
+/// OnDebug resta come guardia: solo Editor/Development Build, e nessuna eccezione se
+/// DeguAndTest o il suo pannello mancano.
 /// </summary>
 [RequireComponent(typeof(CharacterController))]
 [RequireComponent(typeof(PlayerInput))]
 public class PlayerController : MonoBehaviour
 {
-    [Header("Movement")]
-    [SerializeField] private float walkSpeed = 3f;
-    [SerializeField] private float sprintSpeed = 5.5f;
-    [SerializeField] private float crouchSpeed = 1.5f;
-    [SerializeField] private float acceleration = 10f;
-    [SerializeField] private float deceleration = 10f;
+    private const string SprintActionName = "Sprint";
+
+    [Header("Movement (Rev BT-a — valori da SO)")]
+    [Tooltip("Velocità, accelerazione, stamina e gravità. Asset: Assets/Project/Scripts/Player/" +
+             "PlayerMovementConfig.asset. Se manca, si usano i default dello SO e un errore a log.")]
+    [SerializeField] private PlayerMovementConfig movementConfig;
 
     [Header("Look")]
     [SerializeField] private float lookSensitivity = 2f;
     [SerializeField] private float lookSmoothness = 10f;
     [SerializeField] private float maxLookAngle = 85f;
-
-    [Header("Stamina")]
-    [SerializeField] private float maxStamina = 100f;
-    [SerializeField] private float sprintStaminaDrain = 20f;
-    [SerializeField] private float staminaRecovery = 15f;
-
-    [Header("Gravity")]
-    [SerializeField] private float gravity = 20f; // Adjustable gravity strength
-    [SerializeField] private float terminalVelocity = -50f; // Max fall speed
 
     [Header("References")]
     [SerializeField] private Transform cameraTransform;
@@ -51,6 +61,7 @@ public class PlayerController : MonoBehaviour
     private CharacterController characterController;
     private PlayerInput playerInput;
     private PlayerStatusEffects statusEffects;   // Rev BR: moltiplicatore di velocità (può mancare fuori dal Player prefab)
+    private InputAction sprintAction;            // Rev BT-a: rete di sicurezza sul rilascio dello sprint
 
     // Input values
     private Vector2 moveInput;
@@ -66,10 +77,16 @@ public class PlayerController : MonoBehaviour
 
     // Properties
     public float CurrentStamina => currentStamina;
-    public float MaxStamina => maxStamina;   // Rev BR-b: blocco preventivo dell'Adrenaline (Q47-a)
+    public float MaxStamina => Config.MaxStamina;   // Rev BR-b: blocco preventivo dell'Adrenaline (Q47-a)
     public bool IsSprinting => sprintPressed && currentStamina > 0 && moveInput.magnitude > 0.1f;
     public bool IsCrouching => crouchToggled;
     public Transform CameraTransform => cameraTransform;
+
+    /// <summary>
+    /// Rev BT-a — configurazione attiva. Mai null dopo Awake: se il campo è vuoto, Awake crea
+    /// un'istanza con i default e lo segnala una volta.
+    /// </summary>
+    private PlayerMovementConfig Config => movementConfig;
 
     /// <summary>
     /// Azzera la velocità interna (orizzontale + verticale/gravità).
@@ -100,7 +117,7 @@ public class PlayerController : MonoBehaviour
     /// </summary>
     public void RefillStamina()
     {
-        currentStamina = maxStamina;
+        currentStamina = Config.MaxStamina;
     }
 
     /// <summary>Rev BR — moltiplicatore di velocità dagli stati attivi (1 se il componente manca).</summary>
@@ -112,7 +129,16 @@ public class PlayerController : MonoBehaviour
         characterController = GetComponent<CharacterController>();
         playerInput = GetComponent<PlayerInput>();
         statusEffects = GetComponent<PlayerStatusEffects>();
-        currentStamina = maxStamina;
+
+        // Rev BT-a: senza asset il giocatore deve comunque muoversi — default dello SO + errore.
+        if (movementConfig == null)
+        {
+            Debug.LogError("[PlayerController] PlayerMovementConfig non assegnato: uso i valori di default. " +
+                           "Assegna Assets/Project/Scripts/Player/PlayerMovementConfig.asset nel Player prefab.");
+            movementConfig = ScriptableObject.CreateInstance<PlayerMovementConfig>();
+        }
+
+        currentStamina = Config.MaxStamina;
 
         // Auto-assign camera if not set
         if (cameraTransform == null)
@@ -138,6 +164,9 @@ public class PlayerController : MonoBehaviour
 
     private void Update()
     {
+        // Rev BT-a: rete di sicurezza sul rilascio dello sprint, anche sulla scala.
+        VerifySprintRelease();
+
         // Check if on ladder
         if (currentLadder != null && currentLadder.IsPlayerOnLadder)
         {
@@ -150,9 +179,6 @@ public class PlayerController : MonoBehaviour
             HandleMovement();
             HandleLook();
             HandleStamina();
-
-            // WORKAROUND: Verify sprint state every frame
-            VerifySprintState();
         }
     }
 
@@ -163,21 +189,20 @@ public class PlayerController : MonoBehaviour
         currentLadder = ladder;
     }
 
-    private void VerifySprintState()
+    /// <summary>
+    /// Rev BT-a (Q71-a) — rete di sicurezza: se lo sprint risulta acceso ma l'azione "Sprint" non
+    /// è più premuta, lo spegne. Sostituisce VerifySprintState, che leggeva Keyboard.current
+    /// (Shift) e spegneva lo sprint del gamepad. Il rilascio normale arriva da OnSprint.
+    /// </summary>
+    private void VerifySprintRelease()
     {
-        // Check if Shift is actually pressed
-        if (Keyboard.current != null)
-        {
-            bool shiftActuallyPressed = Keyboard.current.leftShiftKey.isPressed ||
-                                       Keyboard.current.rightShiftKey.isPressed;
+        if (!sprintPressed) return;
 
-            // If callback says sprint is ON but Shift is not pressed, force it OFF
-            if (sprintPressed && !shiftActuallyPressed)
-            {
-                sprintPressed = false;
-                // Debug log removed - workaround is working silently
-            }
-        }
+        if (sprintAction == null && playerInput != null && playerInput.actions != null)
+            sprintAction = playerInput.actions.FindAction(SprintActionName, throwIfNotFound: false);
+
+        if (sprintAction != null && !sprintAction.IsPressed())
+            sprintPressed = false;
     }
 
     private void HandleMovement()
@@ -188,16 +213,18 @@ public class PlayerController : MonoBehaviour
             return;
         }
 
+        PlayerMovementConfig config = Config;
+
         // Determine target speed
-        float targetSpeed = walkSpeed;
+        float targetSpeed = config.WalkSpeed;
 
         if (IsSprinting)
         {
-            targetSpeed = sprintSpeed;
+            targetSpeed = config.SprintSpeed;
         }
         else if (IsCrouching)
         {
-            targetSpeed = crouchSpeed;
+            targetSpeed = config.CrouchSpeed;
         }
 
         // Rev BR: modificatori di velocità (Combat Stim)
@@ -208,7 +235,9 @@ public class PlayerController : MonoBehaviour
         Vector3 targetVelocity = inputDirection.normalized * targetSpeed;
 
         // Smooth acceleration/deceleration (horizontal only)
-        float speedDelta = (targetVelocity.magnitude > currentVelocity.magnitude) ? acceleration : deceleration;
+        float speedDelta = (targetVelocity.magnitude > currentVelocity.magnitude)
+            ? config.Acceleration
+            : config.Deceleration;
         currentVelocity = Vector3.Lerp(currentVelocity, targetVelocity, speedDelta * Time.deltaTime);
 
         // Handle gravity separately
@@ -220,11 +249,11 @@ public class PlayerController : MonoBehaviour
         else
         {
             // Apply gravity acceleration
-            verticalVelocity -= gravity * Time.deltaTime;
+            verticalVelocity -= config.Gravity * Time.deltaTime;
         }
 
         // Clamp fall speed to terminal velocity
-        verticalVelocity = Mathf.Max(verticalVelocity, terminalVelocity);
+        verticalVelocity = Mathf.Max(verticalVelocity, config.TerminalVelocity);
 
         // Combine horizontal movement with vertical velocity
         Vector3 finalVelocity = currentVelocity;
@@ -255,15 +284,17 @@ public class PlayerController : MonoBehaviour
 
     private void HandleStamina()
     {
+        PlayerMovementConfig config = Config;
+
         if (IsSprinting)
         {
-            currentStamina -= sprintStaminaDrain * Time.deltaTime;
+            currentStamina -= config.SprintStaminaDrain * Time.deltaTime;
             currentStamina = Mathf.Max(0f, currentStamina);
         }
         else
         {
-            currentStamina += staminaRecovery * Time.deltaTime;
-            currentStamina = Mathf.Min(maxStamina, currentStamina);
+            currentStamina += config.StaminaRecovery * Time.deltaTime;
+            currentStamina = Mathf.Min(config.MaxStamina, currentStamina);
         }
     }
 
@@ -280,11 +311,13 @@ public class PlayerController : MonoBehaviour
         lookInput = value.Get<Vector2>();
     }
 
+    /// <summary>
+    /// Azione "Sprint" (Shift / L3), Press And Release (Rev BT-a · Q71-a): premuto → scatto,
+    /// rilasciato → camminata. Tenere premuto su tastiera e gamepad.
+    /// </summary>
     public void OnSprint(InputValue value)
     {
-        // Button callback only fires on press, not release (Unity 6.3 behavior)
-        float rawValue = value.Get<float>();
-        sprintPressed = rawValue > 0.5f;
+        sprintPressed = value.isPressed;
     }
 
     public void OnCrouch(InputValue value)
@@ -294,13 +327,23 @@ public class PlayerController : MonoBehaviour
             crouchToggled = !crouchToggled;
         }
     }
+
+    /// <summary>
+    /// Rev BT-a (Q74-a) — guardia: l'azione "Debug" non ha più binding (prima era lo spazio, che
+    /// lanciava una NullReferenceException perché il pannello di DeguAndTest non è assegnato in
+    /// scena). Se un giorno le si ridà un tasto, funziona solo in Editor e Development Build e
+    /// non lancia eccezioni se DeguAndTest manca.
+    /// </summary>
     public void OnDebug(InputValue value)
     {
-        if (value.isPressed)
-        {
-            DeguAndTest deguAndTest = FindObjectOfType<DeguAndTest>();
-            deguAndTest.panel();
-        }
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+        if (!value.isPressed) return;
+
+        DeguAndTest deguAndTest = FindAnyObjectByType<DeguAndTest>();
+        if (deguAndTest == null) return;
+
+        deguAndTest.panel();
+#endif
     }
 
     // OnCancel is handled by EngineeringStation and other systems
@@ -323,7 +366,7 @@ public class PlayerController : MonoBehaviour
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
         if (!showDebugUI) return;
 
-        GUI.Label(new Rect(10, 10, 300, 20), $"Stamina: {currentStamina:F1}/{maxStamina}");
+        GUI.Label(new Rect(10, 10, 300, 20), $"Stamina: {currentStamina:F1}/{MaxStamina}");
         GUI.Label(new Rect(10, 30, 300, 20), $"Speed: {currentVelocity.magnitude:F2} m/s (×{MoveSpeedMultiplier:F2})");
         GUI.Label(new Rect(10, 50, 300, 20), $"Sprinting: {IsSprinting}");
         GUI.Label(new Rect(10, 70, 300, 20), $"Crouching: {IsCrouching}");
