@@ -3336,6 +3336,7 @@ GameObject:
   - component: {fileID: 5610572989266236388}
   - component: {fileID: 2675865464265625071}
   - component: {fileID: 2980385632875717071}
+  - component: {fileID: 6095291782808219397}
   m_Layer: 0
   m_Name: Player
   m_TagString: Player
@@ -3816,6 +3817,22 @@ MonoBehaviour:
   feedbackText: {fileID: 5293802867559564085}
   logVerbose: 0
   debugFreeThrows: 0
+--- !u!114 &6095291782808219397
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 6942183193722732773}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: e774782ae30cefd4190777cc81129127, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::PlayerNanomedicDrone
+  ShowTopMostFoldoutHeaderGroup: 1
+  config: {fileID: 11400000, guid: dc59da391f639af40a3992f9e87d8a79, type: 2}
+  showDebugUI: 0
+  logVerbose: 0
 --- !u!1 &7011612708961063772
 GameObject:
   m_ObjectHideFlags: 0

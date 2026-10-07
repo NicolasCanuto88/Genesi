@@ -79,6 +79,12 @@ using UnityEngine.InputSystem;
 /// ruolo (Q57-a). Mira e kit si escludono (Q66-a): durante la mira H/J/K/L sono ignorati, durante
 /// un canale la mira non si apre (IsChanneling).
 ///
+/// NANOMEDIC DRONE (Rev BU-b · workshop Corpsman T3–T4 Q86-a / Q87-a): un contatore replicato in
+/// più (NanomedicDrone), capienza da SO, stesso armadietto, prelevabile da Medbay T3 (come la stim
+/// da T2: sotto il tier l'armadietto non lo versa e lo dice nell'esito). Il kit lo PORTA soltanto:
+/// lo lancia PlayerNanomedicDrone (V / LB), che usa FindLookedTeammate per il bersaglio (stessa
+/// regola Q31-a), ShowFeedback per la riga di esito, ServerTryConsume e ProfileFor sul server.
+///
 /// AUTORITÀ: le RPC verso il server accettano solo il proprietario del kit
 /// (SenderClientId == OwnerClientId). Il server rilegge tutto: item disponibile,
 /// bersaglio vivo, qualcosa da curare, profilo di ruolo (mai dichiarato dal client).
@@ -130,6 +136,10 @@ public class PlayerMedKit : NetworkBehaviour
     private readonly NetworkVariable<byte> netHealingGrenade = new NetworkVariable<byte>(
         0, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Server);
 
+    // Rev BU-b — Nanomedic Drone (lo lancia PlayerNanomedicDrone; il kit lo porta)
+    private readonly NetworkVariable<byte> netNanomedicDrone = new NetworkVariable<byte>(
+        0, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Server);
+
     /// <summary>Tutti i tipi che il kit può contenere (rifornimento, pienezza, debug).</summary>
     private static readonly ItemType[] KitTypes =
     {
@@ -139,7 +149,8 @@ public class PlayerMedKit : NetworkBehaviour
         ItemType.Adrenaline,
         ItemType.HazmatInjection,
         ItemType.CombatStim,
-        ItemType.HealingGrenade   // Rev BS-b
+        ItemType.HealingGrenade,  // Rev BS-b
+        ItemType.NanomedicDrone   // Rev BU-b
     };
 
     /// <summary>Rev BR-b (Q46-a) — droghe nell'ordine fisso del ciclo di selezione.</summary>
@@ -243,6 +254,7 @@ public class PlayerMedKit : NetworkBehaviour
             case ItemType.HazmatInjection: return netHazmat.Value;
             case ItemType.CombatStim: return netCombatStim.Value;
             case ItemType.HealingGrenade: return netHealingGrenade.Value;
+            case ItemType.NanomedicDrone: return netNanomedicDrone.Value;
             default: return 0;
         }
     }
@@ -287,6 +299,22 @@ public class PlayerMedKit : NetworkBehaviour
     public MedKitProfile ProfileFor(ulong userClientId) => ResolveProfile(userClientId);
 
     /// <summary>
+    /// Rev BU-b — compagno sotto il mirino entro la portata del kit (regola Q31-a), oppure null
+    /// (nessuno, parete, oggetto). Solo owner. Lo usa PlayerNanomedicDrone per il bersaglio.
+    /// </summary>
+    public PlayerHealthSystem FindLookedTeammate() => IsOwner ? FindLookedPlayer() : null;
+
+    /// <summary>
+    /// Rev BU-b — scrive una riga di esito sotto il mirino per la durata standard del kit. Solo
+    /// owner (sugli altri client non fa nulla). La usa PlayerNanomedicDrone.
+    /// </summary>
+    public void ShowFeedback(string text)
+    {
+        if (!IsOwner) return;
+        SetFeedback(text, HoldSeconds);
+    }
+
+    /// <summary>
     /// Rev BR-b — droga selezionata dal proprietario (solo owner). Se nel kit non c'è nessuna
     /// droga, HasSelectedDrug è false.
     /// </summary>
@@ -321,6 +349,7 @@ public class PlayerMedKit : NetworkBehaviour
         netHazmat.OnValueChanged += HandleKitChanged;
         netCombatStim.OnValueChanged += HandleKitChanged;
         netHealingGrenade.OnValueChanged += HandleKitChanged;
+        netNanomedicDrone.OnValueChanged += HandleKitChanged;
 
         if (IsServer)
         {
@@ -332,6 +361,7 @@ public class PlayerMedKit : NetworkBehaviour
             netHazmat.Value = 0;
             netCombatStim.Value = 0;
             netHealingGrenade.Value = 0;
+            netNanomedicDrone.Value = 0;
 
             if (config == null)
                 Debug.LogError("[PlayerMedKit] MedKitConfig non assegnato sul Player prefab: il kit medico " +
@@ -369,6 +399,7 @@ public class PlayerMedKit : NetworkBehaviour
         netHazmat.OnValueChanged -= HandleKitChanged;
         netCombatStim.OnValueChanged -= HandleKitChanged;
         netHealingGrenade.OnValueChanged -= HandleKitChanged;
+        netNanomedicDrone.OnValueChanged -= HandleKitChanged;
 
         if (activeByClientId.TryGetValue(OwnerClientId, out var registered) && registered == this)
             activeByClientId.Remove(OwnerClientId);
@@ -941,14 +972,18 @@ public class PlayerMedKit : NetworkBehaviour
         RestockResult result = ServerRestockFromShip(out RestockTaken taken);
         RestockResultOwnerRpc(result, taken.Base, taken.Advanced, taken.Antidote,
                               taken.Adrenaline, taken.Hazmat, taken.CombatStim, taken.HealingGrenade,
-                              taken.StimBlockedByTier);
+                              taken.NanomedicDrone, taken.StimBlockedByTier, taken.DroneBlockedByTier);
     }
 
-    /// <summary>Rev BR-b — pezzi prelevati dalla stiva in un rifornimento (solo server). Rev BS-b: + bomba.</summary>
+    /// <summary>
+    /// Rev BR-b — pezzi prelevati dalla stiva in un rifornimento (solo server). Rev BS-b: + bomba.
+    /// Rev BU-b: + Nanomedic Drone e il suo blocco di tier.
+    /// </summary>
     private struct RestockTaken
     {
-        public byte Base, Advanced, Antidote, Adrenaline, Hazmat, CombatStim, HealingGrenade;
+        public byte Base, Advanced, Antidote, Adrenaline, Hazmat, CombatStim, HealingGrenade, NanomedicDrone;
         public bool StimBlockedByTier;   // Q48-a: c'erano stim in stiva e spazio nel kit, ma tier troppo basso
+        public bool DroneBlockedByTier;  // Rev BU-b: idem per il drone (Medbay T3)
     }
 
     /// <summary>
@@ -968,9 +1003,8 @@ public class PlayerMedKit : NetworkBehaviour
         }
 
         // Q48-a: segnala la stim bloccata dal tier (spazio nel kit e scorte in stiva, ma Medbay sotto il minimo).
-        taken.StimBlockedByTier = GetRestockCap(ItemType.CombatStim) == 0 &&
-                                  GetCount(ItemType.CombatStim) < GetCap(ItemType.CombatStim) &&
-                                  inventory.GetQuantity(ItemType.CombatStim) > 0;
+        taken.StimBlockedByTier = IsBlockedByTier(inventory, ItemType.CombatStim);
+        taken.DroneBlockedByTier = IsBlockedByTier(inventory, ItemType.NanomedicDrone);   // Rev BU-b
 
         if (IsFull) return RestockResult.KitFull;
 
@@ -981,16 +1015,26 @@ public class PlayerMedKit : NetworkBehaviour
         taken.Hazmat = TakeFromShip(inventory, ItemType.HazmatInjection);
         taken.CombatStim = TakeFromShip(inventory, ItemType.CombatStim);
         taken.HealingGrenade = TakeFromShip(inventory, ItemType.HealingGrenade);   // Rev BS-b
+        taken.NanomedicDrone = TakeFromShip(inventory, ItemType.NanomedicDrone);   // Rev BU-b
 
         int total = taken.Base + taken.Advanced + taken.Antidote + taken.Adrenaline + taken.Hazmat + taken.CombatStim +
-                    taken.HealingGrenade;
+                    taken.HealingGrenade + taken.NanomedicDrone;
         if (total == 0) return RestockResult.NoSupplies;
 
         LogV($"Rifornito dalla stiva: base +{taken.Base}, avanzato +{taken.Advanced}, antidoto +{taken.Antidote}, " +
              $"adrenaline +{taken.Adrenaline}, hazmat +{taken.Hazmat}, stim +{taken.CombatStim}, " +
-             $"bomba +{taken.HealingGrenade}.");
+             $"bomba +{taken.HealingGrenade}, drone +{taken.NanomedicDrone}.");
         return RestockResult.Restocked;
     }
+
+    /// <summary>
+    /// Q48-a / Rev BU-b — il tipo resta fuori dal kit SOLO per il tier della Medbay: spazio nel kit e
+    /// scorte in stiva ci sono, ma la capienza di rifornimento è 0. SERVER (la stiva è replicata).
+    /// </summary>
+    private bool IsBlockedByTier(InventorySystem inventory, ItemType type)
+        => GetRestockCap(type) == 0 &&
+           GetCount(type) < GetCap(type) &&
+           inventory.GetQuantity(type) > 0;
 
     private byte TakeFromShip(InventorySystem inventory, ItemType type)
     {
@@ -1008,17 +1052,19 @@ public class PlayerMedKit : NetworkBehaviour
     [Rpc(SendTo.Owner)]
     private void RestockResultOwnerRpc(RestockResult result, byte takenBase, byte takenAdvanced, byte takenAntidote,
                                        byte takenAdrenaline, byte takenHazmat, byte takenStim, byte takenGrenade,
-                                       bool stimBlockedByTier)
+                                       byte takenDrone, bool stimBlockedByTier, bool droneBlockedByTier)
     {
-        // Rev BR-b (Q48-a): nota sulla stim bloccata dal tier, in coda a qualsiasi esito.
-        string stimNote = stimBlockedByTier
-            ? $" · Combat Stim needs Medbay T{(config != null ? config.MinMedbayTierFor(ItemType.CombatStim) : 2)}"
-            : string.Empty;
+        // Rev BR-b (Q48-a): nota sui pezzi bloccati dal tier, in coda a qualsiasi esito. Rev BU-b: + drone.
+        string stimNote = string.Empty;
+        if (stimBlockedByTier)
+            stimNote += $" · Combat Stim needs Medbay T{(config != null ? config.MinMedbayTierFor(ItemType.CombatStim) : 2)}";
+        if (droneBlockedByTier)
+            stimNote += $" · Nanomedic Drone needs Medbay T{(config != null ? config.MinMedbayTierFor(ItemType.NanomedicDrone) : 3)}";
 
         switch (result)
         {
             case RestockResult.Restocked:
-                var parts = new List<string>(7);
+                var parts = new List<string>(8);
                 if (takenBase > 0) parts.Add($"+{takenBase} medkit");
                 if (takenAdvanced > 0) parts.Add($"+{takenAdvanced} advanced medkit");
                 if (takenAntidote > 0) parts.Add($"+{takenAntidote} antidote");
@@ -1026,6 +1072,7 @@ public class PlayerMedKit : NetworkBehaviour
                 if (takenHazmat > 0) parts.Add($"+{takenHazmat} Hazmat");
                 if (takenStim > 0) parts.Add($"+{takenStim} Combat Stim");
                 if (takenGrenade > 0) parts.Add($"+{takenGrenade} Healing Grenade");   // Rev BS-b
+                if (takenDrone > 0) parts.Add($"+{takenDrone} Nanomedic Drone");       // Rev BU-b
                 SetFeedback("Kit restocked: " + string.Join(", ", parts) + stimNote, HoldSeconds);
                 break;
             case RestockResult.KitFull:
@@ -1056,12 +1103,14 @@ public class PlayerMedKit : NetworkBehaviour
         netHazmat.Value = 0;
         netCombatStim.Value = 0;
         netHealingGrenade.Value = 0;
+        netNanomedicDrone.Value = 0;
         LogV("Kit svuotato.");
     }
 
     /// <summary>
     /// Rev BS-b — toglie un pezzo del tipo indicato dal kit. SERVER ONLY. Lo usa PlayerThrower per
-    /// la bomba curativa, solo dopo un lancio partito. false se il kit non ne contiene.
+    /// la bomba curativa, solo dopo un lancio partito, e PlayerNanomedicDrone per il drone (Rev BU-b).
+    /// false se il kit non ne contiene.
     /// </summary>
     public bool ServerTryConsume(ItemType type)
     {
@@ -1086,6 +1135,7 @@ public class PlayerMedKit : NetworkBehaviour
             case ItemType.HazmatInjection: netHazmat.Value = clamped; break;
             case ItemType.CombatStim: netCombatStim.Value = clamped; break;
             case ItemType.HealingGrenade: netHealingGrenade.Value = clamped; break;
+            case ItemType.NanomedicDrone: netNanomedicDrone.Value = clamped; break;
             default:
                 Debug.LogError($"[PlayerMedKit] ItemType {type} non appartiene al kit medico.");
                 break;
@@ -1133,7 +1183,7 @@ public class PlayerMedKit : NetworkBehaviour
         // banda per OwnerClientId (passo 250).
         float y = 310 + (OwnerClientId * 250f);
 
-        GUILayout.BeginArea(new Rect(940, y, 320, 130));   // Rev BS-b: riga della bomba
+        GUILayout.BeginArea(new Rect(940, y, 320, 130));   // Rev BS-b: riga della bomba (Rev BU-b: + drone, stessa riga)
         GUILayout.BeginVertical("box");
         GUILayout.Label($"[PlayerMedKit] Client {OwnerClientId} — base {GetCount(ItemType.MedkitBase)}/" +
                         $"{GetCap(ItemType.MedkitBase)} · avanz. {GetCount(ItemType.MedkitAdvanced)}/" +
@@ -1143,14 +1193,16 @@ public class PlayerMedKit : NetworkBehaviour
                         $"hazmat {GetCount(ItemType.HazmatInjection)}/{GetCap(ItemType.HazmatInjection)} · " +
                         $"stim {GetCount(ItemType.CombatStim)}/{GetCap(ItemType.CombatStim)} " +
                         $"(rifornibili {GetRestockCap(ItemType.CombatStim)})");
-        GUILayout.Label($"Bomba curativa {GetCount(ItemType.HealingGrenade)}/{GetCap(ItemType.HealingGrenade)}");
+        GUILayout.Label($"Bomba curativa {GetCount(ItemType.HealingGrenade)}/{GetCap(ItemType.HealingGrenade)} · " +
+                        $"drone {GetCount(ItemType.NanomedicDrone)}/{GetCap(ItemType.NanomedicDrone)} " +
+                        $"(rifornibili {GetRestockCap(ItemType.NanomedicDrone)})");
 
         GUILayout.BeginHorizontal();
         if (GUILayout.Button("Dalla stiva"))
         {
             RestockResult result = ServerRestockFromShip(out RestockTaken t);
             RestockResultOwnerRpc(result, t.Base, t.Advanced, t.Antidote, t.Adrenaline, t.Hazmat, t.CombatStim,
-                                  t.HealingGrenade, t.StimBlockedByTier);
+                                  t.HealingGrenade, t.NanomedicDrone, t.StimBlockedByTier, t.DroneBlockedByTier);
         }
         if (GUILayout.Button("Pieno (gratis)"))   // debug: ignora il tier della Medbay
         {

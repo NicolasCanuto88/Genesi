@@ -298,6 +298,15 @@ public partial class @InputSystem_Actions: IInputActionCollection2, IDisposable
                     ""processors"": """",
                     ""interactions"": ""Press(behavior=2)"",
                     ""initialStateCheck"": false
+                },
+                {
+                    ""name"": ""DeployDrone"",
+                    ""type"": ""Button"",
+                    ""id"": ""6e3200a4-9c79-4f06-9e31-8b4d7a5691ef"",
+                    ""expectedControlType"": """",
+                    ""processors"": """",
+                    ""interactions"": """",
+                    ""initialStateCheck"": false
                 }
             ],
             ""bindings"": [
@@ -991,6 +1000,28 @@ public partial class @InputSystem_Actions: IInputActionCollection2, IDisposable
                     ""processors"": """",
                     ""groups"": """",
                     ""action"": ""ThrowGrenade"",
+                    ""isComposite"": false,
+                    ""isPartOfComposite"": false
+                },
+                {
+                    ""name"": """",
+                    ""id"": ""3981995b-c881-4ff4-a4b7-b5892d56d35f"",
+                    ""path"": ""<Keyboard>/v"",
+                    ""interactions"": """",
+                    ""processors"": """",
+                    ""groups"": """",
+                    ""action"": ""DeployDrone"",
+                    ""isComposite"": false,
+                    ""isPartOfComposite"": false
+                },
+                {
+                    ""name"": """",
+                    ""id"": ""0f1e6a69-83e4-43a6-90bf-dfbae949821d"",
+                    ""path"": ""<Gamepad>/leftShoulder"",
+                    ""interactions"": """",
+                    ""processors"": """",
+                    ""groups"": """",
+                    ""action"": ""DeployDrone"",
                     ""isComposite"": false,
                     ""isPartOfComposite"": false
                 }
@@ -2078,6 +2109,7 @@ public partial class @InputSystem_Actions: IInputActionCollection2, IDisposable
         m_Player_UseDrug = m_Player.FindAction("UseDrug", throwIfNotFound: true);
         m_Player_CycleDrug = m_Player.FindAction("CycleDrug", throwIfNotFound: true);
         m_Player_ThrowGrenade = m_Player.FindAction("ThrowGrenade", throwIfNotFound: true);
+        m_Player_DeployDrone = m_Player.FindAction("DeployDrone", throwIfNotFound: true);
         // UI
         m_UI = asset.FindActionMap("UI", throwIfNotFound: true);
         m_UI_Navigate = m_UI.FindAction("Navigate", throwIfNotFound: true);
@@ -2213,6 +2245,7 @@ public partial class @InputSystem_Actions: IInputActionCollection2, IDisposable
     private readonly InputAction m_Player_UseDrug;
     private readonly InputAction m_Player_CycleDrug;
     private readonly InputAction m_Player_ThrowGrenade;
+    private readonly InputAction m_Player_DeployDrone;
     /// <summary>
     /// Provides access to input actions defined in input action map "Player".
     /// </summary>
@@ -2317,6 +2350,10 @@ public partial class @InputSystem_Actions: IInputActionCollection2, IDisposable
         /// </summary>
         public InputAction @ThrowGrenade => m_Wrapper.m_Player_ThrowGrenade;
         /// <summary>
+        /// Provides access to the underlying input action "Player/DeployDrone".
+        /// </summary>
+        public InputAction @DeployDrone => m_Wrapper.m_Player_DeployDrone;
+        /// <summary>
         /// Provides access to the underlying input action map instance.
         /// </summary>
         public InputActionMap Get() { return m_Wrapper.m_Player; }
@@ -2411,6 +2448,9 @@ public partial class @InputSystem_Actions: IInputActionCollection2, IDisposable
             @ThrowGrenade.started += instance.OnThrowGrenade;
             @ThrowGrenade.performed += instance.OnThrowGrenade;
             @ThrowGrenade.canceled += instance.OnThrowGrenade;
+            @DeployDrone.started += instance.OnDeployDrone;
+            @DeployDrone.performed += instance.OnDeployDrone;
+            @DeployDrone.canceled += instance.OnDeployDrone;
         }
 
         /// <summary>
@@ -2491,6 +2531,9 @@ public partial class @InputSystem_Actions: IInputActionCollection2, IDisposable
             @ThrowGrenade.started -= instance.OnThrowGrenade;
             @ThrowGrenade.performed -= instance.OnThrowGrenade;
             @ThrowGrenade.canceled -= instance.OnThrowGrenade;
+            @DeployDrone.started -= instance.OnDeployDrone;
+            @DeployDrone.performed -= instance.OnDeployDrone;
+            @DeployDrone.canceled -= instance.OnDeployDrone;
         }
 
         /// <summary>
@@ -3317,6 +3360,13 @@ public partial class @InputSystem_Actions: IInputActionCollection2, IDisposable
         /// <seealso cref="UnityEngine.InputSystem.InputAction.performed" />
         /// <seealso cref="UnityEngine.InputSystem.InputAction.canceled" />
         void OnThrowGrenade(InputAction.CallbackContext context);
+        /// <summary>
+        /// Method invoked when associated input action "DeployDrone" is either <see cref="UnityEngine.InputSystem.InputAction.started" />, <see cref="UnityEngine.InputSystem.InputAction.performed" /> or <see cref="UnityEngine.InputSystem.InputAction.canceled" />.
+        /// </summary>
+        /// <seealso cref="UnityEngine.InputSystem.InputAction.started" />
+        /// <seealso cref="UnityEngine.InputSystem.InputAction.performed" />
+        /// <seealso cref="UnityEngine.InputSystem.InputAction.canceled" />
+        void OnDeployDrone(InputAction.CallbackContext context);
     }
     /// <summary>
     /// Interface to implement callback methods for all input action callbacks associated with input actions defined by "UI" which allows adding and removing callbacks.

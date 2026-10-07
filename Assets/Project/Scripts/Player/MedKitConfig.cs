@@ -33,6 +33,11 @@ using UnityEngine;
 /// moltiplicatore di un non-Corpsman è quello del profilo di default (Q57-a, applicato alla
 /// cura del campo).
 ///
+/// NANOMEDIC DRONE (Rev BU-b · Q87-a): capienza nel kit (1) e tier minimo della Medbay per
+/// prelevarlo all'armadietto (T3, gadget T3 del Corpsman). Cura, durata e visuale stanno
+/// nell'asset NanomedicDroneConfig; il moltiplicatore di un non-Corpsman è quello del profilo
+/// di default, applicato alla cura (come la bomba).
+///
 /// NON QUI (decisioni di design, non tuning):
 ///   - quali stati cura l'antidoto (Veleno e Radiazioni, mai Ferite Composte — Q34-a):
 ///     costante documentata in PlayerMedKit;
@@ -75,6 +80,16 @@ public class MedKitConfig : ScriptableObject
     [Tooltip("Bombe curative che un giocatore può portare. Si lanciano con PlayerThrower (G / RB).")]
     [Min(0)]
     [SerializeField] private int capHealingGrenade = 1;
+
+    [Header("Capienza del kit personale — Nanomedic Drone (Rev BU-b)")]
+    [Tooltip("Nanomedic Drone che un giocatore può portare. Si lancia con PlayerNanomedicDrone (V / LB).")]
+    [Min(0)]
+    [SerializeField] private int capNanomedicDrone = 1;
+
+    [Tooltip("Tier minimo della Medbay per prelevare il Nanomedic Drone all'armadietto (Q87-a: gadget T3). Sotto " +
+             "questo tier la sua capienza di rifornimento vale 0; i droni già nel kit restano usabili.")]
+    [Range(1, 4)]
+    [SerializeField] private int nanomedicDroneMinMedbayTier = 3;
 
     [Header("Medikit — HP nominali (Q33-a)")]
     [Tooltip("HP ripristinati dal medikit base con effetto pieno (Corpsman). Gli altri ruoli " +
@@ -148,20 +163,22 @@ public class MedKitConfig : ScriptableObject
             case ItemType.HazmatInjection: return Mathf.Clamp(capHazmatInjection, 0, 255);
             case ItemType.CombatStim: return Mathf.Clamp(capCombatStim, 0, 255);
             case ItemType.HealingGrenade: return Mathf.Clamp(capHealingGrenade, 0, 255);
+            case ItemType.NanomedicDrone: return Mathf.Clamp(capNanomedicDrone, 0, 255);   // Rev BU-b
             default: return 0;
         }
     }
 
     /// <summary>
     /// Rev BR-b (Q48-a) — tier minimo della Medbay per prelevare il tipo all'armadietto.
-    /// Solo la Combat Stim ha un vincolo (T2); tutto il resto è disponibile da T1 (compresa la
-    /// bomba curativa, loadout T1 — Rev BS-b · Q65-a).
+    /// Combat Stim T2, Nanomedic Drone T3 (Rev BU-b · Q87-a); tutto il resto è disponibile da T1
+    /// (compresa la bomba curativa, loadout T1 — Rev BS-b · Q65-a).
     /// </summary>
     public int MinMedbayTierFor(ItemType type)
     {
         switch (type)
         {
             case ItemType.CombatStim: return Mathf.Clamp(combatStimMinMedbayTier, 1, 4);
+            case ItemType.NanomedicDrone: return Mathf.Clamp(nanomedicDroneMinMedbayTier, 1, 4);
             default: return 1;
         }
     }
