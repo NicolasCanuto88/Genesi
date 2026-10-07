@@ -9,8 +9,8 @@ namespace SpaceSurvivor.Ship
     /// Gestisce le quantità di tutti i materiali a bordo.
     ///
     /// RESPONSABILITÀ:
-    ///   - Traccia 15 tipi di item (6 Engineering + 9 Medical: 4 scorte + 3 droghe, Rev BR-b, + bomba
-    ///     curativa, Rev BS-b, + Nanomedic Drone, Rev BU-b)
+    ///   - Traccia 16 tipi di item (6 Engineering + 10 Medical: 4 scorte + 3 droghe, Rev BR-b, + bomba
+    ///     curativa, Rev BS-b, + Nanomedic Drone, Rev BU-b, + Antidote Injector, Rev BU-c)
     ///   - Ogni quantità è una NetworkVariable (server authority, tutti leggono)
     ///   - Espone TryConsume / AddItem / GetQuantity / HasEnough
     ///   - Notifica l'UI via evento statico OnQuantityChanged
@@ -75,11 +75,16 @@ namespace SpaceSurvivor.Ship
         private readonly NetworkVariable<int> _qtyNanomedicDrone =
             new(0, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Server);
 
+        // Rev BU-c — Antidote Injector del Corpsman (prelevato dall'armadietto medico nel kit personale, Medbay T4)
+        private readonly NetworkVariable<int> _qtyAntidoteInjector =
+            new(0, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Server);
+
         // ── Catalog ──────────────────────────────────────────────────────
         [Header("Item Catalog (InventoryItemData)")]
         [Tooltip("Assegna un InventoryItemData per ogni ItemType. L'ordine non conta. Un tipo senza asset " +
                  "usa il massimo di ripiego (99): è il caso delle droghe di Rev BR-b (Q49-a), " +
-                 "della bomba curativa di Rev BS-b (Q65-a) e del Nanomedic Drone di Rev BU-b.")]
+                 "della bomba curativa di Rev BS-b (Q65-a), del Nanomedic Drone di Rev BU-b e " +
+                 "dell'Antidote Injector di Rev BU-c.")]
         [SerializeField] private InventoryItemData[] itemCatalog;
 
         // ── Quantità iniziali (test/debug) ───────────────────────────────
@@ -99,6 +104,7 @@ namespace SpaceSurvivor.Ship
         [SerializeField] private int startCombatStim = 3;        // Rev BR-b
         [SerializeField] private int startHealingGrenade = 3;    // Rev BS-b
         [SerializeField] private int startNanomedicDrone = 2;    // Rev BU-b
+        [SerializeField] private int startAntidoteInjector = 2;  // Rev BU-c
 
         // ── Evento pubblico (tutti i client) ─────────────────────────────
         /// <summary>
@@ -129,6 +135,7 @@ namespace SpaceSurvivor.Ship
             _qtyCombatStim.OnValueChanged += OnCombatStimChanged;
             _qtyHealingGrenade.OnValueChanged += OnHealingGrenadeChanged;
             _qtyNanomedicDrone.OnValueChanged += OnNanomedicDroneChanged;
+            _qtyAntidoteInjector.OnValueChanged += OnAntidoteInjectorChanged;
 
             if (IsServer)
                 InitStartingQuantities();
@@ -153,6 +160,7 @@ namespace SpaceSurvivor.Ship
             _qtyCombatStim.OnValueChanged -= OnCombatStimChanged;
             _qtyHealingGrenade.OnValueChanged -= OnHealingGrenadeChanged;
             _qtyNanomedicDrone.OnValueChanged -= OnNanomedicDroneChanged;
+            _qtyAntidoteInjector.OnValueChanged -= OnAntidoteInjectorChanged;
 
             if (Instance == this) Instance = null;
         }
@@ -175,6 +183,7 @@ namespace SpaceSurvivor.Ship
         private void OnCombatStimChanged(int _, int v) => FireChanged(ItemType.CombatStim, v);
         private void OnHealingGrenadeChanged(int _, int v) => FireChanged(ItemType.HealingGrenade, v);
         private void OnNanomedicDroneChanged(int _, int v) => FireChanged(ItemType.NanomedicDrone, v);
+        private void OnAntidoteInjectorChanged(int _, int v) => FireChanged(ItemType.AntidoteInjector, v);
 
         private static void FireChanged(ItemType type, int qty)
             => OnQuantityChanged?.Invoke(type, qty);
@@ -197,6 +206,7 @@ namespace SpaceSurvivor.Ship
             _qtyCombatStim.Value = Mathf.Max(0, startCombatStim);
             _qtyHealingGrenade.Value = Mathf.Max(0, startHealingGrenade);
             _qtyNanomedicDrone.Value = Mathf.Max(0, startNanomedicDrone);
+            _qtyAntidoteInjector.Value = Mathf.Max(0, startAntidoteInjector);
         }
 
         // ── API pubblica ──────────────────────────────────────────────────
@@ -288,6 +298,7 @@ namespace SpaceSurvivor.Ship
             ItemType.CombatStim => _qtyCombatStim,
             ItemType.HealingGrenade => _qtyHealingGrenade,
             ItemType.NanomedicDrone => _qtyNanomedicDrone,
+            ItemType.AntidoteInjector => _qtyAntidoteInjector,
             _ => throw new ArgumentOutOfRangeException(
                                                nameof(type), type,
                                                "ItemType non gestito in InventorySystem")
@@ -303,7 +314,7 @@ namespace SpaceSurvivor.Ship
         {
             if (!showDebugUI) return;
 
-            GUILayout.BeginArea(new Rect(10, 200, 210, 450));   // Rev BU-b: 15 righe
+            GUILayout.BeginArea(new Rect(10, 200, 210, 475));   // Rev BU-c: 16 righe
             GUILayout.BeginVertical("box");
             GUILayout.Label($"[Inventory] {(IsServer ? "SERVER" : "CLIENT")}");
 

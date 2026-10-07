@@ -98,7 +98,8 @@ public class ProfileTabUI : MonoBehaviour, IDashboardPanel
     /// Rev BQ — contenuto del kit medico personale (conteggio / capienza per tipo).
     /// Rev BR-b — seconda riga con le droghe e la droga selezionata (CycleDrug).
     /// Rev BS-b — la bomba curativa nella prima riga (Q65-a).
-    /// Rev BU-b — il Nanomedic Drone in coda alla prima riga.
+    /// Rev BU-b — il Nanomedic Drone in coda alla prima riga. Rev BU-c — l'Antidote Injector accanto
+    /// all'antidoto.
     /// </summary>
     private void RefreshMedKit()
     {
@@ -117,6 +118,7 @@ public class ProfileTabUI : MonoBehaviour, IDashboardPanel
             $"Medical kit — Medkit {kit.GetCount(ItemType.MedkitBase)}/{kit.GetCap(ItemType.MedkitBase)}" +
             $" · Advanced {kit.GetCount(ItemType.MedkitAdvanced)}/{kit.GetCap(ItemType.MedkitAdvanced)}" +
             $" · Antidote {kit.GetCount(ItemType.Antidote)}/{kit.GetCap(ItemType.Antidote)}" +
+            $" · Injector {kit.GetCount(ItemType.AntidoteInjector)}/{kit.GetCap(ItemType.AntidoteInjector)}" +
             $" · Grenade {kit.GetCount(ItemType.HealingGrenade)}/{kit.GetCap(ItemType.HealingGrenade)}" +
             $" · Drone {kit.GetCount(ItemType.NanomedicDrone)}/{kit.GetCap(ItemType.NanomedicDrone)}" +
             $"\nDrugs — Adrenaline {kit.GetCount(ItemType.Adrenaline)}/{kit.GetCap(ItemType.Adrenaline)}" +

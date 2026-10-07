@@ -33,8 +33,11 @@ namespace SpaceSurvivor.Ship
         // ── Medical: Nanomedic Drone del Corpsman, gadget T3 (Rev BU-b · Q87-a) ──
         NanomedicDrone = 14,
 
+        // ── Medical: Antidote Injector del Corpsman, gadget T4 (Rev BU-c · Q88-a) ──
+        AntidoteInjector = 15,
+
         // ── Sentinel — SEMPRE ULTIMA ─────────────────
-        COUNT = 15
+        COUNT = 16
     }
 
     public enum ItemCategory { Engineering, Medical }
