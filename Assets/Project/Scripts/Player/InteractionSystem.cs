@@ -6,15 +6,15 @@ using TMPro;
 /// Handles player interaction with interactable objects
 /// Uses Unity's New Input System
 ///
-/// INTERAZIONI CONTINUE (Rev BT-c · Q73-a): un'interazione continua (oggi solo la
-/// rianimazione, PlayerReviveTarget) tiene isInteracting acceso finché l'oggetto non chiama
-/// EndInteraction. Finché è acceso, InteractionSystem non mostra prompt e non avvia altre
+/// INTERAZIONI CONTINUE (Rev BT-c Â· Q73-a): un'interazione continua (oggi solo la
+/// rianimazione, PlayerReviveTarget) tiene isInteracting acceso finchÃ© l'oggetto non chiama
+/// EndInteraction. FinchÃ© Ã¨ acceso, InteractionSystem non mostra prompt e non avvia altre
 /// interazioni, e kit e lancio (PlayerMedKit, PlayerThrower) restano bloccati.
-/// Rete di sicurezza: l'oggetto che ha avviato l'interazione è ricordato in activeInteractable;
+/// Rete di sicurezza: l'oggetto che ha avviato l'interazione Ã¨ ricordato in activeInteractable;
 /// se viene distrutto o disattivato prima di chiamare EndInteraction (per esempio il giocatore
 /// a terra si disconnette e il suo NetworkObject viene despawnato), l'interazione si chiude qui
 /// a inizio Update. Prima di Rev BT-c il giocatore restava "in interazione" per sempre: niente
-/// porte, scale, postazioni, letto, armadietto, kit né lancio, nemmeno dopo la clonazione.
+/// porte, scale, postazioni, letto, armadietto, kit nÃ© lancio, nemmeno dopo la clonazione.
 /// La stessa verifica protegge OnInteract da un bersaglio distrutto nel frame precedente.
 /// File convertito in UTF-8 in Rev BT-c (era Windows-1252).
 /// </summary>
@@ -39,7 +39,7 @@ public class InteractionSystem : MonoBehaviour
 
     // Debug
     [Header("Debug")]
-    [Tooltip("Disegna il raggio di interazione con Debug.DrawRay (Scene view). Standard Rev BA — default off.")]
+    [Tooltip("Disegna il raggio di interazione con Debug.DrawRay (Scene view). Standard Rev BA â€” default off.")]
     [SerializeField] private bool showDebugRay = false;
 
     private void Awake()
@@ -66,7 +66,7 @@ public class InteractionSystem : MonoBehaviour
 
     private void Update()
     {
-        // Rev BT-c (Q73-a): rete di sicurezza — l'interazione continua non può sopravvivere
+        // Rev BT-c (Q73-a): rete di sicurezza â€” l'interazione continua non puÃ² sopravvivere
         // all'oggetto che la guida.
         if (isInteracting && !IsAlive(activeInteractable))
         {
@@ -78,8 +78,8 @@ public class InteractionSystem : MonoBehaviour
     }
 
     /// <summary>
-    /// Rev BT-c — vero se l'interagibile esiste ancora e, se è un componente Unity, non è stato
-    /// distrutto né disattivato. Un riferimento d'interfaccia a un MonoBehaviour distrutto non è
+    /// Rev BT-c â€” vero se l'interagibile esiste ancora e, se Ã¨ un componente Unity, non Ã¨ stato
+    /// distrutto nÃ© disattivato. Un riferimento d'interfaccia a un MonoBehaviour distrutto non Ã¨
     /// null per C#: il controllo passa da UnityEngine.Object.
     /// </summary>
     private static bool IsAlive(IInteractable interactable)
@@ -182,7 +182,7 @@ public class InteractionSystem : MonoBehaviour
 
     private void StartInteraction()
     {
-        // Rev BT-c: bersaglio fissato prima di Interact — Interact può chiamare EndInteraction,
+        // Rev BT-c: bersaglio fissato prima di Interact â€” Interact puÃ² chiamare EndInteraction,
         // che ricalcola currentInteractable.
         IInteractable target = currentInteractable;
         activeInteractable = target;

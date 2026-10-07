@@ -1,0 +1,9 @@
+# Space Survivor (Genesi) - Rev BT-d, Q83-a.
+# Sorgenti C#: Visual Studio li salva in UTF-8 senza BOM, qualunque codifica
+# avessero all'apertura.
+# Fine riga: nessuna regola di proposito. Il repo usa LF ovunque e git li gestisce;
+# una regola qui potrebbe mescolare LF e CRLF nella copia di lavoro.
+root = true
+
+[*.cs]
+charset = utf-8

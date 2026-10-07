@@ -4,7 +4,7 @@ using Unity.Netcode;
 namespace creepycat.scifikitvol4
 {
     /// <summary>
-    /// Double door auto-open — NetworkBehaviour (NGO v2) con client-side prediction.
+    /// Double door auto-open â€” NetworkBehaviour (NGO v2) con client-side prediction.
     /// 
     /// Server: authority su netOpening e netPoint.
     /// Client: anima localPoint autonomamente (prediction immediata),
@@ -13,9 +13,9 @@ namespace creepycat.scifikitvol4
     public class DoubleDoorOpenAuto : NetworkBehaviour, IPowerConsumer
     {
         [Header("Debug")]
-        [Tooltip("Log diagnostici verbosi (perdita/ripristino alimentazione porta). Standard Rev BA — default off.")]
+        [Tooltip("Log diagnostici verbosi (perdita/ripristino alimentazione porta). Standard Rev BA â€” default off.")]
         [SerializeField] private bool logVerbose = false;
-        [Tooltip("Disegna il gizmo del trigger porta (Scene view). Standard Rev BA — default off.")]
+        [Tooltip("Disegna il gizmo del trigger porta (Scene view). Standard Rev BA â€” default off.")]
         [SerializeField] private bool drawDebugGizmos = false;
         private void LogV(string msg) { if (logVerbose) Debug.Log(msg); }
         private void LogVWarn(string msg) { if (logVerbose) Debug.LogWarning(msg); }
@@ -40,7 +40,7 @@ namespace creepycat.scifikitvol4
         public AudioClip deniedSound;
 
         [Header("Network")]
-        [Tooltip("Velocità di correzione del client verso il valore autoritativo del server (0 = no correzione, 1 = snap immediato).")]
+        [Tooltip("VelocitÃ  di correzione del client verso il valore autoritativo del server (0 = no correzione, 1 = snap immediato).")]
         [SerializeField] private float correctionSpeed = 5f;
 
         // ===== NetworkVariables =====
@@ -113,7 +113,7 @@ namespace creepycat.scifikitvol4
         {
             if (!other.gameObject.CompareTag("Player") && !other.gameObject.CompareTag("MainCamera")) return;
 
-            // Client: prediction immediata — anima senza aspettare il server
+            // Client: prediction immediata â€” anima senza aspettare il server
             if (!IsServer)
                 localOpening = true;
 
@@ -169,7 +169,7 @@ namespace creepycat.scifikitvol4
 
             if (IsServer)
             {
-                // SERVER: anima netPoint — autoritativo
+                // SERVER: anima netPoint â€” autoritativo
                 float target = netOpening.Value ? 1f : 0f;
                 netPoint.Value = Mathf.Lerp(netPoint.Value, target, Time.deltaTime * speed);
 

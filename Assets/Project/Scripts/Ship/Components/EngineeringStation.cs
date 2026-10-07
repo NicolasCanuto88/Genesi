@@ -1,4 +1,4 @@
-﻿using UnityEngine;
+using UnityEngine;
 using UnityEngine.InputSystem;
 using UnityEngine.EventSystems;
 using System.Collections;
@@ -297,7 +297,7 @@ public class EngineeringStation : MonoBehaviour, IInteractable
 
         if (!isExiting)
         {
-            // ENTRATA � sposta verso snap point
+            // ENTRATA — sposta verso snap point
             characterController.enabled = false;
 
             playerController.transform.position = Vector3.Lerp(originalPlayerPosition, playerSnapPoint.position, t);
@@ -310,9 +310,9 @@ public class EngineeringStation : MonoBehaviour, IInteractable
                 isTransitioning = false;
                 playerController.enabled = allowMovementWhileUsing;
 
-                // Camera: ora che il player � fermo allo snap point, punta verso Monitor 1.
-                // Usiamo LookAtMonitorRoutine � stesso metodo dei tasti 1/2 � cos� il risultato
-                // � identico. Il player � gi� nella rotazione finale: nessuna ambiguit� sul parent.
+                // Camera: ora che il player è fermo allo snap point, punta verso Monitor 1.
+                // Usiamo LookAtMonitorRoutine — stesso metodo dei tasti 1/2 — così il risultato
+                // è identico. Il player è già nella rotazione finale: nessuna ambiguità sul parent.
                 LookAtMonitor(0);
 
                 LogV("[EngineeringStation] Transition complete - At workstation");
@@ -320,7 +320,7 @@ public class EngineeringStation : MonoBehaviour, IInteractable
         }
         else
         {
-            // USCITA � torna alla posizione originale
+            // USCITA — torna alla posizione originale
             characterController.enabled = false;
 
             playerController.transform.position = Vector3.Lerp(playerSnapPoint.position, originalPlayerPosition, t);
@@ -398,7 +398,7 @@ public class EngineeringStation : MonoBehaviour, IInteractable
         {
             Vector3 direction = (cameraLookAtPoints[0].position - eyesPosition).normalized;
             float verticalAngle = Mathf.Atan2(direction.y, new Vector2(direction.x, direction.z).magnitude) * Mathf.Rad2Deg;
-            modeText += $"\nAngle: {verticalAngle:F1}� (+ = UP)";
+            modeText += $"\nAngle: {verticalAngle:F1}° (+ = UP)";
         }
 
         UnityEditor.Handles.Label(eyesPosition + Vector3.up * 0.5f, modeText);

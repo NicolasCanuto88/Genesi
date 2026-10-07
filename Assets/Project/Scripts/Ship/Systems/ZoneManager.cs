@@ -1,4 +1,4 @@
-﻿using Unity.Netcode;
+using Unity.Netcode;
 using UnityEngine;
 using UnityEngine.Events;
 using SpaceSurvivor.Ship;                  // ← AGGIUNTO: PropulsionSystem

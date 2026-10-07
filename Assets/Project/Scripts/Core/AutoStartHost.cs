@@ -1,4 +1,4 @@
-﻿using UnityEngine;
+using UnityEngine;
 
 /// <summary>
 /// AutoStartHost — Rev Q (Blocco 2 M3, rewrite).

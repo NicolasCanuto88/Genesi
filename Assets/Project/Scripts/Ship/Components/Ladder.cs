@@ -4,11 +4,11 @@ using UnityEngine;
 /// Ladder climbing system - INPUT HANDLED BY PLAYERCONTROLLER
 /// This component only provides climbing logic, PlayerController feeds it input via Input System
 ///
-/// VISUALE (Rev BT-b · Q79-a): HandleClimbing riceve la rotazione già convertita in GRADI da
-/// PlayerController (mouse: pixel × sensibilità; stick: velocità angolare × deltaTime), quindi in
-/// salita la sensibilità è la stessa che a piedi. lookScale (default 1) è solo un moltiplicatore
+/// VISUALE (Rev BT-b Â· Q79-a): HandleClimbing riceve la rotazione giÃ  convertita in GRADI da
+/// PlayerController (mouse: pixel Ã— sensibilitÃ ; stick: velocitÃ  angolare Ã— deltaTime), quindi in
+/// salita la sensibilitÃ  Ã¨ la stessa che a piedi. lookScale (default 1) Ã¨ solo un moltiplicatore
 /// relativo. Il vecchio campo cameraLookSpeed (0.1 nelle due scale di Game.unity) moltiplicava
-/// l'input grezzo — pixel del mouse o deflessione dello stick — e non è più letto: il valore
+/// l'input grezzo â€” pixel del mouse o deflessione dello stick â€” e non Ã¨ piÃ¹ letto: il valore
 /// serializzato in scena viene ignorato e sparisce al prossimo salvataggio della scena.
 /// File convertito in UTF-8 in Rev BT-b (era Windows-1252).
 /// </summary>
@@ -16,9 +16,9 @@ using UnityEngine;
 public class Ladder : MonoBehaviour, IInteractable
 {
     [Header("Debug")]
-    [Tooltip("Log diagnostici verbosi (ingresso/uscita/snap scala). Standard Rev BA — default off.")]
+    [Tooltip("Log diagnostici verbosi (ingresso/uscita/snap scala). Standard Rev BA â€” default off.")]
     [SerializeField] private bool logVerbose = false;
-    [Tooltip("Disegna i gizmi dei punti scala (Scene view). Standard Rev BA — default off.")]
+    [Tooltip("Disegna i gizmi dei punti scala (Scene view). Standard Rev BA â€” default off.")]
     [SerializeField] private bool drawDebugGizmos = false;
     private void LogV(string msg) { if (logVerbose) Debug.Log(msg); }
 
@@ -31,7 +31,7 @@ public class Ladder : MonoBehaviour, IInteractable
     // Rev BT-b: sostituito da lookScale (l'input ora arriva in gradi da PlayerController).
     // [SerializeField] private float cameraLookSpeed = 2f;
     [Tooltip("Moltiplicatore della rotazione verticale in salita, relativo alla visuale a piedi " +
-             "(1 = stessa sensibilità). Rev BT-b.")]
+             "(1 = stessa sensibilitÃ ). Rev BT-b.")]
     [Min(0f)]
     [SerializeField] private float lookScale = 1f;
     [SerializeField] private float maxLookAngle = 60f;
@@ -119,7 +119,7 @@ public class Ladder : MonoBehaviour, IInteractable
 
     /// <summary>
     /// Called by PlayerController every frame when on ladder.
-    /// lookDegrees: rotazione di questo frame in gradi, già convertita da PlayerController
+    /// lookDegrees: rotazione di questo frame in gradi, giÃ  convertita da PlayerController
     /// (Rev BT-b). Qui si usa solo la componente verticale.
     /// </summary>
     public void HandleClimbing(float verticalInput, Vector2 lookDegrees)
@@ -157,7 +157,7 @@ public class Ladder : MonoBehaviour, IInteractable
         lockedPos.z = ladderPos.z + (offsetDir.z * cameraDistanceFromLadder);
         currentPlayer.transform.position = lockedPos;
 
-        // Camera look (from PlayerController, already in degrees — Rev BT-b)
+        // Camera look (from PlayerController, already in degrees â€” Rev BT-b)
         HandleCameraLook(lookDegrees);
     }
 

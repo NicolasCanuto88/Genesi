@@ -1,4 +1,4 @@
-﻿using TMPro;
+using TMPro;
 using SpaceSurvivor.Ship;
 using SpaceSurvivor.Ship.Systems;
 using SpaceSurvivor.Poi;
