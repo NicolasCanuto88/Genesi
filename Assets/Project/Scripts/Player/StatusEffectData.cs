@@ -14,7 +14,8 @@ public enum StatusEffectType
 {
     Radiation = 0,       // da zone/hazard (DeepVoid, tempeste) — SORGENTE FUORI SCOPE Rev BC
     Poison = 1,          // danno nel tempo
-    CompoundWounds = 2,  // "Ferite Composte" — applicato alla rianimazione (D27), curabile solo medbay T3+
+    CompoundWounds = 2,  // "Ferite Composte" — applicato alla rianimazione (D27), curabile solo medbay T3+;
+                         // Rev BU-a: StatModifier (HP max e velocità giù, valori nell'asset)
 
     // ── Buff (Rev BR · Q41-a): droghe del Corpsman ──
     Hazmat = 3,          // Hazmat Injection — riduce il danno da Radiazioni (GDD §9.6, conciliazione v0.9.46)
@@ -24,7 +25,7 @@ public enum StatusEffectType
 /// <summary>
 /// Come viene applicato l'effetto di uno stato. Tipizzato per estensione futura
 /// (Heal verrà aggiunto se servirà) senza toccare il framework.
-///   None         — marker puro (Ferite Composte)
+///   None         — marker puro, nessun effetto (Ferite Composte fino a Rev BU-a)
 ///   Damage       — DoT: ogni tick instrada danno a PlayerHealthSystem.ApplyDamage (server-only)
 ///   StatModifier — Rev BR: nessun tick; finché lo stato è attivo i suoi `modifiers`
 ///                  cambiano le statistiche del giocatore (PlayerStatusEffects.GetStatMultiplier)

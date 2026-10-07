@@ -15,6 +15,8 @@ namespace SpaceSurvivor.Ship
     ///         uguale a tutti i tier (Rev BP-b: nessun miglioramento di design previsto).
     ///       · Cura degli stati (Rev BP-b): T1 no, da T2 sì (Veleno, Radiazioni; Ferite
     ///         Composte solo da T3, regola dello stato in PlayerStatusEffects).
+    ///       · Trattamento unico (Rev BU-a · Q89-a): da T4 una sola sessione "ALL CONDITIONS"
+    ///         cura HP e stati insieme, se il paziente ha almeno due cose da curare.
     ///   - Auto-cura (Q5-a): cadenza dei tick server.
     ///   - Trattamento (minigame medico): decay e limite di tempo della sessione.
     ///   - Malus Rev U (Q6-a): moltiplicatori per un operatore NON-Corpsman. Il
@@ -49,28 +51,39 @@ namespace SpaceSurvivor.Ship
                      "stato, cura al 100%). T1 no, T2+ sì. Ferite Composte richiede comunque T3+.")]
             [SerializeField] private bool curesStatuses;
 
-            public TierData(float capFraction, float perSecond, bool curesStatuses)
+            [Tooltip("Rev BU-a (Q89-a) — trattamento unico: se il paziente ha almeno due cose da curare " +
+                     "(stati curabili a questo tier e/o HP sotto il massimo), la console propone UNA " +
+                     "sessione \"ALL CONDITIONS\": soglie 50/75/100 sugli HP come TRAUMA e, al 100%, " +
+                     "cura di tutti gli stati curabili. Richiede anche Cures Statuses. T4 sì.")]
+            [SerializeField] private bool treatsAllInOneSession;
+
+            public TierData(float capFraction, float perSecond, bool curesStatuses, bool treatsAllInOneSession)
             {
                 autoHealCapFraction = capFraction;
                 autoHealPerSecond = perSecond;
                 this.curesStatuses = curesStatuses;
+                this.treatsAllInOneSession = treatsAllInOneSession;
             }
 
             public float AutoHealCapFraction => Mathf.Clamp01(autoHealCapFraction);
             public float AutoHealPerSecond => Mathf.Max(0f, autoHealPerSecond);
             public bool CuresStatuses => curesStatuses;
+
+            /// <summary>Rev BU-a — trattamento unico attivo (solo se il tier cura anche gli stati).</summary>
+            public bool TreatsAllInOneSession => treatsAllInOneSession && curesStatuses;
         }
 
         [Header("Tabella per tier — indice 0 = T1 (Q4)")]
         [Tooltip("Una riga per tier del modulo Medbay (T1..T4). Auto-cura uguale a tutti i tier; " +
-                 "cura degli stati da T2 (Rev BP-b). Un tier oltre la tabella usa l'ultima riga.")]
+                 "cura degli stati da T2 (Rev BP-b); trattamento unico da T4 (Rev BU-a). Un tier " +
+                 "oltre la tabella usa l'ultima riga.")]
         [SerializeField]
         private TierData[] tiers =
         {
-            new TierData(0.5f, 1f, false),   // T1 — solo HP (Q4-a)
-            new TierData(0.5f, 1f, true),    // T2 — + Veleno, Radiazioni (BP-b)
-            new TierData(0.5f, 1f, true),    // T3 — + Ferite Composte (regola dello stato)
-            new TierData(0.5f, 1f, true)     // T4 — cure multi-stato in ciclo unico: M4.5
+            new TierData(0.5f, 1f, false, false),   // T1 — solo HP (Q4-a)
+            new TierData(0.5f, 1f, true, false),    // T2 — + Veleno, Radiazioni (BP-b)
+            new TierData(0.5f, 1f, true, false),    // T3 — + Ferite Composte (regola dello stato)
+            new TierData(0.5f, 1f, true, true)      // T4 — + trattamento unico ALL CONDITIONS (BU-a · Q89-a)
         };
 
         [Header("Auto-cura — Q5-a")]
@@ -104,7 +117,7 @@ namespace SpaceSurvivor.Ship
         /// </summary>
         public TierData GetTier(int tier)
         {
-            if (tiers == null || tiers.Length == 0) return new TierData(0f, 0f, false);
+            if (tiers == null || tiers.Length == 0) return new TierData(0f, 0f, false, false);
             int index = Mathf.Clamp(tier - 1, 0, tiers.Length - 1);
             return tiers[index];
         }

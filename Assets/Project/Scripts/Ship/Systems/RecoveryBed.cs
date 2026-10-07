@@ -36,6 +36,15 @@ namespace SpaceSurvivor.Ship
     /// Curabilità di uno stato: tier con CuresStatuses (MedbayConfig: T2+) E regola dello
     /// stato (Ferite Composte T3+). Nessun vincolo sulla composizione della crew
     /// (Q25-b): chiunque può operare, col malus Rev U se non è Corpsman.
+    ///
+    /// TRATTAMENTO UNICO (Rev BU-a · Q89-a): con il flag TreatsAllInOneSession del tier
+    /// (MedbayConfig: T4) e almeno DUE cose da curare (stati curabili a questo tier e/o HP
+    /// sotto il massimo), la prossima fase è AllConditions: una sola sessione. Soglie
+    /// 50/75/100 sugli HP come la fase Trauma; al 100% prima si curano TUTTI gli stati
+    /// curabili, poi gli HP vanno al 100% del massimo, che può essere appena risalito
+    /// (Ferite Composte curate: Rev BU-a). Con una sola cosa da curare resta la fase singola.
+    /// Il minigame non cambia: legge solo l'etichetta della fase.
+    ///
     /// Sdraiarsi: solo se c'è qualcosa da curare a questo tier (HP sotto il massimo o
     /// uno stato curabile).
     ///
@@ -119,7 +128,12 @@ namespace SpaceSurvivor.Ship
             Hp = 1,
             Poison = 2,
             Radiation = 3,
-            CompoundWounds = 4
+            CompoundWounds = 4,
+            /// <summary>
+            /// Rev BU-a (Q89-a) — trattamento unico da T4: soglie sugli HP come Hp e, al 100%,
+            /// cura di tutti gli stati curabili. Proposta solo con almeno due cose da curare.
+            /// </summary>
+            AllConditions = 5
         }
 
         /// <summary>Q21-a — ordine delle fasi stato proposto dalla console (prima gli stati, poi gli HP).</summary>
@@ -374,11 +388,15 @@ namespace SpaceSurvivor.Ship
         /// <summary>
         /// Prossima fase da curare per il client indicato, nell'ordine Q21-a: prima gli
         /// stati curabili a questo tier, poi gli HP. None se non c'è niente da curare (o
-        /// il client non è Alive). Legge solo stato replicato: vale su server e client.
+        /// il client non è Alive). Rev BU-a: con il trattamento unico del tier e almeno due
+        /// cose da curare, AllConditions. Legge solo stato replicato: vale su server e client.
         /// </summary>
         public TreatmentPhase GetNextPhase(ulong patientClientId)
         {
             if (!TryGetAliveHealth(patientClientId, out PlayerHealthSystem health)) return TreatmentPhase.None;
+
+            if (IsAllConditionsTreatable(patientClientId, health))
+                return TreatmentPhase.AllConditions;
 
             for (int i = 0; i < StatusPhaseOrder.Length; i++)
             {
@@ -397,7 +415,27 @@ namespace SpaceSurvivor.Ship
         {
             if (!TryGetAliveHealth(patientClientId, out PlayerHealthSystem health)) return false;
             if (phase == TreatmentPhase.Hp) return health.CurrentHP < health.MaxHP;
+            if (phase == TreatmentPhase.AllConditions) return IsAllConditionsTreatable(patientClientId, health);
             return IsStatusPhaseTreatable(patientClientId, phase);
+        }
+
+        /// <summary>
+        /// Rev BU-a (Q89-a) — trattamento unico possibile: il tier lo prevede (MedbayConfig) e
+        /// le cose da curare sono almeno due (stati curabili a questo tier, più gli HP se sotto
+        /// il massimo). Con una sola cosa da curare resta la fase singola.
+        /// </summary>
+        private bool IsAllConditionsTreatable(ulong patientClientId, PlayerHealthSystem health)
+        {
+            if (config == null || health == null) return false;
+            if (!config.GetTier(MedbaySystem.CurrentTierOrDefault).TreatsAllInOneSession) return false;
+
+            int count = health.CurrentHP < health.MaxHP ? 1 : 0;
+            for (int i = 0; i < StatusPhaseOrder.Length; i++)
+            {
+                if (IsStatusPhaseTreatable(patientClientId, StatusPhaseOrder[i]))
+                    count++;
+            }
+            return count >= 2;
         }
 
         /// <summary>
@@ -450,6 +488,7 @@ namespace SpaceSurvivor.Ship
                 case TreatmentPhase.Poison: return "POISON";
                 case TreatmentPhase.Radiation: return "RADIATION";
                 case TreatmentPhase.CompoundWounds: return "COMPOUND WOUNDS";
+                case TreatmentPhase.AllConditions: return "ALL CONDITIONS";   // Rev BU-a
                 default: return "—";
             }
         }
@@ -550,7 +589,8 @@ namespace SpaceSurvivor.Ship
         /// dell'operatore a ogni soglia, eseguito sul server. L'effetto dipende dalla fase
         /// della sessione (Rev BP-b), decisa dal server all'accettazione:
         ///   - Hp (Q3-a): porta gli HP ad ALMENO progressPct% di maxHP;
-        ///   - fase stato (Q22-a): solo al 100%, PlayerStatusEffects.TryCure.
+        ///   - fase stato (Q22-a): solo al 100%, PlayerStatusEffects.TryCure;
+        ///   - AllConditions (Rev BU-a · Q89-a): come Hp, e al 100% prima cura tutti gli stati.
         /// Idempotente in entrambi i casi (un duplicato non cura due volte). Accettato solo
         /// dall'operatore corrente.
         /// </summary>
@@ -571,6 +611,16 @@ namespace SpaceSurvivor.Ship
 
             if (_sessionPhase == TreatmentPhase.Hp)
             {
+                ServerApplyHpThreshold(patientHealth, progressPct);
+                return;
+            }
+
+            // Rev BU-a (Q89-a): trattamento unico. Al 100% prima gli stati (curare le Ferite
+            // Composte fa risalire l'HP max), poi gli HP al 100% del massimo aggiornato.
+            if (_sessionPhase == TreatmentPhase.AllConditions)
+            {
+                if (progressPct >= 100f)
+                    ServerCureAllStatuses(patient);
                 ServerApplyHpThreshold(patientHealth, progressPct);
                 return;
             }
@@ -612,6 +662,29 @@ namespace SpaceSurvivor.Ship
             float healed = patientHealth.ApplyHeal(missing);
             LogV($"[RecoveryBed] {name}: soglia {progressPct:F0}% → +{healed:F1} HP " +
                  $"(paziente {netPatient.Value}, ora {patientHealth.CurrentHP:F0}/{patientHealth.MaxHP:F0}).");
+        }
+
+        /// <summary>
+        /// Rev BU-a (Q89-a) — cura tutti gli stati curabili ADESSO sul paziente (stesse regole
+        /// delle fasi singole: tier che cura gli stati, stato attivo, regola dello stato).
+        /// Idempotente: uno stato già curato viene saltato. SERVER.
+        /// </summary>
+        private void ServerCureAllStatuses(ulong patient)
+        {
+            if (!PlayerStatusEffects.TryGetByClientId(patient, out PlayerStatusEffects effects) || effects == null)
+                return;
+
+            int tier = MedbaySystem.CurrentTierOrDefault;
+            for (int i = 0; i < StatusPhaseOrder.Length; i++)
+            {
+                TreatmentPhase phase = StatusPhaseOrder[i];
+                if (!IsStatusPhaseTreatable(patient, phase)) continue;
+                if (!TryGetStatus(phase, out StatusEffectType status)) continue;
+
+                bool cured = effects.TryCure(status, tier);
+                LogV($"[RecoveryBed] {name}: ALL CONDITIONS al 100% → {status} {(cured ? "curato" : "non curato")} " +
+                     $"(paziente {patient}, T{tier}).");
+            }
         }
 
         // ── Reazione locale ai cambi di occupazione (tutti i client) ───────────

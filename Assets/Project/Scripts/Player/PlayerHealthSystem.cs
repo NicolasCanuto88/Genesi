@@ -41,6 +41,12 @@ using UnityEngine;
 /// clone è un CORPO NUOVO → NESSUNA Ferita Composta al respawn (Q8-a); le Ferite
 /// Composte si applicano SOLO alla rianimazione via defibrillatore.
 ///
+/// FERITE COMPOSTE E HP ALLA RIANIMAZIONE (Rev BU-a · Q84-a / Q85-a): le Ferite Composte
+/// abbassano HP max e velocità (modificatori nell'asset SED_CompoundWounds). In
+/// ServerTryRevive si applicano PRIMA di calcolare gli HP: la frazione del profilo (Corpsman
+/// 60%, altri 30%) vale sul massimo già ridotto, quindi la barra torna sempre alla stessa
+/// percentuale, alla prima rianimazione come alle successive.
+///
 /// IMMUNITÀ (Rev BP-a · Q27-a): ServerTryRevive riceve i secondi di immunità del
 /// profilo del rianimatore (Corpsman 3 s, default 0). Finché dura, ApplyDamage non ha
 /// effetto: essendo il choke point unico, l'immunità copre anche il DoT degli Stati.
@@ -451,9 +457,10 @@ public class PlayerHealthSystem : NetworkBehaviour
     /// <summary>
     /// Tenta la rianimazione via defibrillatore. SERVER ONLY. Chiamato dal
     /// ReviveServerRpc di PlayerReviveTarget. First-completer-wins (Q4-a): riesce
-    /// solo se il player è ancora Downed. Su successo: HP = MaxHP (effettivo) × frazione,
+    /// solo se il player è ancora Downed. Su successo: Ferite Composte (Q8-a), poi
+    /// HP = MaxHP (effettivo, già ridotto dalle Ferite: Rev BU-a · Q85-a) × frazione,
     /// stato → Alive, immunità al danno per immunitySeconds (Rev BP-a, profilo del
-    /// rianimatore) e Ferite Composte (Q8-a). Ritorna true su successo.
+    /// rianimatore). Ritorna true su successo.
     /// </summary>
     public bool ServerTryRevive(float hpRestoreFraction, float immunitySeconds = 0f)
     {
@@ -463,13 +470,15 @@ public class PlayerHealthSystem : NetworkBehaviour
         // Immunità PRIMA del ritorno ad Alive: nessun danno può infilarsi tra i due passi.
         immuneUntil = immunitySeconds > 0f ? Time.time + immunitySeconds : 0f;
 
+        // Ferite Composte SOLO alla rianimazione via defib (Q8-a). Rev BU-a (Q85-a): PRIMA degli
+        // HP, così la frazione vale sul massimo già ridotto. A terra gli HP sono 0: il taglio
+        // al nuovo massimo (ServerClampHPToMax, al cambio di maschera) non tocca nulla.
+        if (statusEffects != null)
+            statusEffects.ApplyEffect(StatusEffectType.CompoundWounds);
+
         float frac = Mathf.Clamp01(hpRestoreFraction);
         netCurrentHP.Value = Mathf.Max(1f, MaxHP * frac);   // almeno 1 HP: rianimato = non subito ri-downed (Rev BR: max effettivo)
         netLifeState.Value = LifeState.Alive;
-
-        // Ferite Composte SOLO alla rianimazione via defib (Q8-a). Stato pronto da Rev BC.
-        if (statusEffects != null)
-            statusEffects.ApplyEffect(StatusEffectType.CompoundWounds);
 
         return true;
     }

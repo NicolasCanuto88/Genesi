@@ -15,10 +15,16 @@ MonoBehaviour:
   type: 2
   displayName: CompoundWounds
   description: 
+  category: 0
   duration: 0
-  effectKind: 0
+  effectKind: 2
   tickInterval: 0
   effectPerTick: 0
+  modifiers:
+  - stat: 3
+    percent: -20
+  - stat: 0
+    percent: -15
   stackingPolicy: 0
   maxStacks: 1
   curableOnlyAtMedbayT3Plus: 1
