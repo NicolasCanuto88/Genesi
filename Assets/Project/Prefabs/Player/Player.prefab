@@ -3529,6 +3529,8 @@ MonoBehaviour:
   lookSensitivity: 0.15
   lookSmoothness: 50
   maxLookAngle: 70
+  stickLookSpeed: 180
+  stickLookExponent: 1.5
   cameraTransform: {fileID: 8790591149620919640}
   showDebugUI: 1
 --- !u!114 &409763803724793407
@@ -3685,7 +3687,7 @@ MonoBehaviour:
   fallbackCorpsmanChannelSeconds: 2
   fallbackCorpsmanHpRestoreFraction: 0.6
   fallbackCorpsmanImmunitySeconds: 3
-  revivePrompt: '[{interact}] Rianima (tieni premuto)'
+  revivePrompt: '[{interact}] Revive (hold)'
 --- !u!114 &5451365132181139867
 MonoBehaviour:
   m_ObjectHideFlags: 0

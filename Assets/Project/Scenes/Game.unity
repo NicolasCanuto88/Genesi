@@ -8220,7 +8220,7 @@ MonoBehaviour:
   config: {fileID: 11400000, guid: 516f5918eb75fce43a94fbe2fd432838, type: 2}
   patientViewPoint: {fileID: 702795181}
   occupiedVisual: {fileID: 1582953967}
-  lieDownPrompt: Sdraiati sul lettino
+  lieDownPrompt: '[{interact}] Lie down'
   requestCooldown: 0.5
   exitCooldown: 1
   showDebugUI: 0
@@ -13731,7 +13731,7 @@ MonoBehaviour:
   repairableTarget: {fileID: 1788421913}
   repairMinigame: {fileID: 232239842}
   playerInputReference: {fileID: 0}
-  interactionPrompt: Ripara sistema
+  interactionPrompt: '[{interact}] Repair system'
 --- !u!65 &232239844
 BoxCollider:
   m_ObjectHideFlags: 0
@@ -16948,7 +16948,7 @@ MonoBehaviour:
   climbSpeed: 3
   topExitPoint: {fileID: 1663275405}
   bottomExitPoint: {fileID: 1161444761}
-  cameraLookSpeed: 0.1
+  lookScale: 1
   maxLookAngle: 60
   cameraDistanceFromLadder: 0.65
   snapDistance: 0.8
@@ -98564,7 +98564,7 @@ MonoBehaviour:
   climbSpeed: 3
   topExitPoint: {fileID: 1732334131}
   bottomExitPoint: {fileID: 583633772}
-  cameraLookSpeed: 0.1
+  lookScale: 1
   maxLookAngle: 60
   cameraDistanceFromLadder: 0.65
   snapDistance: 0.8
@@ -430039,7 +430039,7 @@ MonoBehaviour:
   stabilizableTarget: {fileID: 1847589143}
   stabilizationMinigame: {fileID: 604324182345578323}
   playerInputReference: {fileID: 0}
-  interactionPrompt: Stabilizza sistema
+  interactionPrompt: '[{interact}] Stabilize system'
   debugArmed: 1
 --- !u!33 &6091824278314727665
 MeshFilter:
@@ -520168,7 +520168,7 @@ MonoBehaviour:
   repairableTarget: {fileID: 1847589143}
   repairMinigame: {fileID: 8020568468449594436}
   playerInputReference: {fileID: 0}
-  interactionPrompt: Ripara sistema
+  interactionPrompt: '[{interact}] Repair system'
 --- !u!114 &8020568468449594438
 MonoBehaviour:
   m_ObjectHideFlags: 0

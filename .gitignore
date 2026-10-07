@@ -23,3 +23,7 @@ ExportedObj/
 *.mdb
 *.opendb
 *.VC.db
+
+# Rev BT-c (Q76-a): cartella di lavoro di Visual Studio (indici Copilot, layout delle finestre).
+# Era versionata e finiva in ogni commit; Visual Studio la ricrea da solo.
+.vs/

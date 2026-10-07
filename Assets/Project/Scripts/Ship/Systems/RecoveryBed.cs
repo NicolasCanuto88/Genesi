@@ -148,7 +148,7 @@ namespace SpaceSurvivor.Ship
         [SerializeField] private GameObject occupiedVisual;
 
         [Header("Prompt")]
-        [SerializeField] private string lieDownPrompt = "Sdraiati sul lettino";
+        [SerializeField] private string lieDownPrompt = "[{interact}] Lie down";   // Rev BT-c (Q75-a)
 
         [Header("Tempi")]
         [Tooltip("Pausa dopo una richiesta al server, per non inviarne una a ogni pressione.")]

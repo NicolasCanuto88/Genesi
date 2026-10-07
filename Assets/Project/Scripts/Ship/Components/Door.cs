@@ -147,16 +147,16 @@ public class Door : MonoBehaviour, IInteractable, IPowerConsumer
         {
             if (currentState == DoorState.Closed)
             {
-                return "[E] Open Door";
+                return "[{interact}] Open Door";   // Rev BT-c (Q75-a): tasto da FormatPrompt
             }
             else
             {
-                return "[E] Close Door";
+                return "[{interact}] Close Door";
             }
         }
         else
         {
-            return "[E] Open Door";
+            return "[{interact}] Open Door";
         }
     }
 

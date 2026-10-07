@@ -27,10 +27,19 @@ using UnityEngine;
 /// canali vedono lo stato non più Downed e abortano. Nessun lock da rilasciare →
 /// nessun lock orfano se un rianimatore si disconnette a metà.
 ///
-/// DISCONNECT del downed: se questo giocatore si disconnette, NGO despawna il suo
-/// NetworkObject → questo componente sparisce su tutti i client → i canali in
-/// corso perdono il bersaglio (il raycast non lo colpisce più → abort) e nessun
-/// RPC può essere consegnato a un oggetto despawnato. Gestione naturale.
+/// DISCONNECT del downed (corretto in Rev BT-c · Q73-a): se questo giocatore si
+/// disconnette, NGO despawna il suo NetworkObject e questo componente viene distrutto.
+/// Il suo Update non gira più, quindi l'abort del canale non può arrivare da lì: prima di
+/// Rev BT-c il rianimatore restava "in interazione" per sempre. Ora OnNetworkDespawn chiude
+/// il canale in corso (AbortChannel → EndInteraction), e InteractionSystem ha comunque una
+/// rete di sicurezza sugli interagibili distrutti. Nessun RPC può essere consegnato a un
+/// oggetto despawnato.
+///
+/// USCITE ANTICIPATE di Interact (Rev BT-c · Q73-a): InteractionSystem accende
+/// isInteracting PRIMA di chiamare Interact e, essendo l'interazione continua, aspetta un
+/// EndInteraction. Ogni uscita senza avviare il canale libera quindi il rianimatore
+/// (ReleaseInteractor). Caso reale: tra il controllo di CanInteract nel frame precedente e la
+/// pressione, il compagno è stato rianimato da un altro o le cariche sono finite (contesa C2).
 ///
 /// NOTA input "hold": l'azione Interact usa una Hold interaction (soglia). La
 /// soglia è il gate d'AVVIO del canale; la vulnerabilità co-op durante il canale
@@ -72,8 +81,9 @@ public class PlayerReviveTarget : NetworkBehaviour, IInteractable
     [SerializeField] private float fallbackCorpsmanImmunitySeconds = 3f;
 
     [Header("Prompt")]
-    [Tooltip("Prompt mostrato al rianimatore. {interact} è sostituito dal tasto dal InputDeviceManager.")]
-    [SerializeField] private string revivePrompt = "[{interact}] Rianima (tieni premuto)";
+    [Tooltip("Prompt mostrato al rianimatore. {interact} è sostituito dal tasto dal InputDeviceManager. " +
+             "Testo in inglese da Rev BT-c (Q75-a).")]
+    [SerializeField] private string revivePrompt = "[{interact}] Revive (hold)";
 
     // ── Riferimenti ──
     private PlayerHealthSystem health;
@@ -113,15 +123,27 @@ public class PlayerReviveTarget : NetworkBehaviour, IInteractable
     public void Interact(GameObject interactor)
     {
         // Chiamato una volta all'inizio dell'hold, sul client del rianimatore.
-        if (channeling) return;
         if (interactor == null) return;
-        if (!CanInteract()) return;
+
+        // Rev BT-c: un canale già in corso tiene lui l'interazione; non si avvia un secondo.
+        if (channeling) return;
+
+        // Rev BT-c: uscita senza canale → il rianimatore va liberato (interazione continua).
+        if (!CanInteract())
+        {
+            ReleaseInteractor(interactor);
+            return;
+        }
+
+        NetworkObject no = interactor.GetComponent<NetworkObject>();
+        if (no == null)
+        {
+            ReleaseInteractor(interactor);
+            return;
+        }
 
         reviverInteraction = interactor.GetComponent<InteractionSystem>();
         reviverHealth = interactor.GetComponent<PlayerHealthSystem>();
-
-        NetworkObject no = interactor.GetComponent<NetworkObject>();
-        if (no == null) return;
         reviverClientId = no.OwnerClientId;
 
         DefibProfile profile = ResolveProfile(reviverClientId);
@@ -178,6 +200,27 @@ public class PlayerReviveTarget : NetworkBehaviour, IInteractable
         reviverInteraction?.EndInteraction();
         reviverInteraction = null;
         reviverHealth = null;
+    }
+
+    /// <summary>
+    /// Rev BT-c (Q73-a) — libera chi ha premuto senza che il canale sia partito.
+    /// Operazione distinta da AbortChannel: qui non c'è nessun canale da chiudere.
+    /// </summary>
+    private static void ReleaseInteractor(GameObject interactor)
+    {
+        InteractionSystem interaction = interactor != null ? interactor.GetComponent<InteractionSystem>() : null;
+        if (interaction != null) interaction.EndInteraction();
+    }
+
+    /// <summary>
+    /// Rev BT-c (Q73-a) — il giocatore a terra lascia la partita (o la sessione si chiude) con un
+    /// canale in corso sul client del rianimatore: il canale si chiude qui, perché dopo il
+    /// despawn l'Update di questo componente non gira più.
+    /// </summary>
+    public override void OnNetworkDespawn()
+    {
+        if (channeling) AbortChannel();
+        base.OnNetworkDespawn();
     }
 
     // ── RPC server: rianimazione (Q3-a, Q4-a) ──────────────────────────────────

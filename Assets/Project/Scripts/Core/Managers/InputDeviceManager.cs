@@ -135,12 +135,12 @@ public class InputDeviceManager : MonoBehaviour
 
     public string GetSprintPrompt()
     {
-        return IsGamepad ? "LT" : "Shift";
+        return IsGamepad ? "LS" : "Shift";   // Rev BT-c: lo sprint del gamepad è il click dello stick sinistro (L3)
     }
 
     public string GetCrouchPrompt()
     {
-        return IsGamepad ? "RS" : "C";
+        return IsGamepad ? "B" : "C";   // Rev BT-c: il crouch del gamepad è B (buttonEast)
     }
 
     public string FormatPrompt(string template)

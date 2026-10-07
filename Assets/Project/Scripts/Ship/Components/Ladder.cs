@@ -89,7 +89,8 @@ public class Ladder : MonoBehaviour, IInteractable
 
     public string GetInteractionPrompt()
     {
-        return isPlayerOnLadder ? "[E] Exit Ladder" : "[E] Use Ladder";
+        // Rev BT-c (Q75-a): tasto da InputDeviceManager.FormatPrompt invece di "[E]" fisso.
+        return isPlayerOnLadder ? "[{interact}] Exit Ladder" : "[{interact}] Use Ladder";
     }
 
     public bool CanInteract()

@@ -52,7 +52,7 @@ namespace SpaceSurvivor.Ship
         [SerializeField] private PlayerInput playerInputReference;
 
         [Header("Prompt")]
-        [SerializeField] private string interactionPrompt = "Stabilizza sistema";
+        [SerializeField] private string interactionPrompt = "[{interact}] Stabilize system";   // Rev BT-c (Q75-a)
 
         [Header("Debug — arming (Q3-c, in attesa Combat M4.7)")]
         [Tooltip("Arma la stabilizzazione per il test. Sostituito dallo stato acuto " +
@@ -107,9 +107,9 @@ namespace SpaceSurvivor.Ship
             if (_repairable == null) return interactionPrompt;
 
             if (!debugArmed)
-                return $"{_repairable.GetSystemName()} — Stabile";
+                return $"{_repairable.GetSystemName()} — Stable";   // Rev BT-c (Q75-a): prompt in inglese
 
-            return $"Stabilizza {_repairable.GetSystemName()}";
+            return $"[{{interact}}] Stabilize {_repairable.GetSystemName()}";
         }
 
         public void Interact(GameObject interactor)

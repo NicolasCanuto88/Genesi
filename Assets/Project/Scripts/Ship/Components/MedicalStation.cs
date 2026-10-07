@@ -231,7 +231,7 @@ public class MedicalStation : MonoBehaviour, IInteractable
         return true;
     }
 
-    public string GetInteractionPrompt() => "Medical Station";
+    public string GetInteractionPrompt() => "[{interact}] Use Medical Station";   // Rev BT-c (Q75-a)
     public bool IsContinuousInteraction() => false;
     public void OnLookEnter() { }
     public void OnLookExit() { }

@@ -5,6 +5,18 @@ using TMPro;
 /// <summary>
 /// Handles player interaction with interactable objects
 /// Uses Unity's New Input System
+///
+/// INTERAZIONI CONTINUE (Rev BT-c · Q73-a): un'interazione continua (oggi solo la
+/// rianimazione, PlayerReviveTarget) tiene isInteracting acceso finché l'oggetto non chiama
+/// EndInteraction. Finché è acceso, InteractionSystem non mostra prompt e non avvia altre
+/// interazioni, e kit e lancio (PlayerMedKit, PlayerThrower) restano bloccati.
+/// Rete di sicurezza: l'oggetto che ha avviato l'interazione è ricordato in activeInteractable;
+/// se viene distrutto o disattivato prima di chiamare EndInteraction (per esempio il giocatore
+/// a terra si disconnette e il suo NetworkObject viene despawnato), l'interazione si chiude qui
+/// a inizio Update. Prima di Rev BT-c il giocatore restava "in interazione" per sempre: niente
+/// porte, scale, postazioni, letto, armadietto, kit né lancio, nemmeno dopo la clonazione.
+/// La stessa verifica protegge OnInteract da un bersaglio distrutto nel frame precedente.
+/// File convertito in UTF-8 in Rev BT-c (era Windows-1252).
 /// </summary>
 public class InteractionSystem : MonoBehaviour
 {
@@ -22,6 +34,7 @@ public class InteractionSystem : MonoBehaviour
 
     // State
     private IInteractable currentInteractable;
+    private IInteractable activeInteractable;   // Rev BT-c: chi ha avviato l'interazione in corso
     private bool isInteracting;
 
     // Debug
@@ -53,8 +66,28 @@ public class InteractionSystem : MonoBehaviour
 
     private void Update()
     {
+        // Rev BT-c (Q73-a): rete di sicurezza — l'interazione continua non può sopravvivere
+        // all'oggetto che la guida.
+        if (isInteracting && !IsAlive(activeInteractable))
+        {
+            EndInteraction();
+        }
+
         CheckForInteractable();
         UpdateUI();
+    }
+
+    /// <summary>
+    /// Rev BT-c — vero se l'interagibile esiste ancora e, se è un componente Unity, non è stato
+    /// distrutto né disattivato. Un riferimento d'interfaccia a un MonoBehaviour distrutto non è
+    /// null per C#: il controllo passa da UnityEngine.Object.
+    /// </summary>
+    private static bool IsAlive(IInteractable interactable)
+    {
+        if (interactable == null) return false;
+        if (interactable is Behaviour behaviour) return behaviour != null && behaviour.isActiveAndEnabled;
+        if (interactable is Object unityObject) return unityObject != null;
+        return true;
     }
 
     private void CheckForInteractable()
@@ -140,7 +173,8 @@ public class InteractionSystem : MonoBehaviour
     {
         // Il tuo Input Actions ha "Hold" interaction per Interact
         // Quindi questo viene chiamato quando inizia l'hold
-        if (value.isPressed && currentInteractable != null && !isInteracting)
+        // Rev BT-c: IsAlive scarta un bersaglio distrutto dopo l'ultimo CheckForInteractable.
+        if (value.isPressed && IsAlive(currentInteractable) && !isInteracting)
         {
             StartInteraction();
         }
@@ -148,10 +182,14 @@ public class InteractionSystem : MonoBehaviour
 
     private void StartInteraction()
     {
+        // Rev BT-c: bersaglio fissato prima di Interact — Interact può chiamare EndInteraction,
+        // che ricalcola currentInteractable.
+        IInteractable target = currentInteractable;
+        activeInteractable = target;
         isInteracting = true;
-        currentInteractable.Interact(this.gameObject);
+        target.Interact(this.gameObject);
 
-        if (!currentInteractable.IsContinuousInteraction())
+        if (!target.IsContinuousInteraction())
         {
             EndInteraction();
         }
@@ -160,6 +198,7 @@ public class InteractionSystem : MonoBehaviour
     public void EndInteraction()
     {
         isInteracting = false;
+        activeInteractable = null;   // Rev BT-c
         CheckForInteractable();
     }
 

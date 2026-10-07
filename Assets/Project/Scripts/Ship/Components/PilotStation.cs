@@ -374,7 +374,7 @@ public class PilotStation : MonoBehaviour, IInteractable
     }
 
     public bool CanInteract() => !isUsingStation && interactionCooldown <= 0f;
-    public string GetInteractionPrompt() => "Console Pilota";
+    public string GetInteractionPrompt() => "[{interact}] Use Pilot Station";   // Rev BT-c (Q75-a)
     public bool IsContinuousInteraction() => false;
     public void OnLookEnter() { }
     public void OnLookExit() { }

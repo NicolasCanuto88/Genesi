@@ -76,7 +76,7 @@ namespace SpaceSurvivor.Ship
         [SerializeField] private PlayerInput playerInputReference;
 
         [Header("Prompt")]
-        [SerializeField] private string interactionPrompt = "Ripara sistema";
+        [SerializeField] private string interactionPrompt = "[{interact}] Repair system";   // Rev BT-c (Q75-a)
 
         // ── Stato runtime (client/UI) ────────────────────────────────────────
         private PlayerController _playerController;
@@ -138,12 +138,12 @@ namespace SpaceSurvivor.Ship
             if (_repairable == null) return interactionPrompt;
 
             if (!_repairable.IsRepairable())
-                return $"{_repairable.GetSystemName()} — Operativo";
+                return $"{_repairable.GetSystemName()} — Operational";   // Rev BT-c (Q75-a): prompt in inglese
 
             if (!_repairable.HasMaterialsForFullRepair())
-                return $"{_repairable.GetSystemName()} — Materiali insufficienti (vedi Monitor 2)";
+                return $"{_repairable.GetSystemName()} — Not enough materials (see Monitor 2)";
 
-            return $"Ripara {_repairable.GetSystemName()} [{_repairable.GetCurrentState()}]";
+            return $"[{{interact}}] Repair {_repairable.GetSystemName()} [{_repairable.GetCurrentState()}]";
         }
 
         public void Interact(GameObject interactor)
