@@ -74,6 +74,9 @@ namespace SpaceSurvivor.Ship
     ///   - Al ripristino PlayerController torna attivo SOLO se il giocatore è Alive:
     ///     il freeze Downed di PlayerHealthSystem resta l'autorità (l'ordine dei
     ///     callback tra NetworkObject diversi non è garantito).
+    ///   - Rev BW-b (Q111-a): prima di salvare e prima di ripristinare la posa della camera si
+    ///     chiama CameraShaker.CancelShake, così un urto preso mentre ci si sdraia o ci si alza
+    ///     non lascia un residuo di shake sulla camera.
     ///   - Il tablet è bloccato in apertura per tutta la durata (TabletStation.SetOpenBlocked):
     ///     tablet e letto salvano/ripristinano entrambi PlayerController e camera.
     ///     Audit Rev AF/AG, vedi TabletStation.
@@ -730,6 +733,10 @@ namespace SpaceSurvivor.Ship
             _localIsPatient = true;
             _leaveRequested = false;
 
+            // Rev BW-b (Q111-a): la posa salvata non deve contenere il residuo di uno shake in corso,
+            // altrimenti al ripristino resterebbe sulla camera per sempre.
+            CameraShaker.LocalInstance?.CancelShake();
+
             _savedCameraLocalPosition = _localCamera.localPosition;
             _savedCameraLocalRotation = _localCamera.localRotation;
 
@@ -749,6 +756,10 @@ namespace SpaceSurvivor.Ship
 
             if (_localCamera != null)
             {
+                // Rev BW-b (Q111-a): lo shake in corso si chiude prima del ripristino, così i suoi
+                // delta successivi non spostano la posa appena ripristinata.
+                CameraShaker.LocalInstance?.CancelShake();
+
                 _localCamera.localPosition = _savedCameraLocalPosition;
                 _localCamera.localRotation = _savedCameraLocalRotation;
             }
