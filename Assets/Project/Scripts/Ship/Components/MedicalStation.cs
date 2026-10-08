@@ -56,6 +56,10 @@ using UnityEngine.InputSystem;
 ///   - uscita normale: PlayerController riattivato solo se Alive (prima:
 ///     wasPlayerControllerEnabled, che poteva rimettere in moto un giocatore a terra).
 ///
+/// MONITOR SPENTO A RIPOSO (Rev BW-a · Q109-a): come EngineeringStation, il dashboard si spegne in
+/// Awake e si accende solo a chi si siede. Prima restava acceso ma fermo fino alla prima seduta
+/// (i dati si aggiornano solo da Open) e spento per il solo client che si era alzato.
+///
 /// Monitor unico: MedicalDashboardUI + minigame medico.
 /// </summary>
 [RequireComponent(typeof(BoxCollider))]
@@ -146,6 +150,10 @@ public class MedicalStation : MonoBehaviour, IInteractable
     private void Awake()
     {
         GetComponent<BoxCollider>().isTrigger = true;
+
+        // Rev BW-a (Q109-a) — monitor spento a riposo, acceso da EnterStation.
+        if (dashboardUI != null)
+            dashboardUI.gameObject.SetActive(false);
     }
 
     private void Start()

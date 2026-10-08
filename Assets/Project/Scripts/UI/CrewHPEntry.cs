@@ -11,42 +11,45 @@ using TMPro;
 /// In M3: aggiornato da PlayerHealthSystem con dati reali (NetworkVariable).
 ///
 /// ⚠️ Dipende da: PlayerHealthSystem (M3) per dati reali multiplayer.
+///
+/// Rev BW-a (Q110-a): badge in inglese. A 0 HP il giocatore è a terra o aspetta il clone, non morto:
+/// "DOWN" invece di "MORTO".
 /// </summary>
 public class CrewHPEntry : MonoBehaviour
 {
-    [SerializeField] private TextMeshProUGUI   nameLabel;
+    [SerializeField] private TextMeshProUGUI nameLabel;
     [SerializeField] private SciFiSegmentedBar hpBar;
-    [SerializeField] private TextMeshProUGUI   hpText;
-    [SerializeField] private TextMeshProUGUI   statusBadge;
+    [SerializeField] private TextMeshProUGUI hpText;
+    [SerializeField] private TextMeshProUGUI statusBadge;
 
     public void SetData(string crewName, float currentHP, float maxHP, Color statusColor)
     {
         float percent = maxHP > 0f ? currentHP / maxHP : 0f;
 
         if (nameLabel != null) nameLabel.text = crewName;
-        if (hpBar     != null) hpBar.SetValue(percent);
-        if (hpText    != null) hpText.text    = $"{currentHP:F0} / {maxHP:F0}";
+        if (hpBar != null) hpBar.SetValue(percent);
+        if (hpText != null) hpText.text = $"{currentHP:F0} / {maxHP:F0}";
 
         if (statusBadge == null) return;
 
         if (percent <= 0f)
         {
-            statusBadge.text  = "MORTO";
+            statusBadge.text = "DOWN";
             statusBadge.color = new Color(0.4f, 0.4f, 0.4f);
         }
         else if (percent < 0.20f)
         {
-            statusBadge.text  = "CRITICO";
+            statusBadge.text = "CRITICAL";
             statusBadge.color = new Color(1f, 0.2f, 0f);
         }
         else if (percent < 0.40f)
         {
-            statusBadge.text  = "FERITO";
+            statusBadge.text = "INJURED";
             statusBadge.color = new Color(1f, 0.67f, 0f);
         }
         else
         {
-            statusBadge.text  = "OK";
+            statusBadge.text = "OK";
             statusBadge.color = statusColor;
         }
     }
