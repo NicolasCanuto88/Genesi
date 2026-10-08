@@ -102,7 +102,10 @@ namespace SpaceSurvivor.Ship
             if (allTiers != null && startingTierIndex < allTiers.Length)
                 _data = allTiers[startingTierIndex];
 
-            if (_data != null)
+            // Rev BW-d (Q116-a): valore iniziale solo sul server. Prima lo scriveva anche il client,
+            // che non ne ha il permesso: NGO scartava la scrittura e registrava un errore a ogni ingresso.
+            // Il client riceve il valore dal server prima di OnNetworkSpawn.
+            if (IsServer && _data != null)
                 _netHealth.Value = _data.maxHealth;
 
             _netState.OnValueChanged += OnStateChanged;
