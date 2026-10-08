@@ -1,0 +1,42 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 08c64ff1c1e5f1c4183d800a5b082211, type: 3}
+  m_Name: TD_BubbleShield
+  m_EditorClassIdentifier: Assembly-CSharp::ThrowableData
+  displayName: Bubble Shield
+  launchSpeed: 10
+  aimPitchOffsetDegrees: 10
+  throwCooldownSeconds: 0.75
+  gravity: 9.81
+  projectileRadius: 0.08
+  maxFlightSeconds: 3
+  maxBounces: 0
+  restitution: 0.4
+  minBounceSpeed: 1.5
+  collisionMask:
+    serializedVersion: 2
+    m_Bits: 979
+  kitItem: 13
+  effectKind: 2
+  areaRadius: 3
+  areaDurationSeconds: 8
+  healPerSecond: 5
+  healTickSeconds: 0.5
+  shieldTickSeconds: 0.25
+  shieldLingerSeconds: 0.75
+  projectileVisualPrefab: {fileID: 3193770398959926912, guid: 3e1cdf2519a07984ea19b93f1e380984, type: 3}
+  areaVisualPrefab: {fileID: 1924649449836365806, guid: 1ed4d0a7aec84a341af07de589dc9b39, type: 3}
+  aimMarkerPrefab: {fileID: 297335115294173594, guid: e74ce0abff3a4e44fb6cf7ed6adc875b, type: 3}
+  aimArcMaterial: {fileID: 2100000, guid: 971abc380acdee84ba03d1d0ecafc273, type: 2}
+  aimArcWidth: 0.03
+  areaFadeFraction: 0.25
+  feedbackHoldSeconds: 2

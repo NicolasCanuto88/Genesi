@@ -38,6 +38,16 @@ namespace SpaceSurvivor.Ship
     ///     PlayerHealthSystem.ApplyHeal (solo Alive, HP max dinamico): non rialza chi è a terra e non
     ///     cura gli stati. A fine campo OnServerAreaFinished porta il riepilogo a chi ha lanciato
     ///     (Q64-a).
+    ///   - BubbleShield (Rev BV-c · Q96-a · Q105-a): a ogni tick (primo alla detonazione) chi ha una
+    ///     parte del corpo nel raggio e in linea di vista dal centro (stessa regola del campo), VIVO O
+    ///     A TERRA (non in attesa del clone), riceve lo stato Shielded per ShieldLingerSeconds, via
+    ///     PlayerStatusEffects.ApplyEffectForSeconds. Uscito dalla bolla, lo scudo finisce entro quel
+    ///     tempo (anche dopo la fine della bolla). Lo stato para solo i proiettili (Combat).
+    ///     OnServerAreaFinished riporta quanti giocatori diversi la bolla ha coperto.
+    ///
+    /// DURATA DELL'AREA (Rev BV-c): ServerLaunch accetta una durata esplicita (la bolla dura quanto
+    /// dice il tier del Quartermaster); senza, vale AreaDurationSeconds dello SO. La durata viaggia
+    /// con la detonazione, così i client mostrano la visuale per lo stesso tempo.
     ///
     /// NAVE STATICA (Q53-a): tutto nello spazio Unity, cioè nel riferimento della nave.
     ///
@@ -100,6 +110,7 @@ namespace SpaceSurvivor.Ship
             public ThrowableData Data;
             public ulong Thrower;
             public float EffectScale;
+            public float AreaDuration;   // Rev BV-c: durata dell'area alla detonazione (secondi, 0 = nessuna)
             public ThrowFlightState State;
         }
 
@@ -112,7 +123,8 @@ namespace SpaceSurvivor.Ship
             public float EffectScale;
             public float NextTickTime;                                    // Rev BS-b
             public float TotalHealed;                                     // Rev BS-b
-            public readonly HashSet<ulong> Healed = new HashSet<ulong>();  // Rev BS-b: giocatori distinti
+            // Rev BS-b: giocatori distinti raggiunti dall'effetto (curati; Rev BV-c: o coperti dalla bolla)
+            public readonly HashSet<ulong> Healed = new HashSet<ulong>();
         }
 
         private readonly List<ServerFlight> serverFlights = new List<ServerFlight>();
@@ -252,9 +264,19 @@ namespace SpaceSurvivor.Ship
         /// (il client li manda nella sua RPC: co-op, nessun anti-cheat). effectScale è il
         /// moltiplicatore di effetto deciso dal chiamante (ruolo), registrato con l'area.
         /// Ritorna false se il lanciabile non è nel catalogo o il sistema non è pronto.
+        /// L'area dura AreaDurationSeconds dello SO.
         /// </summary>
         public bool ServerLaunch(ThrowableData data, Vector3 origin, Vector3 lookDirection, ulong throwerClientId,
                                  float effectScale)
+            => ServerLaunch(data, origin, lookDirection, throwerClientId, effectScale,
+                            data != null ? data.AreaDurationSeconds : 0f);
+
+        /// <summary>
+        /// Rev BV-c — come sopra, con la durata dell'area decisa dal chiamante (Bubble Shield: dal tier
+        /// del Quartermaster). areaDurationSeconds ≤ 0 = nessuna area.
+        /// </summary>
+        public bool ServerLaunch(ThrowableData data, Vector3 origin, Vector3 lookDirection, ulong throwerClientId,
+                                 float effectScale, float areaDurationSeconds)
         {
             if (!IsServer || !IsSpawned)
             {
@@ -280,6 +302,7 @@ namespace SpaceSurvivor.Ship
                 Data = data,
                 Thrower = throwerClientId,
                 EffectScale = Mathf.Max(0f, effectScale),
+                AreaDuration = Mathf.Max(0f, areaDurationSeconds),
                 State = ThrowBallistics.Begin(origin, velocity)
             };
             serverFlights.Add(flight);
@@ -368,20 +391,20 @@ namespace SpaceSurvivor.Ship
         {
             ThrowableData data = flight.Data;
 
-            if (data.AreaDurationSeconds > 0f)
+            if (flight.AreaDuration > 0f)
             {
                 serverAreas.Add(new ServerArea
                 {
                     Data = data,
                     Center = point,
-                    EndTime = Time.time + data.AreaDurationSeconds,
+                    EndTime = Time.time + flight.AreaDuration,   // Rev BV-c: durata decisa al lancio
                     Thrower = flight.Thrower,
                     EffectScale = flight.EffectScale,
                     NextTickTime = Time.time   // Rev BS-b: primo tick alla detonazione
                 });
             }
 
-            DetonateClientRpc(flight.Id, flight.DataIndex, flight.Thrower, point, hitClient);
+            DetonateClientRpc(flight.Id, flight.DataIndex, flight.Thrower, point, hitClient, flight.AreaDuration);
 
             debugRecords.Insert(0, new DetonationRecord
             {
@@ -425,14 +448,22 @@ namespace SpaceSurvivor.Ship
                         area.NextTickTime += data.HealTickSeconds;
                     }
                 }
+                else if (data.EffectKind == ThrowEffectKind.BubbleShield)   // Rev BV-c
+                {
+                    while (area.NextTickTime <= now && area.NextTickTime < area.EndTime)
+                    {
+                        ServerShieldTick(area);
+                        area.NextTickTime += data.ShieldTickSeconds;
+                    }
+                }
 
                 if (now < area.EndTime) continue;
 
                 serverAreas.RemoveAt(i);
                 if (data.EffectKind != ThrowEffectKind.None)
                 {
-                    LogV($"Area {data.name} di client {area.Thrower} finita: +{area.TotalHealed:F1} HP a " +
-                         $"{area.Healed.Count} giocatori.");
+                    LogV($"Area {data.name} di client {area.Thrower} finita: {area.Healed.Count} giocatori " +
+                         $"raggiunti, +{area.TotalHealed:F1} HP.");
                     OnServerAreaFinished?.Invoke(area.Thrower, data, area.TotalHealed, area.Healed.Count);
                 }
             }
@@ -461,6 +492,33 @@ namespace SpaceSurvivor.Ship
                 if (healed <= 0f) continue;
 
                 area.TotalHealed += healed;
+                area.Healed.Add(clientId);
+            }
+        }
+
+        /// <summary>
+        /// Rev BV-c (Q96-a · Q105-a) — un tick della Bubble Shield. SERVER ONLY. Ogni giocatore vivo o a
+        /// terra nella bolla e in linea di vista riceve lo stato Shielded per ShieldLingerSeconds
+        /// (riapplicare rinnova senza accorciare: lo scudo personale più lungo resta intatto).
+        /// </summary>
+        private void ServerShieldTick(ServerArea area)
+        {
+            ThrowableData data = area.Data;
+            if (NetworkManager == null) return;
+
+            IReadOnlyList<ulong> clients = NetworkManager.ConnectedClientsIds;
+            for (int c = 0; c < clients.Count; c++)
+            {
+                ulong clientId = clients[c];
+                if (!PlayerHealthSystem.TryGetByClientId(clientId, out PlayerHealthSystem player) || player == null)
+                    continue;
+                if (!player.IsAlive && !player.IsDowned) continue;   // Q105-a: non chi aspetta il clone
+                if (!IsInsideField(area.Center, data.AreaRadius, data.CollisionMask, player)) continue;
+                if (!PlayerStatusEffects.TryGetByClientId(clientId, out PlayerStatusEffects effects) ||
+                    effects == null)
+                    continue;
+
+                effects.ApplyEffectForSeconds(StatusEffectType.Shielded, data.ShieldLingerSeconds);
                 area.Healed.Add(clientId);
             }
         }
@@ -586,7 +644,8 @@ namespace SpaceSurvivor.Ship
         }
 
         [Rpc(SendTo.ClientsAndHost)]
-        private void DetonateClientRpc(ushort flightId, byte dataIndex, ulong thrower, Vector3 point, ulong hitClient)
+        private void DetonateClientRpc(ushort flightId, byte dataIndex, ulong thrower, Vector3 point, ulong hitClient,
+                                       float areaDuration)
         {
             if (clientFlights.TryGetValue(flightId, out ClientFlight flight))
             {
@@ -595,8 +654,8 @@ namespace SpaceSurvivor.Ship
             }
 
             ThrowableData data = DataAt(dataIndex);
-            if (data != null && data.AreaDurationSeconds > 0f && data.AreaVisualPrefab != null)
-                SpawnArea(data, point);
+            if (data != null && areaDuration > 0f && data.AreaVisualPrefab != null)
+                SpawnArea(data, point, areaDuration);   // Rev BV-c: durata decisa al lancio
 
             OnClientDetonated?.Invoke(thrower, hitClient, data);
         }
@@ -644,7 +703,7 @@ namespace SpaceSurvivor.Ship
                 clientFlights.Remove(clientFlightsToRemove[i]);
         }
 
-        private void SpawnArea(ThrowableData data, Vector3 point)
+        private void SpawnArea(ThrowableData data, Vector3 point, float duration)
         {
             GameObject visual = SpawnVisual(data.AreaVisualPrefab, point, Quaternion.identity);
             if (visual == null) return;
@@ -666,7 +725,7 @@ namespace SpaceSurvivor.Ship
             {
                 Visual = visual,
                 Elapsed = 0f,
-                Duration = data.AreaDurationSeconds,
+                Duration = duration,
                 FadeFraction = data.AreaFadeFraction,
                 Renderers = renderers,
                 BaseColors = baseColors

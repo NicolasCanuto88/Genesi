@@ -20,7 +20,7 @@ Material:
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_Name: M_ShieldFilm
+  m_Name: M_BubbleShield
   m_Shader: {fileID: 4800000, guid: 104e68f762e37074a862a7a447050b28, type: 3}
   m_Parent: {fileID: 0}
   m_ModifiedSerializedProperties: 0
@@ -103,7 +103,7 @@ Material:
     - _BumpScale: 1
     - _ClearCoatMask: 0
     - _ClearCoatSmoothness: 0
-    - _Cull: 2
+    - _Cull: 0
     - _Cutoff: 0.5
     - _DetailAlbedoMapScale: 1
     - _DetailNormalMapScale: 1
@@ -117,7 +117,7 @@ Material:
     - _Inflate: 0.03
     - _Intensity: 1
     - _Metallic: 0
-    - _NoiseScale: 7
+    - _NoiseScale: 40
     - _NoiseSpeed: 4.32
     - _NoiseStrength: 0.345
     - _OcclusionStrength: 1

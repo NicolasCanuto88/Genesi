@@ -14,7 +14,12 @@ using UnityEngine;
 /// TABELLE (indice 0 = T1 … 3 = T4), valori di Q101-a:
 ///   - Scudo Personale: 6 s / 45 s · 7 s / 40 s · 8 s / 35 s · 10 s / 30 s;
 ///   - Bubble Shield:   —        · 8 s / 60 s · 10 s / 55 s · 12 s / 50 s (T1 non ce l'ha: durata 0).
-/// La ricarica parte dall'attivazione. Le righe della bolla si usano da Rev BV-c.
+/// La ricarica parte dall'attivazione (per la bolla: dal lancio). Le due ricariche sono separate.
+///
+/// COMANDI (Rev BV-c · Q97-a): un solo tasto (Shield, F / Y). Tocco sotto tapThresholdSeconds =
+/// Scudo Personale al rilascio; pressione più lunga = mira della Bubble Shield, lancio al rilascio.
+/// La bolla è il lanciabile bubbleShieldThrowable (TD_BubbleShield), lanciato con il framework di
+/// lancio (ThrowableSystem): deve stare anche nel catalogo di ThrowableSystem in Game.unity.
 ///
 /// COSA PARANO (Q95/Q99): solo i proiettili. Prima del Combat lo scudo è uno stato a tempo che si
 /// vede (film) e non cambia il danno: stati e soffocamento passano.
@@ -49,9 +54,21 @@ public class QuartermasterGadgetConfig : ScriptableObject
     [Range(MinTier, MaxTier)]
     [SerializeField] private int testTier = 2;
 
+    [Header("Comandi — Rev BV-c · Q97-a")]
+    [Tooltip("Pressione di Shield più breve di questa soglia, in secondi = tocco: Scudo Personale al rilascio. " +
+             "Oltre la soglia si apre la mira della Bubble Shield e la bolla parte al rilascio.")]
+    [Min(0.05f)]
+    [SerializeField] private float tapThresholdSeconds = 0.3f;
+
+    [Header("Bubble Shield — lanciabile (Rev BV-c)")]
+    [Tooltip("Asset ThrowableData della bolla (TD_BubbleShield, Effect Kind = BubbleShield). Deve stare anche nel " +
+             "catalogo di ThrowableSystem (Game.unity). La durata dell'area viene dalla tabella qui sotto.")]
+    [SerializeField] private ThrowableData bubbleShieldThrowable;
+
     [Header("Scudo Personale — Q95-a (indice 0 = T1 … 3 = T4)")]
     [Tooltip("Durata e ricarica per tier. Valori di Q101-a.")]
-    [SerializeField] private GadgetTier[] personalShield =
+    [SerializeField]
+    private GadgetTier[] personalShield =
     {
         new GadgetTier(6f, 45f),
         new GadgetTier(7f, 40f),
@@ -59,9 +76,10 @@ public class QuartermasterGadgetConfig : ScriptableObject
         new GadgetTier(10f, 30f)
     };
 
-    [Header("Bubble Shield — Q96-a (indice 0 = T1 … 3 = T4) — da Rev BV-c")]
+    [Header("Bubble Shield — Q96-a (indice 0 = T1 … 3 = T4)")]
     [Tooltip("Durata e ricarica per tier. T1 senza bolla (durata 0). Valori di Q101-a.")]
-    [SerializeField] private GadgetTier[] bubbleShield =
+    [SerializeField]
+    private GadgetTier[] bubbleShield =
     {
         new GadgetTier(0f, 0f),
         new GadgetTier(8f, 60f),
@@ -71,6 +89,12 @@ public class QuartermasterGadgetConfig : ScriptableObject
 
     /// <summary>Tier corrente dei gadget (oggi testTier, domani dall'Armeria).</summary>
     public int CurrentTier => Mathf.Clamp(testTier, MinTier, MaxTier);
+
+    /// <summary>Rev BV-c — soglia tra tocco (scudo personale) e pressione tenuta (mira della bolla).</summary>
+    public float TapThresholdSeconds => Mathf.Max(0.05f, tapThresholdSeconds);
+
+    /// <summary>Rev BV-c — lanciabile della Bubble Shield (può essere null: bolla non disponibile).</summary>
+    public ThrowableData BubbleShieldThrowable => bubbleShieldThrowable;
 
     /// <summary>Scudo personale al tier indicato. false se non disponibile (durata 0 o tabella corta).</summary>
     public bool TryGetPersonalShield(int tier, out float durationSeconds, out float cooldownSeconds)

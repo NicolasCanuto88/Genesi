@@ -4,7 +4,6 @@ using TMPro;
 using Unity.Netcode;
 using UnityEngine;
 using UnityEngine.InputSystem;
-using UnityEngine.Rendering;
 
 /// <summary>
 /// PlayerThrower — lancio di oggetti dal giocatore (Rev BS-a framework, Rev BS-b bomba curativa;
@@ -35,7 +34,9 @@ using UnityEngine.Rendering;
 ///
 /// ARCO DI MIRA (Q60-a): LineRenderer creato a runtime come figlio (solo owner) e marcatore dal
 /// prefab dello SO, entrambi senza collider. Stessa simulazione del server (ThrowBallistics):
-/// quello che si vede è quello che succede, salvo chi si muove dopo il lancio.
+/// quello che si vede è quello che succede, salvo chi si muove dopo il lancio. Rev BV-c (Q104-a):
+/// il codice dell'arco vive in ThrowAimPreview, condiviso con la Bubble Shield del Quartermaster;
+/// il comportamento non cambia.
 ///
 /// SORGENTE (Rev BS-b · Q58-a · Q65-a): il kit medico personale (PlayerMedKit), pezzo
 /// ThrowableData.KitItem. Il client controlla il conteggio replicato per aprire la mira; il
@@ -71,8 +72,6 @@ public class PlayerThrower : NetworkBehaviour
     [SerializeField] private bool debugFreeThrows = false;
 
     private const string ThrowActionName = "ThrowGrenade";
-    private const float PreviewStepSeconds = 1f / 30f;
-    private const int MaxPreviewPoints = 128;
 
     /// <summary>
     /// Tolleranza dell'intervallo minimo sul server: le RPC arrivano con un jitter, quindi il server
@@ -113,11 +112,7 @@ public class PlayerThrower : NetworkBehaviour
     private bool aiming;
     private float nextLocalThrowTime;
     private float feedbackTimer;
-    private LineRenderer arcLine;
-    private GameObject aimMarker;
-    private bool warnedMissingArcMaterial;
-    private readonly Vector3[] previewPoints = new Vector3[MaxPreviewPoints];
-    private readonly RaycastHit[] previewHits = new RaycastHit[16];
+    private ThrowAimPreview aimPreview;   // Rev BV-c (Q104-a): arco e marcatore, solo owner
 
     // ── Stato server ──
     private float nextServerThrowTime;
@@ -163,6 +158,7 @@ public class PlayerThrower : NetworkBehaviour
                                  "Vedi guida Editor di Rev BS-a (ThrowFeedback).");
 
             ThrowableSystem.OnClientDetonated += HandleClientDetonated;
+            aimPreview = new ThrowAimPreview(transform, "ThrowAimArc");
             SetFeedback(string.Empty, 0f);
         }
     }
@@ -179,10 +175,8 @@ public class PlayerThrower : NetworkBehaviour
             LocalInstance = null;
 
         aiming = false;
-        if (arcLine != null) Destroy(arcLine.gameObject);
-        if (aimMarker != null) Destroy(aimMarker);
-        arcLine = null;
-        aimMarker = null;
+        if (aimPreview != null) aimPreview.Dispose();
+        aimPreview = null;
     }
 
     // ── Input (SendMessages di PlayerInput — Q59-a) ────────────────────────────
@@ -221,9 +215,8 @@ public class PlayerThrower : NetworkBehaviour
         if (throwAction == null && playerInput != null && playerInput.actions != null)
             throwAction = playerInput.actions.FindAction(ThrowActionName, throwIfNotFound: false);
 
-        EnsureAimVisuals();
         aiming = true;
-        UpdatePreview();
+        if (aimPreview != null) aimPreview.Show(throwable, cameraTransform);
         LogV("Mira avviata.");
     }
 
@@ -231,7 +224,7 @@ public class PlayerThrower : NetworkBehaviour
     {
         if (!aiming) return;
         aiming = false;
-        SetAimVisible(false);
+        if (aimPreview != null) aimPreview.Hide();
 
         if (!CanThrowLocally() || cameraTransform == null || throwable == null) return;
 
@@ -244,7 +237,7 @@ public class PlayerThrower : NetworkBehaviour
     {
         if (!aiming) return;
         aiming = false;
-        SetAimVisible(false);
+        if (aimPreview != null) aimPreview.Hide();
         LogV("Mira chiusa senza lancio (gate).");
     }
 
@@ -260,8 +253,8 @@ public class PlayerThrower : NetworkBehaviour
                 CancelAim();
             else if (throwAction != null && !throwAction.IsPressed())
                 ReleaseAim();   // rete di sicurezza: rilascio senza messaggio
-            else
-                UpdatePreview();
+            else if (aimPreview != null)
+                aimPreview.Update(cameraTransform);
         }
 
         if (feedbackTimer > 0f)
@@ -295,87 +288,6 @@ public class PlayerThrower : NetworkBehaviour
     private int KitCount() => medKit != null && throwable != null ? medKit.GetCount(throwable.KitItem) : 0;
 
     private bool DebugFreeThrowsActive => debugFreeThrows && Debug.isDebugBuild;
-
-    // ── Arco di mira (owner) ───────────────────────────────────────────────────
-
-    private void EnsureAimVisuals()
-    {
-        if (arcLine == null)
-        {
-            var arcObject = new GameObject("ThrowAimArc");
-            arcObject.transform.SetParent(transform, false);
-            arcLine = arcObject.AddComponent<LineRenderer>();
-            arcLine.useWorldSpace = true;
-            arcLine.positionCount = 0;
-            arcLine.shadowCastingMode = ShadowCastingMode.Off;
-            arcLine.receiveShadows = false;
-            arcLine.numCapVertices = 2;
-            arcLine.enabled = false;
-        }
-
-        if (throwable != null)
-        {
-            arcLine.widthMultiplier = throwable.AimArcWidth;
-            if (throwable.AimArcMaterial != null)
-                arcLine.sharedMaterial = throwable.AimArcMaterial;
-            else if (!warnedMissingArcMaterial)
-            {
-                warnedMissingArcMaterial = true;
-                Debug.LogWarning($"[PlayerThrower] {throwable.name} senza Aim Arc Material: arco con il materiale di default.");
-            }
-        }
-
-        if (aimMarker == null && throwable != null && throwable.AimMarkerPrefab != null)
-        {
-            aimMarker = Instantiate(throwable.AimMarkerPrefab);
-            ThrowableSystem.DisableColliders(aimMarker);
-            SetMarkerVisible(false);
-        }
-    }
-
-    private void UpdatePreview()
-    {
-        Vector3 origin = cameraTransform.position;
-        Vector3 velocity = ThrowBallistics.LaunchDirection(cameraTransform.forward, throwable.AimPitchOffsetDegrees) *
-                           throwable.LaunchSpeed;
-
-        int count = ThrowBallistics.SimulatePath(origin, velocity, throwable, transform, previewHits, previewPoints,
-                                                 PreviewStepSeconds, out Vector3 endPoint, out Vector3 endNormal,
-                                                 out bool _);
-
-        // Il primo punto è dentro la camera: l'arco parte dal secondo.
-        int first = count > 2 ? 1 : 0;
-        int visible = count - first;
-        if (arcLine != null)
-        {
-            arcLine.positionCount = Mathf.Max(0, visible);
-            for (int i = 0; i < visible; i++)
-                arcLine.SetPosition(i, previewPoints[first + i]);
-            arcLine.enabled = visible >= 2;
-        }
-
-        if (aimMarker != null)
-        {
-            aimMarker.transform.SetPositionAndRotation(endPoint + endNormal * 0.01f,
-                                                       Quaternion.FromToRotation(Vector3.up, endNormal));
-            SetMarkerVisible(true);
-        }
-    }
-
-    private void SetAimVisible(bool visible)
-    {
-        if (arcLine != null) arcLine.enabled = visible;
-        SetMarkerVisible(visible);
-    }
-
-    /// <summary>Renderer.enabled, non SetActive (invariante dei componenti visivi).</summary>
-    private void SetMarkerVisible(bool visible)
-    {
-        if (aimMarker == null) return;
-        Renderer[] renderers = aimMarker.GetComponentsInChildren<Renderer>(true);
-        for (int i = 0; i < renderers.Length; i++)
-            renderers[i].enabled = visible;
-    }
 
     // ── RPC: lancio (owner → server) ───────────────────────────────────────────
 

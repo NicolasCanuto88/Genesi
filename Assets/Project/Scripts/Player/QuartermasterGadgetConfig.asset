@@ -13,6 +13,8 @@ MonoBehaviour:
   m_Name: QuartermasterGadgetConfig
   m_EditorClassIdentifier: Assembly-CSharp::QuartermasterGadgetConfig
   testTier: 2
+  tapThresholdSeconds: 0.3
+  bubbleShieldThrowable: {fileID: 11400000, guid: acd48fc3750a09e4488fac869fed75c4, type: 2}
   personalShield:
   - durationSeconds: 6
     cooldownSeconds: 45

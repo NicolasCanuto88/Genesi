@@ -36057,6 +36057,8 @@ MonoBehaviour:
   startHazmatInjection: 2
   startCombatStim: 3
   startHealingGrenade: 3
+  startNanomedicDrone: 2
+  startAntidoteInjector: 2
   showDebugUI: 0
 --- !u!4 &591589294
 Transform:
@@ -115259,6 +115261,7 @@ MonoBehaviour:
   ShowTopMostFoldoutHeaderGroup: 1
   catalog:
   - {fileID: 11400000, guid: c5b211f319cf8384fa961ccdf1e73322, type: 2}
+  - {fileID: 11400000, guid: acd48fc3750a09e4488fac869fed75c4, type: 2}
   showDebugUI: 0
   logVerbose: 0
   drawDebugGizmos: 0

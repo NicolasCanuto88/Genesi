@@ -9,7 +9,8 @@ using UnityEngine;
 public enum ThrowEffectKind : byte
 {
     None = 0,          // Rev BS-a: solo l'area visiva, nessun effetto di gioco
-    HealingField = 1   // Rev BS-b: campo che cura chi ci sta dentro (bomba curativa del Corpsman)
+    HealingField = 1,  // Rev BS-b: campo che cura chi ci sta dentro (bomba curativa del Corpsman)
+    BubbleShield = 2   // Rev BV-c: bolla che dà lo stato Shielded a chi ci sta dentro (Quartermaster)
 }
 
 /// <summary>
@@ -31,8 +32,14 @@ public enum ThrowEffectKind : byte
 ///     una parte del corpo nel raggio e in linea di vista dal centro (pareti e porte bloccano, i
 ///     corpi no). La cura passa da PlayerHealthSystem.ApplyHeal (solo Alive, HP max dinamico) ed è
 ///     moltiplicata per il profilo di ruolo di chi lancia, preso al lancio (Q57-a).
-///   - SORGENTE (Rev BS-b · Q65-a): il pezzo del kit medico consumato a ogni lancio. Altre sorgenti
-///     (Armeria del Quartermaster) arriveranno con i loro lanciabili.
+///   - BUBBLE SHIELD (Rev BV-c · Q96-a · Q105-a): a ogni tick chi ha una parte del corpo nel raggio
+///     e in linea di vista dal centro (stessa regola del campo curativo), vivo O A TERRA, riceve lo
+///     stato Shielded per shieldLingerSeconds: uscito dalla bolla, lo scudo finisce poco dopo. La
+///     durata della bolla viene dal tier del Quartermaster (QuartermasterGadgetConfig), non da
+///     areaDurationSeconds, che resta il valore di ripiego.
+///   - SORGENTE (Rev BS-b · Q65-a): il pezzo del kit medico consumato a ogni lancio (kitItem, letto da
+///     PlayerThrower). La Bubble Shield non ha pezzi: ha la ricarica del gadget (Rev BV-c) e kitItem
+///     è ignorato.
 ///   - VISUALE (Q60-a): prefab LOCALI, mai di rete. ThrowableSystem e PlayerThrower li
 ///     istanziano su ogni client e ne disattivano i collider: un collider sulla visuale
 ///     fermerebbe gli sweep.
@@ -95,7 +102,8 @@ public class ThrowableData : ScriptableObject
     [SerializeField] private ItemType kitItem = ItemType.HealingGrenade;
 
     [Header("Effetto e area — Q55-b")]
-    [Tooltip("Effetto alla detonazione. None = solo l'area visiva; HealingField = campo che cura (Rev BS-b).")]
+    [Tooltip("Effetto alla detonazione. None = solo l'area visiva; HealingField = campo che cura (Rev BS-b); " +
+             "BubbleShield = bolla del Quartermaster (Rev BV-c).")]
     [SerializeField] private ThrowEffectKind effectKind = ThrowEffectKind.None;
 
     [Tooltip("Raggio dell'area, in metri.")]
@@ -115,6 +123,16 @@ public class ThrowableData : ScriptableObject
     [Tooltip("Secondi tra due tick di cura. Il primo tick è alla detonazione.")]
     [Min(0.05f)]
     [SerializeField] private float healTickSeconds = 0.5f;
+
+    [Header("Bubble Shield (BubbleShield) — Rev BV-c · Q96-a")]
+    [Tooltip("Secondi tra due tick della bolla. Il primo tick è alla detonazione.")]
+    [Min(0.05f)]
+    [SerializeField] private float shieldTickSeconds = 0.25f;
+
+    [Tooltip("Secondi di stato Shielded dati a ogni tick: uscito dalla bolla, lo scudo resta al massimo per " +
+             "questo tempo. Deve essere maggiore del tick, altrimenti il film lampeggia.")]
+    [Min(0.1f)]
+    [SerializeField] private float shieldLingerSeconds = 0.75f;
 
     [Header("Visuale (prefab locali, NON di rete) — Q60-a")]
     [Tooltip("Bomba in volo. Senza collider (vengono comunque disattivati all'istanza).")]
@@ -165,6 +183,8 @@ public class ThrowableData : ScriptableObject
     public float AreaDurationSeconds => Mathf.Max(0f, areaDurationSeconds);
     public float HealPerSecond => Mathf.Max(0f, healPerSecond);
     public float HealTickSeconds => Mathf.Max(0.05f, healTickSeconds);
+    public float ShieldTickSeconds => Mathf.Max(0.05f, shieldTickSeconds);
+    public float ShieldLingerSeconds => Mathf.Max(ShieldTickSeconds + 0.05f, shieldLingerSeconds);
 
     public GameObject ProjectileVisualPrefab => projectileVisualPrefab;
     public GameObject AreaVisualPrefab => areaVisualPrefab;
