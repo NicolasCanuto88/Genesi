@@ -26,9 +26,11 @@ using UnityEngine;
 /// (OnDeviceChanged) la riga si riscrive anche a tablet aperto. Il riquadro InventoryStubLabel
 /// nel Player prefab è alto 180 px per contenere le righe (guida Editor di Rev BU-d).
 ///
-/// GADGET DEL QUARTERMASTER (Rev BV-b · Q91-c): per il Quartermaster la riga del ruolo aggiunge il
-/// tasto e i tempi dello Scudo Personale al tier corrente ("Quartermaster — [F] Personal Shield ·
-/// 7 s, recharge 40 s"). Si riscrive al cambio di dispositivo.
+/// GADGET DEL QUARTERMASTER (Rev BV-b · Q91-c; Rev BV-d): per il Quartermaster la riga del ruolo
+/// aggiunge il tasto e le durate dei gadget al tier corrente: "Quartermaster — [F] Shield 7 s ·
+/// hold: Bubble 8 s" (tocco = Scudo Personale, tenuto = Bubble Shield, Rev BV-c). Testo corto: la
+/// riga è alta 40 px e non deve andare a capo; le ricariche le dice la riga di esito quando servono.
+/// Senza bolla al tier (T1) resta solo lo scudo. Si riscrive al cambio di dispositivo.
 ///
 /// DATI ANCORA STUB (da agganciare quando i sistemi corrispondenti esisteranno):
 ///   - Skill tree → dipende da: Progressione Personaggio, GDD §10 (da completare)
@@ -157,8 +159,9 @@ public class ProfileTabUI : MonoBehaviour, IDashboardPanel
     private static string Slot(PlayerMedKit kit, ItemType type) => $"{kit.GetCount(type)}/{kit.GetCap(type)}";
 
     /// <summary>
-    /// Rev BV-b — riga del ruolo. Per il Quartermaster (ruolo replicato) aggiunge tasto e tempi dello
-    /// Scudo Personale al tier corrente; per gli altri ruoli resta il nome del ruolo.
+    /// Rev BV-b — riga del ruolo. Per il Quartermaster (ruolo replicato) aggiunge tasto e durate dei
+    /// gadget al tier corrente (Rev BV-d: anche la Bubble Shield); per gli altri ruoli resta il nome
+    /// del ruolo.
     /// </summary>
     private void RefreshRole()
     {
@@ -169,10 +172,11 @@ public class ProfileTabUI : MonoBehaviour, IDashboardPanel
 
         PlayerQuartermasterGadgets gadgets = PlayerQuartermasterGadgets.LocalInstance;
         if (gadgets != null && gadgets.IsQuartermaster &&
-            gadgets.TryGetPersonalShieldStats(out float duration, out float cooldown))
+            gadgets.TryGetPersonalShieldStats(out float duration, out float _))
         {
-            string template = role + " — [{shield}] Personal Shield · " + Mathf.RoundToInt(duration) + " s, recharge " +
-                              Mathf.RoundToInt(cooldown) + " s";
+            string template = role + " — [{shield}] Shield " + Mathf.RoundToInt(duration) + " s";
+            if (gadgets.TryGetBubbleShieldStats(out float bubbleDuration, out float _))
+                template += " · hold: Bubble " + Mathf.RoundToInt(bubbleDuration) + " s";
             roleLabel.text = InputDeviceManager.Instance != null
                 ? InputDeviceManager.Instance.FormatPrompt(template)
                 : template;
