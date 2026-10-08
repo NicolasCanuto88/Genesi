@@ -143,6 +143,42 @@ public class InputDeviceManager : MonoBehaviour
         return IsGamepad ? "B" : "C";   // Rev BT-c: il crouch del gamepad è B (buttonEast)
     }
 
+    // ===== KIT MEDICO (Rev BU-d · Q91-c) =====
+    // Tasti delle azioni del kit nella mappa Player, per la riga del kit sul tablet (ProfileTabUI).
+    // Scritte fisse come gli altri prompt: chi cambia uno di questi binding (UseMedkit, UseAntidote,
+    // UseDrug, CycleDrug, ThrowGrenade, DeployDrone) aggiorna anche queste righe (audit Rev AF/AG).
+    // Niente frecce: ↑↓←→ non sono nell'atlante principale di LiberationSans.
+
+    public string GetMedkitPrompt()
+    {
+        return IsGamepad ? "D-pad Down" : "H";
+    }
+
+    public string GetAntidotePrompt()
+    {
+        return IsGamepad ? "D-pad Up" : "J";
+    }
+
+    public string GetDrugPrompt()
+    {
+        return IsGamepad ? "D-pad Right" : "K";
+    }
+
+    public string GetCycleDrugPrompt()
+    {
+        return IsGamepad ? "D-pad Left" : "L";
+    }
+
+    public string GetGrenadePrompt()
+    {
+        return IsGamepad ? "RB" : "G";
+    }
+
+    public string GetDronePrompt()
+    {
+        return IsGamepad ? "LB" : "V";
+    }
+
     public string FormatPrompt(string template)
     {
         return template
@@ -150,6 +186,12 @@ public class InputDeviceManager : MonoBehaviour
             .Replace("{cancel}", GetCancelPrompt())
             .Replace("{confirm}", GetConfirmPrompt())
             .Replace("{sprint}", GetSprintPrompt())
-            .Replace("{crouch}", GetCrouchPrompt());
+            .Replace("{crouch}", GetCrouchPrompt())
+            .Replace("{medkit}", GetMedkitPrompt())        // Rev BU-d
+            .Replace("{antidote}", GetAntidotePrompt())
+            .Replace("{drug}", GetDrugPrompt())
+            .Replace("{cycledrug}", GetCycleDrugPrompt())
+            .Replace("{grenade}", GetGrenadePrompt())
+            .Replace("{drone}", GetDronePrompt());
     }
 }

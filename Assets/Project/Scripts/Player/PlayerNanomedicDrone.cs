@@ -6,16 +6,30 @@ using UnityEngine.InputSystem;
 
 /// <summary>
 /// PlayerNanomedicDrone — Nanomedic Drone, gadget T3 del Corpsman (Rev BU-b · workshop Corpsman
-/// T3–T4, Q86-a / Q87-a, tutte come raccomandate).
+/// T3–T4, Q86-a / Q87-a, tutte come raccomandate). Aggancio del bersaglio: Rev BU-d (Q92-a).
 ///
-/// COSA FA (Q86-a): il drone si lancia su un bersaglio scelto al momento — il compagno sotto il
-/// mirino entro la portata del kit, altrimenti se stessi (regola Q31-a del kit medico). Resta
+/// COSA FA (Q86-a): il drone si lancia su un bersaglio scelto al momento (vedi BERSAGLIO). Resta
 /// sopra la spalla del bersaglio e lo cura a tick per la durata dello SO (Corpsman 2 HP/s per
 /// 30 s). Cura solo HP e solo un giocatore vivo, via PlayerHealthSystem.ApplyHeal: non cura gli
 /// stati, non rialza chi è a terra. Se il bersaglio va a terra il drone resta e riprende a curare
 /// se viene rianimato in tempo; finisce se il bersaglio esce dalla partita. Un compagno a terra non
 /// è un bersaglio valido (serve il defibrillatore). Droni diversi sullo stesso bersaglio si
 /// sommano (come i campi curativi, Q70-a); un giocatore ha al massimo un drone attivo.
+///
+/// BERSAGLIO (Rev BU-d · Q92-a): "tocca per te, tieni premuto per un compagno".
+///   - TOCCO: rilascio prima della soglia dello SO (0,3 s) → drone su se stessi, ovunque si guardi.
+///   - PRESSIONE TENUTA: oltre la soglia si apre l'aggancio. Si aggancia il compagno vivo più vicino
+///     al centro del mirino, entro l'angolo e la portata dello SO (10°, 15 m) e in linea di vista:
+///     sul raggio dalla camera al centro del suo corpo non c'è nessun collider altrui (pareti,
+///     oggetti, altri giocatori). L'aggancio resta finché quel compagno sta nel cono; se esce, si
+///     riaggancia il migliore rimasto. La riga del kit mostra "Drone on Pilota — release to deploy".
+///   - RILASCIO con un aggancio → drone sul compagno; senza aggancio → "No target", nessun lancio
+///     (mai su se stessi per errore).
+///   - Un compagno a terra non si aggancia; se è il migliore nel cono, la riga lo dice ("… is down —
+///     use the defibrillator").
+///   - Se un gate cade durante la pressione (postazione, tablet, letto, a terra, interazione,
+///     canale del kit, mira di lancio) la pressione si annulla senza lancio e la riga si pulisce.
+///   La portata di 2,5 m del kit (Q31-a) non vale più per il drone.
 ///
 /// SORGENTE (Q87-a): il kit medico personale (PlayerMedKit, pezzo ItemType.NanomedicDrone),
 /// rifornito all'armadietto da Medbay T3. Il client controlla il conteggio replicato; il server lo
@@ -33,20 +47,27 @@ using UnityEngine.InputSystem;
 ///   - REPLICATO: solo il bersaglio del drone attivo (NetworkVariable&lt;ulong&gt;, NoTarget = nessuno).
 ///     Basta ai client per la visuale; chi entra a partita in corso vede il drone.
 ///   - SOLO SERVER: scadenza, moltiplicatore di ruolo, accumulatore dei tick, HP curati in totale.
+///   - SOLO OWNER: pressione, soglia e aggancio (Rev BU-d). Nessun traffico finché non si rilascia:
+///     la RPC di lancio e le regole del server non cambiano (nessun controllo di distanza, Q2 di BM).
 ///   - VISUALE: ogni client istanzia da sé il prefab dello SO (senza collider) e lo fa inseguire la
 ///     spalla del bersaglio (posizione del Player replicata dal suo NetworkTransform). Nessun
 ///     traffico per il movimento.
 ///   - ESITI: lancio e riepilogo finale arrivano al proprietario con RPC; il testo usa la riga
 ///     sotto il mirino del kit (PlayerMedKit.ShowFeedback).
 ///
-/// INPUT: azione "DeployDrone" (V / LB), ricevuta via SendMessages di PlayerInput
-/// (OnDeployDrone). LB è condiviso con RepairKey_2, come RB con ThrowGrenade e RepairKey_3: i
-/// minigame disattivano il PlayerController, che qui è un gate. Nessuna interazione continua: il
-/// drone non si usa con E (la regola EndInteraction di BT-c non si applica).
+/// INPUT: azione "DeployDrone" (V / LB) con interazione Press "Press And Release" (Rev BU-d, come
+/// ThrowGrenade), ricevuta via SendMessages di PlayerInput (OnDeployDrone): il messaggio arriva sia
+/// alla pressione (isPressed true) sia al rilascio (isPressed false). Come rete di sicurezza,
+/// durante la pressione l'azione del PlayerInput viene anche interrogata (InputAction.IsPressed):
+/// le due vie convergono sullo stesso rilascio idempotente (schema di PlayerThrower). LB è
+/// condiviso con RepairKey_2, come RB con ThrowGrenade e RepairKey_3: i minigame disattivano il
+/// PlayerController, che qui è un gate. Nessuna interazione continua: il drone non si usa con E
+/// (la regola EndInteraction di BT-c non si applica).
 ///
 /// GATE (come kit e lancio): vivo, PlayerController attivo (non a postazione, tablet, letto,
 /// pannello o a terra), tablet chiuso, nessuna interazione continua, nessun canale del kit e
-/// nessuna mira di lancio in corso.
+/// nessuna mira di lancio in corso. Controllati alla pressione, a ogni frame della pressione e al
+/// rilascio.
 ///
 /// AUTORITÀ: la RPC accetta solo il proprietario (SenderClientId == OwnerClientId). Il server
 /// rilegge tutto: chi lancia è vivo, il kit ha il drone, il bersaglio esiste ed è vivo, nessun
@@ -63,13 +84,27 @@ public class PlayerNanomedicDrone : NetworkBehaviour
              "sul server).")]
     [SerializeField] private NanomedicDroneConfig config;
 
+    [Header("Aggancio (Rev BU-d · Q92-a)")]
+    [Tooltip("Layer considerati dal raggio di linea di vista verso il compagno. Un collider di questi layer tra la " +
+             "camera e il centro del corpo del compagno (che non sia suo) blocca l'aggancio: pareti e oggetti " +
+             "devono restare nella maschera. Default come il kit medico: tutto tranne Ignore Raycast e UI.")]
+    [SerializeField] private LayerMask targetRayMask = ~((1 << 2) | (1 << 5));
+
     [Header("Debug")]
     [Tooltip("Overlay OnGUI con il drone attivo (solo Editor/Development Build, solo server). Standard Rev BA — " +
              "default off.")]
     [SerializeField] private bool showDebugUI = false;
 
-    [Tooltip("Log verboso di lanci, tick e fine del drone. Standard Rev BA — default off.")]
+    [Tooltip("Log verboso di pressione, aggancio, lanci, tick e fine del drone. Standard Rev BA — default off.")]
     [SerializeField] private bool logVerbose = false;
+
+    private const string DeployActionName = "DeployDrone";
+
+    /// <summary>
+    /// Altezza del centro del corpo sopra i piedi se il compagno non ha un CharacterController
+    /// (capsula del Player: 1,8 m, centro a 0,9 m). Geometria, non bilanciamento.
+    /// </summary>
+    private const float FallbackBodyCenterHeight = 0.9f;
 
     // ── Stato replicato: bersaglio del drone attivo (server scrive, tutti leggono) ──
     private readonly NetworkVariable<ulong> netTarget = new NetworkVariable<ulong>(
@@ -80,6 +115,9 @@ public class PlayerNanomedicDrone : NetworkBehaviour
 
     /// <summary>true se questo giocatore ha un drone attivo. Replicato.</summary>
     public bool IsDroneActive => netTarget.Value != NoTarget;
+
+    /// <summary>Rev BU-d — true mentre il proprietario tiene premuto V / LB (solo owner).</summary>
+    public bool IsDeployHeld => pressing;
 
     // ── Registro statico per-clientId ──
     private static readonly Dictionary<ulong, PlayerNanomedicDrone> activeByClientId =
@@ -104,11 +142,23 @@ public class PlayerNanomedicDrone : NetworkBehaviour
 
     // ── Riferimenti sibling ──
     private PlayerHealthSystem health;       // server e owner
-    private PlayerMedKit medKit;             // server e owner: sorgente, ruolo, bersaglio, feedback
+    private PlayerMedKit medKit;             // server e owner: sorgente, ruolo, feedback
     private PlayerController controller;     // owner: gate
     private InteractionSystem interaction;   // owner: gate
     private TabletStation tablet;            // owner: gate
     private PlayerThrower thrower;           // owner: gate (mira di lancio)
+    private Transform cameraTransform;       // owner: origine e direzione dell'aggancio (Rev BU-d)
+    private PlayerInput playerInput;         // owner: rete di sicurezza sul rilascio (Rev BU-d)
+    private InputAction deployAction;
+
+    // ── Stato owner: pressione e aggancio (Rev BU-d) ──
+    private bool pressing;                   // V / LB tenuto, pressione accettata
+    private bool targeting;                  // soglia superata: aggancio aperto
+    private float pressStartTime;
+    private bool promptShown;                // la riga del kit mostra il testo dell'aggancio
+    private PlayerHealthSystem lockedTarget; // compagno agganciato, null se nessuno
+    private PlayerHealthSystem downedInCone; // miglior compagno a terra nel cono (solo per la riga)
+    private readonly RaycastHit[] sightHits = new RaycastHit[16];
 
     // ── Stato server ──
     private float serverEndTime;
@@ -150,6 +200,13 @@ public class PlayerNanomedicDrone : NetworkBehaviour
             interaction = GetComponent<InteractionSystem>();
             tablet = GetComponent<TabletStation>();
             thrower = GetComponent<PlayerThrower>();
+            playerInput = GetComponent<PlayerInput>();
+            Camera cam = GetComponentInChildren<Camera>();
+            cameraTransform = cam != null ? cam.transform : null;
+
+            if (cameraTransform == null)
+                Debug.LogError("[PlayerNanomedicDrone] Nessuna Camera figlia del Player: l'aggancio dei compagni non " +
+                               "funziona (il tocco su se stessi sì).");
         }
 
         // Late join: un drone già attivo va mostrato subito.
@@ -166,21 +223,31 @@ public class PlayerNanomedicDrone : NetworkBehaviour
         if (LocalInstance == this)
             LocalInstance = null;
 
+        ResetPress();
         DestroyVisual();
     }
 
-    // ── Input (SendMessages di PlayerInput) ────────────────────────────────────
+    // ── Input (SendMessages di PlayerInput — Press And Release, Rev BU-d) ──────
 
-    /// <summary>Azione "DeployDrone" (V / LB).</summary>
+    /// <summary>
+    /// Azione "DeployDrone" (V / LB), Press And Release: premuto → inizio della pressione,
+    /// rilasciato → tocco (su se stessi) o lancio sul compagno agganciato.
+    /// </summary>
     public void OnDeployDrone(InputValue value)
     {
         if (value.isPressed)
-            TryDeploy();
+            BeginPress();
+        else
+            ReleasePress();
     }
 
-    private void TryDeploy()
+    /// <summary>
+    /// Pressione: gate e controlli locali come prima di BU-d (gli esiti negativi arrivano subito).
+    /// Se tutto va, parte il conteggio della soglia; il lancio avviene al rilascio.
+    /// </summary>
+    private void BeginPress()
     {
-        if (!IsOwner || !IsSpawned) return;
+        if (!IsOwner || !IsSpawned || pressing) return;
         if (!CanDeployLocally()) return;   // postazione, tablet, letto, a terra, canale, mira: ignorato in silenzio
 
         if (config == null || medKit == null)
@@ -199,17 +266,77 @@ public class PlayerNanomedicDrone : NetworkBehaviour
             return;
         }
 
-        // Regola Q31-a del kit: il compagno sotto il mirino, altrimenti se stessi.
-        PlayerHealthSystem looked = medKit.FindLookedTeammate();
-        if (looked != null && looked.IsDowned)
+        if (deployAction == null && playerInput != null && playerInput.actions != null)
+            deployAction = playerInput.actions.FindAction(DeployActionName, throwIfNotFound: false);
+
+        pressing = true;
+        targeting = false;
+        promptShown = false;
+        lockedTarget = null;
+        downedInCone = null;
+        pressStartTime = Time.time;
+        LogV("Pressione avviata.");
+    }
+
+    /// <summary>
+    /// Rilascio (dal messaggio o dalla rete di sicurezza, idempotente). Sotto la soglia: drone su se
+    /// stessi. Oltre: drone sul compagno agganciato, oppure "No target".
+    /// </summary>
+    private void ReleasePress()
+    {
+        if (!pressing) return;
+
+        bool wasTargeting = targeting;
+        PlayerHealthSystem target = lockedTarget;
+        bool hadPrompt = promptShown;
+        ResetPress();
+
+        if (!CanDeployLocally() || config == null || medKit == null)
         {
-            Feedback($"{RoleLabel(looked.OwnerClientId)} is down — use the defibrillator");
+            if (hadPrompt) Feedback(string.Empty);
+            LogV("Rilascio ignorato: gate caduto.");
             return;
         }
 
-        ulong targetId = looked != null && looked.IsAlive ? looked.OwnerClientId : OwnerClientId;
-        DeployServerRpc(targetId);
-        LogV($"Lancio richiesto → client {targetId}.");
+        if (!wasTargeting)
+        {
+            RequestDeploy(OwnerClientId);   // tocco: su se stessi
+            return;
+        }
+
+        if (target != null && target.IsSpawned && target.IsAlive)
+        {
+            RequestDeploy(target.OwnerClientId);
+            return;
+        }
+
+        Feedback("No target");
+        LogV("Rilascio senza aggancio: nessun lancio.");
+    }
+
+    /// <summary>Annulla la pressione senza lancio (gate caduto) e pulisce la riga se era nostra.</summary>
+    private void CancelPress()
+    {
+        if (!pressing) return;
+        bool hadPrompt = promptShown;
+        ResetPress();
+        if (hadPrompt) Feedback(string.Empty);
+        LogV("Pressione annullata senza lancio (gate).");
+    }
+
+    private void ResetPress()
+    {
+        pressing = false;
+        targeting = false;
+        promptShown = false;
+        lockedTarget = null;
+        downedInCone = null;
+    }
+
+    private void RequestDeploy(ulong targetClientId)
+    {
+        DeployServerRpc(targetClientId);
+        LogV($"Lancio richiesto → client {targetClientId}.");
     }
 
     /// <summary>
@@ -226,6 +353,167 @@ public class PlayerNanomedicDrone : NetworkBehaviour
         if (medKit != null && medKit.IsChanneling) return false;
         if (thrower != null && thrower.IsAiming) return false;
         return true;
+    }
+
+    // ── Pressione e aggancio (owner, Rev BU-d) ─────────────────────────────────
+
+    /// <summary>
+    /// Ogni frame della pressione: gate, rete di sicurezza sul rilascio, soglia del tocco, poi
+    /// aggancio e riga del kit.
+    /// </summary>
+    private void UpdatePress()
+    {
+        if (!CanDeployLocally() || config == null || medKit == null)
+        {
+            CancelPress();
+            return;
+        }
+
+        if (deployAction != null && !deployAction.IsPressed())
+        {
+            ReleasePress();   // rete di sicurezza: rilascio senza messaggio
+            return;
+        }
+
+        if (!targeting)
+        {
+            if (Time.time - pressStartTime < config.TapThresholdSeconds) return;
+            targeting = true;
+            LogV("Soglia superata: aggancio aperto.");
+        }
+
+        UpdateLock();
+        ShowTargetingPrompt();
+    }
+
+    /// <summary>
+    /// L'aggancio resta finché il compagno agganciato è valido e nel cono; altrimenti si cerca il
+    /// compagno vivo più vicino al centro del mirino.
+    /// </summary>
+    private void UpdateLock()
+    {
+        if (lockedTarget != null && IsAliveTeammate(lockedTarget) && IsInSightCone(lockedTarget, out float _))
+        {
+            downedInCone = null;
+            return;
+        }
+
+        PlayerHealthSystem previous = lockedTarget;
+        FindBestInCone(out lockedTarget, out downedInCone);
+
+        if (lockedTarget != previous)
+            LogV(lockedTarget != null ? $"Agganciato il client {lockedTarget.OwnerClientId}." : "Nessun aggancio.");
+    }
+
+    /// <summary>
+    /// Scorre i giocatori connessi (NetworkManager.ConnectedClientsIds, disponibile anche sui client
+    /// in NGO 2.x — stesso schema di MedicalDashboardUI) e sceglie, per angolo minimo dal centro del
+    /// mirino, il miglior compagno vivo e il miglior compagno a terra nel cono.
+    /// </summary>
+    private void FindBestInCone(out PlayerHealthSystem bestAlive, out PlayerHealthSystem bestDowned)
+    {
+        bestAlive = null;
+        bestDowned = null;
+        if (cameraTransform == null) return;
+
+        NetworkManager manager = NetworkManager;
+        if (manager == null) return;
+
+        float bestAliveAngle = float.MaxValue;
+        float bestDownedAngle = float.MaxValue;
+        IReadOnlyList<ulong> clients = manager.ConnectedClientsIds;
+        for (int i = 0; i < clients.Count; i++)
+        {
+            ulong clientId = clients[i];
+            if (clientId == OwnerClientId) continue;
+            if (!PlayerHealthSystem.TryGetByClientId(clientId, out PlayerHealthSystem candidate) || candidate == null)
+                continue;
+            if (!candidate.IsSpawned) continue;
+
+            bool alive = candidate.IsAlive;
+            bool downed = candidate.IsDowned;
+            if (!alive && !downed) continue;
+            if (!IsInSightCone(candidate, out float angle)) continue;
+
+            if (alive && angle < bestAliveAngle)
+            {
+                bestAliveAngle = angle;
+                bestAlive = candidate;
+            }
+            else if (downed && angle < bestDownedAngle)
+            {
+                bestDownedAngle = angle;
+                bestDowned = candidate;
+            }
+        }
+    }
+
+    private bool IsAliveTeammate(PlayerHealthSystem candidate)
+        => candidate != null && candidate.IsSpawned && candidate != health && candidate.IsAlive;
+
+    /// <summary>
+    /// Il compagno è entro portata e angolo dal centro del mirino, e in linea di vista: sul raggio
+    /// dalla camera al centro del suo corpo nessun collider che non sia suo (o nostro).
+    /// </summary>
+    private bool IsInSightCone(PlayerHealthSystem candidate, out float angle)
+    {
+        angle = float.MaxValue;
+        if (cameraTransform == null || config == null || candidate == null) return false;
+
+        Vector3 origin = cameraTransform.position;
+        Vector3 toBody = BodyCenter(candidate) - origin;
+        float distance = toBody.magnitude;
+        if (distance < 0.01f || distance > config.LockRange) return false;
+
+        angle = Vector3.Angle(cameraTransform.forward, toBody);
+        if (angle > config.LockAngleDegrees) return false;
+
+        return HasLineOfSight(candidate, origin, toBody / distance, distance);
+    }
+
+    private bool HasLineOfSight(PlayerHealthSystem candidate, Vector3 origin, Vector3 direction, float distance)
+    {
+        int count = Physics.RaycastNonAlloc(origin, direction, sightHits, distance, targetRayMask,
+                                            QueryTriggerInteraction.Ignore);
+        Transform candidateRoot = candidate.transform;
+        for (int i = 0; i < count; i++)
+        {
+            Collider hitCollider = sightHits[i].collider;
+            if (hitCollider == null) continue;
+            Transform hitTransform = hitCollider.transform;
+            if (hitTransform.IsChildOf(transform)) continue;       // il proprio corpo
+            if (hitTransform.IsChildOf(candidateRoot)) continue;   // il compagno stesso
+            return false;                                          // parete, oggetto o un altro giocatore
+        }
+        return true;
+    }
+
+    /// <summary>
+    /// Centro del corpo del compagno: il centro del suo CharacterController in coordinate mondo
+    /// (vale anche se il controller è spento, per esempio sulla scala), altrimenti 0,9 m sopra i piedi.
+    /// </summary>
+    private static Vector3 BodyCenter(PlayerHealthSystem candidate)
+    {
+        Transform root = candidate.transform;
+        CharacterController body = candidate.GetComponent<CharacterController>();
+        return body != null
+            ? root.TransformPoint(body.center)
+            : root.position + Vector3.up * FallbackBodyCenterHeight;
+    }
+
+    /// <summary>Riga del kit durante l'aggancio. Riscritta a ogni frame, così non scade.</summary>
+    private void ShowTargetingPrompt()
+    {
+        string text;
+        if (lockedTarget != null)
+            text = $"Drone on {RoleLabel(lockedTarget.OwnerClientId)} — release to deploy";
+        else if (downedInCone != null)
+            text = $"{RoleLabel(downedInCone.OwnerClientId)} is down — use the defibrillator";
+        else
+            text = "Drone — aim at a crewmate";
+
+        Feedback(text);
+        promptShown = true;
     }
 
     // ── RPC: lancio (owner → server) ───────────────────────────────────────────
@@ -298,10 +586,13 @@ public class PlayerNanomedicDrone : NetworkBehaviour
         }
     }
 
-    // ── Update: tick server + visuale ──────────────────────────────────────────
+    // ── Update: pressione owner + tick server + visuale ────────────────────────
 
     private void Update()
     {
+        if (IsOwner && IsSpawned && pressing)
+            UpdatePress();
+
         if (IsServer && IsSpawned)
             ServerTick(Time.deltaTime);
 

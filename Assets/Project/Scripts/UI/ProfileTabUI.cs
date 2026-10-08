@@ -20,6 +20,12 @@ using UnityEngine;
 /// l'inventario personale dei collezionabili (zaino + stiva, non ancora progettato):
 /// quando esisterà, questa riga ne diventerà una parte. Testo di gioco in inglese.
 ///
+/// TASTI DEL KIT (Rev BU-d · Q91-c): una riga per tasto, con il tasto del dispositivo in uso
+/// accanto ai pezzi che usa. I tasti vengono da InputDeviceManager.FormatPrompt (segnaposto
+/// {medkit} {antidote} {drug} {cycledrug} {grenade} {drone}); al cambio di dispositivo
+/// (OnDeviceChanged) la riga si riscrive anche a tablet aperto. Il riquadro InventoryStubLabel
+/// nel Player prefab è alto 180 px per contenere le righe (guida Editor di Rev BU-d).
+///
 /// DATI ANCORA STUB (da agganciare quando i sistemi corrispondenti esisteranno):
 ///   - Skill tree → dipende da: Progressione Personaggio, GDD §10 (da completare)
 ///
@@ -61,6 +67,8 @@ public class ProfileTabUI : MonoBehaviour, IDashboardPanel
         LocalCharacterProfile.OnPersonalCreditsChanged += OnCreditsChanged;
         PlayerHealthSystem.OnLocalHealthChanged += OnHealthChanged;
         PlayerMedKit.OnLocalKitChanged += RefreshMedKit;
+        if (InputDeviceManager.Instance != null)
+            InputDeviceManager.Instance.OnDeviceChanged += OnDeviceChanged;   // Rev BU-d
     }
 
     public void Close()
@@ -68,6 +76,8 @@ public class ProfileTabUI : MonoBehaviour, IDashboardPanel
         LocalCharacterProfile.OnPersonalCreditsChanged -= OnCreditsChanged;
         PlayerHealthSystem.OnLocalHealthChanged -= OnHealthChanged;
         PlayerMedKit.OnLocalKitChanged -= RefreshMedKit;
+        if (InputDeviceManager.Instance != null)
+            InputDeviceManager.Instance.OnDeviceChanged -= OnDeviceChanged;   // Rev BU-d
     }
 
     private void RefreshStaticInfo()
@@ -100,6 +110,13 @@ public class ProfileTabUI : MonoBehaviour, IDashboardPanel
     /// Rev BS-b — la bomba curativa nella prima riga (Q65-a).
     /// Rev BU-b — il Nanomedic Drone in coda alla prima riga. Rev BU-c — l'Antidote Injector accanto
     /// all'antidoto.
+    /// Rev BU-d (Q91-c) — una riga per tasto, con il tasto del dispositivo in uso. Esempio a tastiera:
+    ///   Medical kit
+    ///   [H] Medkit 1/2 · Advanced 0/1
+    ///   [J] Antidote 1/2 · Injector 0/1
+    ///   [G] Grenade 1/1 · [V] Drone 0/1 (tap: you, hold: crewmate)
+    ///   Drugs — Adrenaline 1/2 · Hazmat 0/1 · Combat Stim 0/1
+    ///   [K] use: Adrenaline · [L] next drug
     /// </summary>
     private void RefreshMedKit()
     {
@@ -114,18 +131,30 @@ public class ProfileTabUI : MonoBehaviour, IDashboardPanel
 
         string selected = kit.HasSelectedDrug ? PlayerMedKit.DrugLabel(kit.SelectedDrug) : "—";
 
-        inventoryStubLabel.text =
-            $"Medical kit — Medkit {kit.GetCount(ItemType.MedkitBase)}/{kit.GetCap(ItemType.MedkitBase)}" +
-            $" · Advanced {kit.GetCount(ItemType.MedkitAdvanced)}/{kit.GetCap(ItemType.MedkitAdvanced)}" +
-            $" · Antidote {kit.GetCount(ItemType.Antidote)}/{kit.GetCap(ItemType.Antidote)}" +
-            $" · Injector {kit.GetCount(ItemType.AntidoteInjector)}/{kit.GetCap(ItemType.AntidoteInjector)}" +
-            $" · Grenade {kit.GetCount(ItemType.HealingGrenade)}/{kit.GetCap(ItemType.HealingGrenade)}" +
-            $" · Drone {kit.GetCount(ItemType.NanomedicDrone)}/{kit.GetCap(ItemType.NanomedicDrone)}" +
-            $"\nDrugs — Adrenaline {kit.GetCount(ItemType.Adrenaline)}/{kit.GetCap(ItemType.Adrenaline)}" +
-            $" · Hazmat {kit.GetCount(ItemType.HazmatInjection)}/{kit.GetCap(ItemType.HazmatInjection)}" +
-            $" · Combat Stim {kit.GetCount(ItemType.CombatStim)}/{kit.GetCap(ItemType.CombatStim)}" +
-            $" · Selected: {selected}";
+        // Segnaposto dei tasti tra graffe: li risolve FormatPrompt (stringhe normali, non interpolate).
+        string template =
+            "Medical kit" +
+            "\n[{medkit}] Medkit " + Slot(kit, ItemType.MedkitBase) +
+            " · Advanced " + Slot(kit, ItemType.MedkitAdvanced) +
+            "\n[{antidote}] Antidote " + Slot(kit, ItemType.Antidote) +
+            " · Injector " + Slot(kit, ItemType.AntidoteInjector) +
+            "\n[{grenade}] Grenade " + Slot(kit, ItemType.HealingGrenade) +
+            " · [{drone}] Drone " + Slot(kit, ItemType.NanomedicDrone) + " (tap: you, hold: crewmate)" +
+            "\nDrugs — Adrenaline " + Slot(kit, ItemType.Adrenaline) +
+            " · Hazmat " + Slot(kit, ItemType.HazmatInjection) +
+            " · Combat Stim " + Slot(kit, ItemType.CombatStim) +
+            "\n[{drug}] use: " + selected + " · [{cycledrug}] next drug";
+
+        inventoryStubLabel.text = InputDeviceManager.Instance != null
+            ? InputDeviceManager.Instance.FormatPrompt(template)
+            : template;
     }
+
+    /// <summary>Rev BU-d — "conteggio/capienza" di un pezzo del kit.</summary>
+    private static string Slot(PlayerMedKit kit, ItemType type) => $"{kit.GetCount(type)}/{kit.GetCap(type)}";
+
+    /// <summary>Rev BU-d — cambio tastiera/gamepad a tablet aperto: si riscrivono i tasti.</summary>
+    private void OnDeviceChanged(InputDeviceManager.ActiveDevice device) => RefreshMedKit();
 
     private void OnCreditsChanged(int newAmount)
     {

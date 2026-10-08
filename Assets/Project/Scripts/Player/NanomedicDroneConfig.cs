@@ -2,8 +2,8 @@ using UnityEngine;
 
 /// <summary>
 /// NanomedicDroneConfig — parametri del Nanomedic Drone del Corpsman (Rev BU-b · workshop Corpsman
-/// T3–T4, Q86-a / Q87-a). ScriptableObject secondo la convenzione del progetto: nessun valore di
-/// tuning hardcodato nel codice.
+/// T3–T4, Q86-a / Q87-a; aggancio Rev BU-d · Q92-a). ScriptableObject secondo la convenzione del
+/// progetto: nessun valore di tuning hardcodato nel codice.
 ///
 /// NAMESPACE GLOBALE: coerenza di dominio con MedKitConfig e DefibConfig (SO di dominio player).
 ///
@@ -11,13 +11,20 @@ using UnityEngine;
 ///   - CURA (Q86-a): HP al secondo con effetto pieno (Corpsman), durata del drone, cadenza dei tick
 ///     sul server. Un non-Corpsman applica il moltiplicatore del profilo di default di
 ///     MedKitConfig (0.6), come la bomba curativa.
+///   - AGGANCIO (Rev BU-d · Q92-a): soglia del tocco (sotto = drone su se stessi), angolo massimo dal
+///     centro del mirino e portata dell'aggancio di un compagno tenendo premuto.
 ///   - VISUALE: prefab solo visivo (senza collider) che resta sopra la spalla del bersaglio, con
 ///     inseguimento morbido e una leggera oscillazione. Ogni client la anima da solo partendo dal
 ///     bersaglio replicato: nessun traffico di rete per il movimento.
 ///
 /// NON QUI (di proposito):
 ///   - capienza nel kit e tier minimo all'armadietto: in MedKitConfig, come per gli altri pezzi del kit;
-///   - chi può essere bersaglio (regola Q31-a del kit): costante di design in PlayerNanomedicDrone.
+///   - chi può essere bersaglio (vivo, non a terra, in linea di vista) e la maschera del raggio di
+///     linea di vista: regole di design e layer, in PlayerNanomedicDrone.
+///
+/// CAMPI NUOVI E ASSET: i campi aggiunti in Rev BU-d non sono scritti nell'asset finché non lo si
+/// salva; fino ad allora valgono i default del codice (0,3 s, 10°, 15 m), in Editor, nei cloni e
+/// nelle build.
 /// </summary>
 [CreateAssetMenu(menuName = "SpaceSurvivor/Nanomedic Drone Config", fileName = "NanomedicDroneConfig")]
 public class NanomedicDroneConfig : ScriptableObject
@@ -36,6 +43,20 @@ public class NanomedicDroneConfig : ScriptableObject
              "scrivere gli HP replicati a ogni frame).")]
     [Min(0.05f)]
     [SerializeField] private float healTickInterval = 0.5f;
+
+    [Header("Aggancio del bersaglio — Rev BU-d · Q92-a")]
+    [Tooltip("Pressione più breve di questa soglia, in secondi = tocco: drone su se stessi. Oltre la soglia si " +
+             "apre l'aggancio di un compagno e il drone parte al rilascio.")]
+    [Min(0.05f)]
+    [SerializeField] private float tapThresholdSeconds = 0.3f;
+
+    [Tooltip("Angolo massimo, in gradi, tra il centro del mirino e il centro del corpo del compagno da agganciare.")]
+    [Range(1f, 45f)]
+    [SerializeField] private float lockAngleDegrees = 10f;
+
+    [Tooltip("Portata massima dell'aggancio, in metri, dalla camera al centro del corpo del compagno.")]
+    [Min(1f)]
+    [SerializeField] private float lockRange = 15f;
 
     [Header("Visuale (solo client, senza collider)")]
     [Tooltip("Prefab SOLO visivo del drone. Eventuali collider vengono disattivati all'istanza.")]
@@ -68,6 +89,9 @@ public class NanomedicDroneConfig : ScriptableObject
     public float HealPerSecond => Mathf.Max(0f, healPerSecond);
     public float DurationSeconds => Mathf.Max(1f, durationSeconds);
     public float HealTickInterval => Mathf.Max(0.05f, healTickInterval);
+    public float TapThresholdSeconds => Mathf.Max(0.05f, tapThresholdSeconds);
+    public float LockAngleDegrees => Mathf.Clamp(lockAngleDegrees, 1f, 45f);
+    public float LockRange => Mathf.Max(1f, lockRange);
     public GameObject VisualPrefab => visualPrefab;
     public float FollowHeight => followHeight;
     public float FollowSide => followSide;
