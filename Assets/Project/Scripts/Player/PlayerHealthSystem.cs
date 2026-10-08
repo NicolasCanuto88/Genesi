@@ -79,7 +79,12 @@ using UnityEngine;
 /// - DANNO SUBITO: ApplyDamage moltiplica il danno per il moltiplicatore DamageTaken, dopo
 ///   il controllo di immunità. Il danno da Radiazioni ha in più un moltiplicatore suo,
 ///   applicato nel tick di PlayerStatusEffects (Hazmat).
-/// La base (campo maxHP) resta il valore di (ri)nascita: il clone nasce senza stati.
+/// La base (campo maxHP) è l'HP max senza modificatori.
+/// - RUOLO (Rev BV-a · Q93-a): il moltiplicatore MaxHP comprende anche il ruolo (RoleStatConfig,
+///   Quartermaster +50%). Il ruolo arriva dopo lo spawn: quando cambia, il server riporta gli HP
+///   correnti sul nuovo massimo mantenendo la frazione (ServerRescaleHPToNewMax), quindi il
+///   Quartermaster passa da 100/100 a 150/150. Il clone nasce a HP max effettivi, con il ruolo e
+///   senza stati (ServerRespawn pulisce gli stati PRIMA di fissare gli HP).
 ///
 /// ⚠️ VERIFICA EDITOR: il Player prefab deve avere NetworkObject + essere il
 /// "Player Prefab" di NetworkManager (setup NGO standard, non in codice). Su di
@@ -132,8 +137,8 @@ public class PlayerHealthSystem : NetworkBehaviour
 
     /// <summary>
     /// HP massimi effettivi (Rev BR): base × moltiplicatore MaxHP degli stati attivi
-    /// (Combat Stim −30%). Uguale su server e client: deriva dalla maschera replicata.
-    /// Mai sotto 1 HP.
+    /// (Combat Stim −30%) e, da Rev BV-a, del ruolo (Quartermaster +50%). Uguale su server e
+    /// client: deriva dalla maschera e dal ruolo, entrambi replicati. Mai sotto 1 HP.
     /// </summary>
     public float MaxHP => Mathf.Max(1f, maxHP * StatMultiplier(StatKind.MaxHP));
 
@@ -201,7 +206,7 @@ public class PlayerHealthSystem : NetworkBehaviour
             // NetworkObject, senza despawn — quindi OnNetworkSpawn gira solo alla
             // (ri)connessione. La persistenza per-player attraverso una riconnessione
             // è fuori scope D27 (nessuno store persistente esiste).
-            netCurrentHP.Value = maxHP;
+            netCurrentHP.Value = MaxHP;   // Rev BV-a: massimo effettivo (allo spawn, di norma, ancora senza ruolo)
             netLifeState.Value = LifeState.Alive;
             immuneUntil = 0f;
 
@@ -227,8 +232,9 @@ public class PlayerHealthSystem : NetworkBehaviour
             playerController = GetComponent<PlayerController>();
 
             // Rev BR: un cambio di stati può cambiare l'HP max → la UI locale deve saperlo.
+            // Rev BV-a: anche il ruolo cambia l'HP max (OnStatModifiersChanged copre stati e ruolo).
             if (statusEffects != null)
-                statusEffects.OnActiveMaskChanged += HandleStatusMaskChanged;
+                statusEffects.OnStatModifiersChanged += HandleStatusMaskChanged;
 
             OnLocalHealthChanged?.Invoke(netCurrentHP.Value, MaxHP);
             OnLocalLifeStateChanged?.Invoke(netLifeState.Value);
@@ -242,7 +248,7 @@ public class PlayerHealthSystem : NetworkBehaviour
         netLifeState.OnValueChanged -= HandleLifeStateChanged;
 
         if (statusEffects != null)
-            statusEffects.OnActiveMaskChanged -= HandleStatusMaskChanged;
+            statusEffects.OnStatModifiersChanged -= HandleStatusMaskChanged;
 
         if (activeByClientId.TryGetValue(OwnerClientId, out var registered) && registered == this)
             activeByClientId.Remove(OwnerClientId);
@@ -257,7 +263,7 @@ public class PlayerHealthSystem : NetworkBehaviour
             OnLocalHealthChanged?.Invoke(current, MaxHP);
     }
 
-    /// <summary>Rev BR — sull'owner: gli stati sono cambiati, forse anche l'HP max.</summary>
+    /// <summary>Rev BR — sull'owner: gli stati (Rev BV-a: o il ruolo) sono cambiati, forse anche l'HP max.</summary>
     private void HandleStatusMaskChanged()
     {
         if (IsOwner)
@@ -408,6 +414,24 @@ public class PlayerHealthSystem : NetworkBehaviour
             netCurrentHP.Value = max;
     }
 
+    /// <summary>
+    /// Rev BV-a (Q93-a) — dopo un cambio di ruolo gli HP correnti seguono il nuovo HP max
+    /// effettivo mantenendo la frazione (100/100 → 150/150 per il Quartermaster; 75/150 → 50/100
+    /// tornando a un altro ruolo). SERVER ONLY. Solo da vivo: a terra o in attesa del clone gli HP
+    /// restano quelli (rianimazione e clone li fissano sul massimo nuovo). previousMax è il massimo
+    /// calcolato con il ruolo precedente.
+    /// </summary>
+    public void ServerRescaleHPToNewMax(float previousMax)
+    {
+        if (!IsServer) return;
+        if (netLifeState.Value != LifeState.Alive) return;
+        if (previousMax <= 0f) return;
+
+        float max = MaxHP;
+        float fraction = Mathf.Clamp01(netCurrentHP.Value / previousMax);
+        netCurrentHP.Value = Mathf.Clamp(max * fraction, 1f, max);
+    }
+
     // ── Macchina a stati (SERVER) ─────────────────────────────────────────
 
     private void ServerEnterDowned()
@@ -434,14 +458,16 @@ public class PlayerHealthSystem : NetworkBehaviour
         if (!IsServer) return;
 
         // Clone = corpo nuovo (Q7-a in-place, Q8-a nessuna Ferita Composta, nessuna immunità).
-        // Rev BR: HP max di BASE — il clone nasce senza stati (ServerClearAll qui sotto).
-        netCurrentHP.Value = maxHP;
-        netLifeState.Value = LifeState.Alive;
-        immuneUntil = 0f;
-
         // Rev BP-b: nessuno stato di alterazione sul clone (Veleno/Radiazioni sono persistenti).
+        // Rev BV-a: gli stati si puliscono PRIMA di fissare gli HP, così il massimo effettivo è
+        // quello del clone (solo il ruolo: Quartermaster 150). In RespawnWait gli HP sono 0, quindi
+        // il taglio al cambio di maschera dentro ServerClearAll non tocca nulla.
         if (statusEffects != null)
             statusEffects.ServerClearAll();
+
+        netCurrentHP.Value = MaxHP;
+        netLifeState.Value = LifeState.Alive;
+        immuneUntil = 0f;
 
         // Rev BQ: il clone nasce senza kit medico personale (Q30-a).
         if (medKit != null)

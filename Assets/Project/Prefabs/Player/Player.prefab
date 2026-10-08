@@ -3667,6 +3667,7 @@ MonoBehaviour:
   - {fileID: 11400000, guid: 43d0145f2ab5a6e419b1c3f9ea345596, type: 2}
   - {fileID: 11400000, guid: 7909bdee17fe46947b9acb74a1d194e5, type: 2}
   limits: {fileID: 11400000, guid: 4da980be5db9f144a8f79607799f828e, type: 2}
+  roleStats: {fileID: 11400000, guid: bcb3eaccb392acd46b096daa71132743, type: 2}
   showDebugUI: 0
   logVerbose: 0
 --- !u!114 &8034489539291105577

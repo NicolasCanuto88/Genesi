@@ -64,11 +64,24 @@ using UnityEngine;
 /// - DURATA PER RUOLO (Q43-a): ApplyEffect accetta un fattore di durata (non-Corpsman 60%
 ///   nella Combat Stim, BR-b). Riapplicare rinnova senza accorciare.
 ///
+/// STATISTICHE DI RUOLO (Rev BV-a · Q93-a): alle percentuali degli stati si sommano quelle del
+/// RUOLO del giocatore, lette dallo SO RoleStatConfig (Quartermaster: HP max +50%, velocità −15%),
+/// prima dei limiti di StatModifierLimits. Il ruolo arriva dal PlayerCrewRole replicato
+/// (evento OnRoleChanged), quindi server e client calcolano lo stesso moltiplicatore.
+/// - Al cambio di ruolo la cache si ricalcola e scatta OnStatModifiersChanged (UI dell'owner).
+/// - Sul server gli HP correnti seguono il nuovo massimo mantenendo la frazione
+///   (PlayerHealthSystem.ServerRescaleHPToNewMax): il Quartermaster nasce a 100/100 con ruolo
+///   None e passa a 150/150 quando la sua dichiarazione arriva.
+/// - Ordine dei componenti: PlayerCrewRole sta dopo questo componente sul Player prefab, quindi la
+///   sottoscrizione all'evento esiste già quando il ruolo viene dichiarato; allo spawn il ruolo già
+///   noto viene comunque letto (late join, ordine diverso).
+///
 /// ⚠️ VERIFICA EDITOR: aggiungere questo componente sullo STESSO GameObject radice
 /// del Player prefab dove sta PlayerHealthSystem; assegnare TUTTI gli asset
 /// StatusEffectData nel campo "Status Catalog" (da Rev BR: 3 condizioni + SED_Hazmat e
-/// SED_CombatStim — obbligatorio per i buff, i client ne leggono categoria e modificatori)
-/// e l'asset StatModifierLimits nel campo "Limits".
+/// SED_CombatStim — obbligatorio per i buff, i client ne leggono categoria e modificatori),
+/// l'asset StatModifierLimits nel campo "Limits" e (Rev BV-a) l'asset RoleStatConfig nel campo
+/// "Role Stats".
 /// </summary>
 public class PlayerStatusEffects : NetworkBehaviour
 {
@@ -81,6 +94,10 @@ public class PlayerStatusEffects : NetworkBehaviour
     [Tooltip("Asset StatModifierLimits: intervallo ammesso per ogni moltiplicatore. " +
              "Senza asset si limitano solo i valori impossibili (errore a spawn).")]
     [SerializeField] private StatModifierLimits limits;
+
+    [Tooltip("Rev BV-a (Q93-a) — asset RoleStatConfig: modificatori di statistica per ruolo (Quartermaster HP max " +
+             "+50%, velocità −15%). Senza asset nessun ruolo modifica le statistiche (errore a spawn sul server).")]
+    [SerializeField] private RoleStatConfig roleStats;
 
     /// <summary>Numero massimo di StatusEffectType rappresentabili nella maschera (ushort).</summary>
     private const int MaxMaskTypes = 16;
@@ -119,6 +136,16 @@ public class PlayerStatusEffects : NetworkBehaviour
     /// scaduto, curato). Lo usa PlayerHealthSystem sull'owner per aggiornare HP max nella UI.
     /// </summary>
     public event Action OnActiveMaskChanged;
+
+    /// <summary>
+    /// Rev BV-a — fired su server e client quando cambiano i modificatori di statistica: la
+    /// maschera replicata (stati) oppure il ruolo del giocatore (Q93-a). Lo usa PlayerHealthSystem
+    /// sull'owner per aggiornare l'HP max nella UI.
+    /// </summary>
+    public event Action OnStatModifiersChanged;
+
+    /// <summary>Rev BV-a — ruolo usato per i modificatori di statistica (dal PlayerCrewRole replicato).</summary>
+    public CrewRole StatRole => _statRole;
 
     /// <summary>
     /// Rev BP-b — true se almeno un'istanza del tipo è attiva. Legge la maschera
@@ -160,6 +187,8 @@ public class PlayerStatusEffects : NetworkBehaviour
             LocalInstance = this;
 
         netActiveMask.OnValueChanged += HandleMaskChanged;
+        PlayerCrewRole.OnRoleChanged += HandleRoleChanged;   // Rev BV-a
+        _statRole = CrewRole.None;
         _statCacheValid = false;
 
         if (IsServer)
@@ -170,6 +199,11 @@ public class PlayerStatusEffects : NetworkBehaviour
                 Debug.LogError("[PlayerStatusEffects] StatModifierLimits non assegnato sul Player prefab (campo \"Limits\"). " +
                                "I moltiplicatori verranno limitati solo ai valori impossibili. Assegnare l'asset StatModifierLimits.");
 
+            if (roleStats == null)
+                Debug.LogError("[PlayerStatusEffects] RoleStatConfig non assegnato sul Player prefab " +
+                               "(campo \"Role Stats\"). Nessun ruolo modificherà le statistiche. " +
+                               "Assegnare l'asset RoleStatConfig.");
+
             ValidateEnumFitsMask();
             _health = GetComponent<PlayerHealthSystem>();
             if (_health == null)
@@ -177,11 +211,15 @@ public class PlayerStatusEffects : NetworkBehaviour
                                "del Player prefab. Gli stati Damage non potranno infliggere danno. " +
                                "Aggiungere PlayerHealthSystem sul root del Player prefab.");
         }
+
+        // Rev BV-a: ruolo già noto allo spawn (late join, o PlayerCrewRole spawnato prima).
+        ApplyStatRole(PlayerCrewRole.GetRole(OwnerClientId));
     }
 
     public override void OnNetworkDespawn()
     {
         netActiveMask.OnValueChanged -= HandleMaskChanged;
+        PlayerCrewRole.OnRoleChanged -= HandleRoleChanged;   // Rev BV-a
 
         if (activeByClientId.TryGetValue(OwnerClientId, out var registered) && registered == this)
             activeByClientId.Remove(OwnerClientId);
@@ -495,6 +533,10 @@ public class PlayerStatusEffects : NetworkBehaviour
     private ushort _statCacheMask;
     private bool _statCacheValid;
 
+    // Rev BV-a — ruolo del giocatore per i modificatori. Cambia solo da ApplyStatRole, che
+    // invalida la cache: la cache resta quindi indicizzata per maschera.
+    private CrewRole _statRole = CrewRole.None;
+
     // Bit dei tipi Buff secondo il catalogo (statico a runtime: calcolato una volta).
     private ushort _buffBits;
     private bool _buffBitsValid;
@@ -539,6 +581,10 @@ public class PlayerStatusEffects : NetworkBehaviour
             }
         }
 
+        // Rev BV-a (Q93-a) — modificatori del ruolo, sommati a quelli degli stati prima dei limiti.
+        if (roleStats != null)
+            roleStats.AddRolePercents(_statRole, _statCache);
+
         // Somma → moltiplicatore limitato.
         for (int s = 0; s < _statCache.Length; s++)
         {
@@ -570,6 +616,35 @@ public class PlayerStatusEffects : NetworkBehaviour
     {
         _statCacheValid = false;
         OnActiveMaskChanged?.Invoke();
+        OnStatModifiersChanged?.Invoke();   // Rev BV-a
+    }
+
+    /// <summary>Rev BV-a — evento statico di PlayerCrewRole: interessa solo il proprio giocatore.</summary>
+    private void HandleRoleChanged(ulong clientId, CrewRole role)
+    {
+        if (clientId != OwnerClientId) return;
+        ApplyStatRole(role);
+    }
+
+    /// <summary>
+    /// Rev BV-a (Q93-a) — adotta il ruolo per i modificatori di statistica. Sul server gli HP
+    /// correnti seguono il nuovo massimo mantenendo la frazione (prima si legge il massimo con il
+    /// ruolo vecchio). Su tutti i client la cache si ricalcola e la UI dell'owner si aggiorna.
+    /// </summary>
+    private void ApplyStatRole(CrewRole role)
+    {
+        if (role == _statRole) return;
+
+        float previousMax = IsServer && _health != null ? _health.MaxHP : 0f;
+
+        LogV($"Ruolo per le statistiche: {_statRole} → {role}");
+        _statRole = role;
+        _statCacheValid = false;
+
+        if (IsServer && _health != null)
+            _health.ServerRescaleHPToNewMax(previousMax);
+
+        OnStatModifiersChanged?.Invoke();
     }
 
     /// <summary>
@@ -636,7 +711,8 @@ public class PlayerStatusEffects : NetworkBehaviour
         }
         GUILayout.EndHorizontal();
 
-        GUILayout.Label($"Vel ×{GetStatMultiplier(StatKind.MoveSpeed):F2} · Danno ×{GetStatMultiplier(StatKind.DamageTaken):F2} · " +
+        GUILayout.Label($"Ruolo {_statRole} · Vel ×{GetStatMultiplier(StatKind.MoveSpeed):F2} · " +
+                        $"Danno ×{GetStatMultiplier(StatKind.DamageTaken):F2} · " +
                         $"Rad ×{GetStatMultiplier(StatKind.RadiationDamageTaken):F2} · HPmax ×{GetStatMultiplier(StatKind.MaxHP):F2}");
 
         for (int i = 0; i < _active.Count; i++)
