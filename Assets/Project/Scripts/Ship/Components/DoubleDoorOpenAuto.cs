@@ -9,6 +9,14 @@ namespace creepycat.scifikitvol4
     /// Server: authority su netOpening e netPoint.
     /// Client: anima localPoint autonomamente (prediction immediata),
     ///         corregge gradualmente verso netPoint quando arriva la risposta del server.
+    ///
+    /// Rev BW-c (Q115-a):
+    /// - Una porta non spawnata (componente spento o senza NetworkObject) ignora trigger e avvisi.
+    ///   Unity manda gli eventi trigger anche ai componenti spenti: senza guardia la RPC lanciava
+    ///   RpcException ("must be spawned").
+    /// - NotifyColliderLeft è l'uscita esplicita per chi spegne un collider dentro il trigger (oggi
+    ///   Ladder): Unity non genera OnTriggerExit per un collider disattivato. Sostituisce la chiamata
+    ///   di OnTriggerExit via SendMessage.
     /// </summary>
     public class DoubleDoorOpenAuto : NetworkBehaviour, IPowerConsumer
     {
@@ -111,6 +119,7 @@ namespace creepycat.scifikitvol4
 
         void OnTriggerEnter(Collider other)
         {
+            if (!IsSpawned) return;   // Rev BW-c: porta non in rete
             if (!other.gameObject.CompareTag("Player") && !other.gameObject.CompareTag("MainCamera")) return;
 
             // Client: prediction immediata — anima senza aspettare il server
@@ -120,8 +129,17 @@ namespace creepycat.scifikitvol4
             RequestOpenRpc();
         }
 
-        void OnTriggerExit(Collider other)
+        void OnTriggerExit(Collider other) => NotifyColliderLeft(other);
+
+        /// <summary>
+        /// Rev BW-c (Q115-a) — il collider ha lasciato il trigger. Chiamato da OnTriggerExit e da chi
+        /// spegne un collider che si trova dentro il trigger (Ladder, prima di spegnere il
+        /// CharacterController). Nessun effetto se la porta non è spawnata.
+        /// </summary>
+        public void NotifyColliderLeft(Collider other)
         {
+            if (!IsSpawned) return;   // Rev BW-c: porta non in rete
+            if (other == null) return;
             if (!other.gameObject.CompareTag("Player") && !other.gameObject.CompareTag("MainCamera")) return;
 
             // Client: prediction immediata

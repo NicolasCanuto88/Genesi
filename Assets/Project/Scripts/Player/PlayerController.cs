@@ -52,6 +52,10 @@ using UnityEngine.InputSystem;
 /// CROUCH (Rev BT-b · Q81-a): OnCrouch è ignorato a componente disattivato (vedi OnCrouch).
 /// Prima, uscendo da una postazione con B (Cancel, stesso tasto di Crouch sul gamepad) il
 /// giocatore si ritrovava accovacciato.
+///
+/// SCALA (Rev BW-c): OnCrouch è ignorato anche in salita (IsOnLadder, L1). La scala legge e
+/// restituisce l'inclinazione della visuale (LookPitch / SetLookPitch, L7): prima la salita la
+/// azzerava e all'uscita tornava il valore di prima della salita.
 /// </summary>
 [RequireComponent(typeof(CharacterController))]
 [RequireComponent(typeof(PlayerInput))]
@@ -113,6 +117,24 @@ public class PlayerController : MonoBehaviour
     public bool IsSprinting => sprintPressed && currentStamina > 0 && moveInput.magnitude > 0.1f;
     public bool IsCrouching => crouchToggled;
     public Transform CameraTransform => cameraTransform;
+
+    /// <summary>Rev BW-c — true mentre il giocatore è su una scala (Ladder lo registra con SetCurrentLadder).</summary>
+    public bool IsOnLadder => currentLadder != null && currentLadder.IsPlayerOnLadder;
+
+    /// <summary>Rev BW-c (L7) — inclinazione attuale della visuale, in gradi (positivo = in basso).</summary>
+    public float LookPitch => verticalRotation;
+
+    /// <summary>
+    /// Rev BW-c (L7) — imposta l'inclinazione della visuale (nei limiti di maxLookAngle) e la scrive
+    /// sulla camera, senza rotazione orizzontale. La usa Ladder all'uscita, così lo sguardo non scatta.
+    /// </summary>
+    public void SetLookPitch(float pitch)
+    {
+        verticalRotation = Mathf.Clamp(pitch, -maxLookAngle, maxLookAngle);
+
+        if (cameraTransform != null)
+            cameraTransform.localRotation = Quaternion.Euler(verticalRotation, 0f, 0f);
+    }
 
     /// <summary>
     /// Rev BT-a — configurazione attiva. Mai null dopo Awake: se il campo è vuoto, Awake crea
@@ -388,10 +410,12 @@ public class PlayerController : MonoBehaviour
     /// PlayerController), il B che chiude il contesto (Cancel, stesso tasto) arrivava qui e
     /// accovacciava il giocatore, e lo stesso faceva C. L'evento arriva prima dell'Update che
     /// riattiva il controller, quindi la guardia lo scarta.
+    /// Rev BW-c (L1): ignorata anche sulla scala (PlayerController resta attivo in salita).
     /// </summary>
     public void OnCrouch(InputValue value)
     {
         if (!isActiveAndEnabled) return;
+        if (IsOnLadder) return;   // Rev BW-c (L1): in salita il crouch non fa nulla
 
         if (value.isPressed)
         {

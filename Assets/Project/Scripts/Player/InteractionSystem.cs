@@ -17,6 +17,13 @@ using TMPro;
 /// porte, scale, postazioni, letto, armadietto, kit né lancio, nemmeno dopo la clonazione.
 /// La stessa verifica protegge OnInteract da un bersaglio distrutto nel frame precedente.
 /// File convertito in UTF-8 in Rev BT-c (era Windows-1252).
+///
+/// BERSAGLIO VINCOLATO (Rev BW-c · Q113-a / Q114-a): un interagibile può vincolare a sé il bersaglio
+/// (SetLockedInteractable) finché non lo libera (ClearLockedInteractable). Lo usa la scala: in salita
+/// la visuale gira (±75°) e il raggio può non colpirla, ma Interact deve sempre poter scendere o
+/// lasciare la presa, e nessun altro oggetto deve diventare bersaglio. Con un vincolo attivo il raggio
+/// non viene lanciato; se il vincolato non è più vivo il vincolo cade da solo; se il suo CanInteract
+/// è falso non c'è bersaglio (niente prompt).
 /// </summary>
 public class InteractionSystem : MonoBehaviour
 {
@@ -35,6 +42,7 @@ public class InteractionSystem : MonoBehaviour
     // State
     private IInteractable currentInteractable;
     private IInteractable activeInteractable;   // Rev BT-c: chi ha avviato l'interazione in corso
+    private IInteractable lockedInteractable;   // Rev BW-c: bersaglio vincolato (scala)
     private bool isInteracting;
 
     // Debug
@@ -92,6 +100,20 @@ public class InteractionSystem : MonoBehaviour
 
     private void CheckForInteractable()
     {
+        // Rev BW-c — bersaglio vincolato: nessun raggio finché resta attivo.
+        if (lockedInteractable != null)
+        {
+            if (!IsAlive(lockedInteractable))
+            {
+                lockedInteractable = null;   // l'oggetto non c'è più: si torna al raggio
+            }
+            else
+            {
+                SetCurrentInteractable(lockedInteractable.CanInteract() ? lockedInteractable : null);
+                return;
+            }
+        }
+
         if (cameraTransform == null)
             return;
 
@@ -193,6 +215,34 @@ public class InteractionSystem : MonoBehaviour
         {
             EndInteraction();
         }
+    }
+
+    /// <summary>
+    /// Rev BW-c — vincola il bersaglio dell'interazione a questo oggetto finché non viene liberato.
+    /// Un solo vincolo alla volta: l'ultimo che lo chiede lo ottiene.
+    /// </summary>
+    public void SetLockedInteractable(IInteractable target)
+    {
+        lockedInteractable = target;
+        CheckForInteractable();
+    }
+
+    /// <summary>Rev BW-c — libera il vincolo, solo se è ancora quello di chi lo chiede.</summary>
+    public void ClearLockedInteractable(IInteractable target)
+    {
+        if (lockedInteractable != target) return;
+        lockedInteractable = null;
+        CheckForInteractable();
+    }
+
+    /// <summary>Rev BW-c — cambio di bersaglio con le notifiche di sguardo (stesso schema del raggio).</summary>
+    private void SetCurrentInteractable(IInteractable target)
+    {
+        if (currentInteractable == target) return;
+
+        currentInteractable?.OnLookExit();
+        currentInteractable = target;
+        currentInteractable?.OnLookEnter();
     }
 
     public void EndInteraction()
