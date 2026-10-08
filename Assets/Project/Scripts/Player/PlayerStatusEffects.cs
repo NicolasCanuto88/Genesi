@@ -63,6 +63,8 @@ using UnityEngine;
 ///   tagliati non tornano (Q40-a).
 /// - DURATA PER RUOLO (Q43-a): ApplyEffect accetta un fattore di durata (non-Corpsman 60%
 ///   nella Combat Stim, BR-b). Riapplicare rinnova senza accorciare.
+/// - DURATA IN SECONDI (Rev BV-b): ApplyEffectForSeconds applica uno stato per i secondi indicati
+///   (scudi del Quartermaster, durata dal tier).
 ///
 /// STATISTICHE DI RUOLO (Rev BV-a · Q93-a): alle percentuali degli stati si sommano quelle del
 /// RUOLO del giocatore, lette dallo SO RoleStatConfig (Quartermaster: HP max +50%, velocità −15%),
@@ -376,6 +378,26 @@ public class PlayerStatusEffects : NetworkBehaviour
         }
 
         SyncMask();
+    }
+
+    /// <summary>
+    /// Rev BV-b (Q101-a) — applica uno stato a tempo per i secondi indicati: gli scudi del
+    /// Quartermaster hanno la durata del tier, non quella dello SO. SERVER ONLY. I secondi diventano
+    /// il fattore di durata di ApplyEffect (secondi / durata dello SO), quindi valgono le stesse
+    /// regole: riapplicare rinnova senza accorciare. Per uno stato persistente i secondi sono ignorati.
+    /// </summary>
+    public void ApplyEffectForSeconds(StatusEffectType type, float seconds)
+    {
+        StatusEffectData data = FindInCatalog(type);
+        if (data == null)
+        {
+            Debug.LogWarning($"[PlayerStatusEffects] Nessun StatusEffectData per {type} nel Status Catalog. " +
+                             "Assegnare l'asset nell'Inspector del Player prefab.");
+            return;
+        }
+
+        float scale = data.IsPersistent ? 1f : Mathf.Max(0.01f, seconds) / data.duration;
+        ApplyEffect(data, scale);
     }
 
     // ── API server: rimozione / cura / query ──────────────────────────────────
@@ -708,7 +730,14 @@ public class PlayerStatusEffects : NetworkBehaviour
         {
             RemoveEffect(StatusEffectType.Hazmat);
             RemoveEffect(StatusEffectType.CombatStim);
+            RemoveEffect(StatusEffectType.Shielded);   // Rev BV-b
         }
+        GUILayout.EndHorizontal();
+
+        // Rev BV-b — scudo del Quartermaster (stato Shielded) senza passare dal gadget.
+        GUILayout.BeginHorizontal();
+        if (GUILayout.Button("Scudo 7 s")) ApplyEffectForSeconds(StatusEffectType.Shielded, 7f);
+        if (GUILayout.Button("- Scudo")) RemoveEffect(StatusEffectType.Shielded);
         GUILayout.EndHorizontal();
 
         GUILayout.Label($"Ruolo {_statRole} · Vel ×{GetStatMultiplier(StatKind.MoveSpeed):F2} · " +

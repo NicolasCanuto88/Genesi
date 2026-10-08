@@ -179,6 +179,12 @@ public class InputDeviceManager : MonoBehaviour
         return IsGamepad ? "LB" : "V";
     }
 
+    // Rev BV-b — gadget del Quartermaster: azione "Shield" della mappa Player (F / Y).
+    public string GetShieldPrompt()
+    {
+        return IsGamepad ? "Y" : "F";
+    }
+
     public string FormatPrompt(string template)
     {
         return template
@@ -192,6 +198,7 @@ public class InputDeviceManager : MonoBehaviour
             .Replace("{drug}", GetDrugPrompt())
             .Replace("{cycledrug}", GetCycleDrugPrompt())
             .Replace("{grenade}", GetGrenadePrompt())
-            .Replace("{drone}", GetDronePrompt());
+            .Replace("{drone}", GetDronePrompt())
+            .Replace("{shield}", GetShieldPrompt());       // Rev BV-b
     }
 }

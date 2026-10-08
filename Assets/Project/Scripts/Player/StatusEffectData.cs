@@ -19,7 +19,12 @@ public enum StatusEffectType
 
     // ── Buff (Rev BR · Q41-a): droghe del Corpsman ──
     Hazmat = 3,          // Hazmat Injection — riduce il danno da Radiazioni (GDD §9.6, conciliazione v0.9.46)
-    CombatStim = 4       // Combat Stim — velocità su, HP max giù (workshop ruoli M3)
+    CombatStim = 4,      // Combat Stim — velocità su, HP max giù (workshop ruoli M3)
+
+    // ── Buff (Rev BV-b · Q102-a): scudi del Quartermaster ──
+    Shielded = 5         // scudo personale o Bubble Shield: marcatore a tempo (EffectKind None, nessun
+                         // modificatore). Para SOLO i proiettili (Q95/Q99): il Combat lo interrogherà
+                         // con IsActive/HasEffect. Oggi si vede soltanto (film, PlayerShieldFilm).
 }
 
 /// <summary>

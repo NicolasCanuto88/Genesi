@@ -26,6 +26,10 @@ using UnityEngine;
 /// (OnDeviceChanged) la riga si riscrive anche a tablet aperto. Il riquadro InventoryStubLabel
 /// nel Player prefab è alto 180 px per contenere le righe (guida Editor di Rev BU-d).
 ///
+/// GADGET DEL QUARTERMASTER (Rev BV-b · Q91-c): per il Quartermaster la riga del ruolo aggiunge il
+/// tasto e i tempi dello Scudo Personale al tier corrente ("Quartermaster — [F] Personal Shield ·
+/// 7 s, recharge 40 s"). Si riscrive al cambio di dispositivo.
+///
 /// DATI ANCORA STUB (da agganciare quando i sistemi corrispondenti esisteranno):
 ///   - Skill tree → dipende da: Progressione Personaggio, GDD §10 (da completare)
 ///
@@ -87,8 +91,7 @@ public class ProfileTabUI : MonoBehaviour, IDashboardPanel
         if (nameLabel != null)
             nameLabel.text = profile != null ? profile.CharacterName : "—";
 
-        if (roleLabel != null)
-            roleLabel.text = profile != null ? profile.Role : "—";
+        RefreshRole();
 
         OnCreditsChanged(profile != null ? profile.PersonalCredits : 0);
 
@@ -153,8 +156,41 @@ public class ProfileTabUI : MonoBehaviour, IDashboardPanel
     /// <summary>Rev BU-d — "conteggio/capienza" di un pezzo del kit.</summary>
     private static string Slot(PlayerMedKit kit, ItemType type) => $"{kit.GetCount(type)}/{kit.GetCap(type)}";
 
-    /// <summary>Rev BU-d — cambio tastiera/gamepad a tablet aperto: si riscrivono i tasti.</summary>
-    private void OnDeviceChanged(InputDeviceManager.ActiveDevice device) => RefreshMedKit();
+    /// <summary>
+    /// Rev BV-b — riga del ruolo. Per il Quartermaster (ruolo replicato) aggiunge tasto e tempi dello
+    /// Scudo Personale al tier corrente; per gli altri ruoli resta il nome del ruolo.
+    /// </summary>
+    private void RefreshRole()
+    {
+        if (roleLabel == null) return;
+
+        LocalCharacterProfile profile = LocalCharacterProfile.Instance;
+        string role = profile != null ? profile.Role : "—";
+
+        PlayerQuartermasterGadgets gadgets = PlayerQuartermasterGadgets.LocalInstance;
+        if (gadgets != null && gadgets.IsQuartermaster &&
+            gadgets.TryGetPersonalShieldStats(out float duration, out float cooldown))
+        {
+            string template = role + " — [{shield}] Personal Shield · " + Mathf.RoundToInt(duration) + " s, recharge " +
+                              Mathf.RoundToInt(cooldown) + " s";
+            roleLabel.text = InputDeviceManager.Instance != null
+                ? InputDeviceManager.Instance.FormatPrompt(template)
+                : template;
+            return;
+        }
+
+        roleLabel.text = role;
+    }
+
+    /// <summary>
+    /// Rev BU-d — cambio tastiera/gamepad a tablet aperto: si riscrivono i tasti (Rev BV-b: anche quelli
+    /// della riga del ruolo).
+    /// </summary>
+    private void OnDeviceChanged(InputDeviceManager.ActiveDevice device)
+    {
+        RefreshMedKit();
+        RefreshRole();
+    }
 
     private void OnCreditsChanged(int newAmount)
     {
