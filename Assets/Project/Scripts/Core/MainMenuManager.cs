@@ -65,6 +65,18 @@ using TMPro;
 ///     prima di caricare MainMenu.
 ///   - Q128-a: bottone EXIT GAME (mainBtnEsci) in fondo al pannello principale, esce subito
 ///     (SessionFlow.QuitGame; in Editor ferma il Play).
+///
+/// REV BX-f (Q130-a / Q131-a / Q132-a) — CAMBIO PERSONAGGIO:
+///   - Lista scorrevole: la voce selezionata con gamepad o tastiera resta sempre visibile
+///     (TieniVisibileNellaLista); all'apertura la lista riparte dall'alto e il focus va sul
+///     personaggio scelto (quello attivo), anche se è in fondo. Il taglio delle voci fuori dalla
+///     lista e l'altezza del contenuto sono in scena (Mask del Viewport, ContentSizeFitter).
+///   - Bottone DELETE (selectBtnElimina) tra INDIETRO e CONFERMA: elimina il personaggio scelto
+///     (verde con la spunta) dopo una finestra di conferma con nome e crediti (deleteConfirmPanel).
+///     Il focus parte da CANCEL; B / Esc chiude la finestra. Senza la finestra in scena il bottone
+///     non elimina nulla. Eliminato l'ultimo personaggio si passa alla creazione obbligatoria.
+///   - Il campo nome della creazione parte sempre vuoto: prima riprendeva il nome del personaggio
+///     attivo (residuo del profilo a slot unico) e portava a personaggi con lo stesso nome.
 /// </summary>
 [DefaultExecutionOrder(100)]
 public class MainMenuManager : MonoBehaviour
@@ -161,6 +173,24 @@ public class MainMenuManager : MonoBehaviour
     [SerializeField] private Button selectBtnConferma;
     [Tooltip("ButtonContainer/Back")]
     [SerializeField] private Button selectBtnIndietro;
+    [Tooltip("ButtonContainer/Delete — tra Back e Apply (Rev BX-f · Q131-a). Elimina il personaggio " +
+             "scelto dopo la conferma; spento se nessun personaggio è scelto.")]
+    [SerializeField] private Button selectBtnElimina;
+
+    [Header("Character Select — conferma eliminazione (Rev BX-f · Q131-a)")]
+    [Tooltip("CharacterSelectPanel/DeleteConfirm — ultimo figlio del pannello, spento in scena. " +
+             "Senza questa finestra il bottone Delete non elimina nulla.")]
+    [SerializeField] private GameObject deleteConfirmPanel;
+    [Tooltip("DeleteConfirm/Box/Message")]
+    [SerializeField] private TextMeshProUGUI deleteConfirmText;
+    [Tooltip("DeleteConfirm/Box/Buttons/Cancel — primo focus della finestra")]
+    [SerializeField] private Button deleteConfirmBtnAnnulla;
+    [Tooltip("DeleteConfirm/Box/Buttons/Delete")]
+    [SerializeField] private Button deleteConfirmBtnElimina;
+    [Tooltip("Testo della conferma. {0} = nome del personaggio, {1} = crediti personali.")]
+    [SerializeField]
+    private string textDeleteConfirm =
+        "Delete {0}?\nTheir {1} cr will be lost. This can't be undone.";
 
     // ── SESSION TYPE ──────────────────────────────────────────────────────────
     // Percorso: MainMenuCanvas/SessionTypePanel/ContentContainer/...
@@ -240,6 +270,12 @@ public class MainMenuManager : MonoBehaviour
     private string _selectedCharId = "";
     private string _ruoloSelezionato = "";
 
+    // Rev BX-f — finestra di conferma eliminazione e personaggio da eliminare (fissato all'apertura).
+    private bool _confermaEliminazioneAperta;
+    private string _idDaEliminare = "";
+    // Rev BX-f — ScrollRect della lista personaggi, cercato quando il pannello è attivo.
+    private ScrollRect _scrollLista;
+
     // Rev BM: etichette dalla fonte unica CrewRoles, nell'ordine dei bottoni
     // (Pilota, Ingegnere, Scanner, Corpsman, Quartermaster). È la stringa che
     // finisce nel profilo e che PlayerCrewRole converte in CrewRole.
@@ -308,6 +344,11 @@ public class MainMenuManager : MonoBehaviour
             Debug.LogWarning("[MainMenuManager] InputDeviceManager assente in MainMenu: il primo focus " +
                              "resta sui campi di testo anche col gamepad. Vedi guida setup Editor Rev BX-b.");
 
+        // Rev BX-f — Delete senza finestra di conferma non elimina nulla: meglio saperlo subito.
+        if (selectBtnElimina != null && deleteConfirmPanel == null)
+            Debug.LogWarning("[MainMenuManager] selectBtnElimina assegnato ma deleteConfirmPanel no: il bottone " +
+                             "Delete non elimina nulla senza conferma. Vedi guida setup Editor Rev BX-f.");
+
         // Rev BX-c — ritorno da una sessione: messaggio (vuoto se l'uscita era voluta) e stato azzerato.
         _messaggioSessione = SessionFlow.ConsumeExitMessage();
 
@@ -351,6 +392,9 @@ public class MainMenuManager : MonoBehaviour
         if (selectBtnNuovoPersonaggio != null) selectBtnNuovoPersonaggio.onClick.AddListener(OnNuovoPersonaggio);
         if (selectBtnConferma != null) selectBtnConferma.onClick.AddListener(OnSelectConferma);
         if (selectBtnIndietro != null) selectBtnIndietro.onClick.AddListener(() => TransitionTo(Stato.MainMenu));
+        if (selectBtnElimina != null) selectBtnElimina.onClick.AddListener(OnSelectElimina);                    // Rev BX-f
+        if (deleteConfirmBtnAnnulla != null) deleteConfirmBtnAnnulla.onClick.AddListener(OnAnnullaEliminazione); // Rev BX-f
+        if (deleteConfirmBtnElimina != null) deleteConfirmBtnElimina.onClick.AddListener(OnConfermaEliminazione); // Rev BX-f
 
         if (sessionBtnAperta != null) sessionBtnAperta.onClick.AddListener(() => OnTipoSessione(TipoSessione.Aperta));
         if (sessionBtnSuInvito != null) sessionBtnSuInvito.onClick.AddListener(() => OnTipoSessione(TipoSessione.SuInvito));
@@ -435,6 +479,11 @@ public class MainMenuManager : MonoBehaviour
                 if (mainBtnUnisciti != null && mainBtnUnisciti.interactable) return mainBtnUnisciti;
                 return mainBtnCambiaPersonaggio;
             case Stato.CharacterSelect:
+                // Rev BX-f — finestra di conferma aperta: "Cancel".
+                if (_confermaEliminazioneAperta && deleteConfirmBtnAnnulla != null) return deleteConfirmBtnAnnulla;
+                // Rev BX-f — la voce del personaggio scelto (di solito l'attivo, anche se è in fondo).
+                var voceScelta = VocePersonaggio(_selectedCharId);
+                if (voceScelta != null) return voceScelta;
                 // Prima entry della lista se esiste, altrimenti "+ Nuovo personaggio".
                 // Rev BX-b: dalla lista delle voci create, non dai figli (Destroy è differito).
                 if (_vociPersonaggi.Count > 0 && _vociPersonaggi[0] != null) return _vociPersonaggi[0];
@@ -469,6 +518,9 @@ public class MainMenuManager : MonoBehaviour
         yield return null; // attende che SetActive/layout siano applicati
         var target = PrimarioPerStato();
         SelezionaPrimario(target);
+
+        // Rev BX-f — la voce scelta può essere fuori dalla parte visibile della lista.
+        if (_stato == Stato.CharacterSelect && target != null) TieniVisibileNellaLista(target.gameObject);
 
         // Rev BX-b (gate) — con tastiera e mouse il campo di testo primario si apre subito, così si
         // scrive senza premere Invio. Col gamepad il primario è un bottone (PrimarioPerStato).
@@ -509,7 +561,11 @@ public class MainMenuManager : MonoBehaviour
                 if (creationBtnIndietro != null && creationBtnIndietro.gameObject.activeInHierarchy)
                     OnCreationIndietro();
                 break;
-            case Stato.CharacterSelect: TransitionTo(Stato.MainMenu); break;
+            case Stato.CharacterSelect:
+                // Rev BX-f — con la conferma aperta B / Esc chiude solo la finestra.
+                if (_confermaEliminazioneAperta) OnAnnullaEliminazione();
+                else TransitionTo(Stato.MainMenu);
+                break;
             case Stato.SessionType: TransitionTo(Stato.MainMenu); break;
             case Stato.LobbyHost: OnAnnullaHost(); break;
             case Stato.Join: TransitionTo(Stato.MainMenu); break;
@@ -585,8 +641,8 @@ public class MainMenuManager : MonoBehaviour
 
     /// <summary>
     /// Cambio personaggio: voci dall'alto in basso → "+ Nuovo personaggio" → "Conferma";
-    /// "Indietro" e "Conferma" affiancati. La scrollbar della lista non è navigabile.
-    /// Limite noto: con molti personaggi la lista non scorre da sola verso la voce selezionata.
+    /// "Indietro", "Delete" e "Conferma" affiancati. La scrollbar della lista non è navigabile.
+    /// Rev BX-f: la lista scorre da sola verso la voce selezionata (TieniVisibileNellaLista).
     /// </summary>
     private void CablaNavigazioneSelezione()
     {
@@ -600,12 +656,20 @@ public class MainMenuManager : MonoBehaviour
             Imposta(_vociPersonaggi[i], su, giu, null, null);
         }
 
+        // Rev BX-f — fila in basso: Indietro | Delete | Conferma. Delete spento non è un bersaglio
+        // (la navigazione di Unity non controlla interactable): Indietro e Conferma si toccano.
+        Selectable elimina = Interagibile(selectBtnElimina);
         Imposta(selectBtnNuovoPersonaggio, ultimaVoce, selectBtnConferma, null, null);
-        Imposta(selectBtnConferma, selectBtnNuovoPersonaggio, null, selectBtnIndietro, null);
-        Imposta(selectBtnIndietro, selectBtnNuovoPersonaggio, null, null, selectBtnConferma);
+        Imposta(selectBtnConferma, selectBtnNuovoPersonaggio, null, elimina != null ? elimina : selectBtnIndietro, null);
+        Imposta(selectBtnElimina, selectBtnNuovoPersonaggio, null, selectBtnIndietro, selectBtnConferma);
+        Imposta(selectBtnIndietro, selectBtnNuovoPersonaggio, null, null, elimina != null ? elimina : selectBtnConferma);
+
+        // Rev BX-f — finestra di conferma: solo Cancel ↔ Delete, niente uscite verso il pannello sotto.
+        Imposta(deleteConfirmBtnAnnulla, null, null, null, deleteConfirmBtnElimina);
+        Imposta(deleteConfirmBtnElimina, null, null, deleteConfirmBtnAnnulla, null);
 
         // Scrollbar della lista: mai bersaglio della navigazione (prima si poteva finirci sopra).
-        var scroll = selectListContainer != null ? selectListContainer.GetComponentInParent<ScrollRect>() : null;
+        var scroll = ScrollLista();
         if (scroll != null)
         {
             if (scroll.verticalScrollbar != null)
@@ -700,6 +764,9 @@ public class MainMenuManager : MonoBehaviour
 
         if (current != null && current.activeInHierarchy)
         {
+            // Rev BX-f — selezione cambiata nella lista personaggi: la lista la segue. Solo al cambio,
+            // così la rotella del mouse scorre libera finché la selezione resta la stessa.
+            if (current != _lastSelected && _stato == Stato.CharacterSelect) TieniVisibileNellaLista(current);
             _lastSelected = current; // memorizza l'ultimo focus valido
             return;
         }
@@ -728,9 +795,11 @@ public class MainMenuManager : MonoBehaviour
         AggiornaCertColoriRuolo();
 
         var profile = LocalCharacterProfile.Instance;
-        if (creationNameInput != null)
-            creationNameInput.text = (profile.HasActiveCharacter && profile.CharacterName != "Senza nome")
-                ? profile.CharacterName : "";
+        // Rev BX-f (Q132-a) — il campo parte sempre vuoto: la creazione crea un personaggio nuovo.
+        // Prima riprendeva il nome del personaggio attivo (residuo del profilo a slot unico):
+        //   creationNameInput.text = (profile.HasActiveCharacter && profile.CharacterName != "Senza nome")
+        //       ? profile.CharacterName : "";
+        if (creationNameInput != null) creationNameInput.text = "";
 
         // Il bottone Indietro ha senso solo se esiste già almeno un personaggio —
         // al primissimo avvio (nessun personaggio) non c'è nessun "menu principale"
@@ -886,8 +955,19 @@ public class MainMenuManager : MonoBehaviour
     private void MostraCharacterSelect()
     {
         characterSelectPanel?.SetActive(true);
+        ChiudiConfermaEliminazione(false);   // Rev BX-f — la finestra non resta aperta tra un ingresso e l'altro
         _selectedCharId = LocalCharacterProfile.Instance.CharacterId;
         RicostruisciListaPersonaggi();
+
+        // Rev BX-f — la lista riparte dall'alto; il primo focus la porta sulla voce scelta.
+        var scroll = ScrollLista();
+        if (scroll != null && scroll.content != null)
+        {
+            scroll.StopMovement();
+            var pos = scroll.content.anchoredPosition;
+            pos.y = 0f;
+            scroll.content.anchoredPosition = pos;
+        }
     }
 
     private void RicostruisciListaPersonaggi()
@@ -908,6 +988,7 @@ public class MainMenuManager : MonoBehaviour
             if (voce != null) _vociPersonaggi.Add(voce);
         }
 
+        AggiornaBottoneElimina();      // Rev BX-f — prima della navigazione, che dipende da interactable
         CablaNavigazioneSelezione();   // Rev BX-b (Q127-a)
     }
 
@@ -919,6 +1000,148 @@ public class MainMenuManager : MonoBehaviour
             var entry = child.GetComponent<CharacterEntryUI>();
             if (entry != null) entry.SetSelected(entry.CharacterId == characterId);
         }
+        AggiornaBottoneElimina();      // Rev BX-f
+        CablaNavigazioneSelezione();
+    }
+
+    // ── ELIMINAZIONE PERSONAGGIO (Rev BX-f · Q131-a) ──────────────────────────
+
+    /// <summary>Dati del personaggio con l'id indicato; null se non esiste.</summary>
+    private static LocalCharacterProfile.CharacterData DatiPersonaggio(string characterId)
+    {
+        if (string.IsNullOrEmpty(characterId) || LocalCharacterProfile.Instance == null) return null;
+        foreach (var data in LocalCharacterProfile.Instance.GetAllCharacters())
+            if (data.characterId == characterId) return data;
+        return null;
+    }
+
+    /// <summary>Voce della lista per il personaggio indicato; null se non c'è.</summary>
+    private Selectable VocePersonaggio(string characterId)
+    {
+        if (string.IsNullOrEmpty(characterId)) return null;
+        foreach (var voce in _vociPersonaggi)
+        {
+            if (voce == null) continue;
+            var entry = voce.GetComponent<CharacterEntryUI>();
+            if (entry != null && entry.CharacterId == characterId) return voce;
+        }
+        return null;
+    }
+
+    /// <summary>Delete è acceso solo se c'è un personaggio scelto che esiste ancora.</summary>
+    private void AggiornaBottoneElimina()
+    {
+        if (selectBtnElimina != null) selectBtnElimina.interactable = DatiPersonaggio(_selectedCharId) != null;
+    }
+
+    /// <summary>
+    /// Delete: apre la conferma per il personaggio scelto (verde con la spunta), non per la voce che ha
+    /// il focus. Il personaggio da eliminare viene fissato qui. Senza finestra di conferma non fa nulla.
+    /// </summary>
+    private void OnSelectElimina()
+    {
+        var dati = DatiPersonaggio(_selectedCharId);
+        if (dati == null) return;
+        if (deleteConfirmPanel == null)
+        {
+            Debug.LogWarning("[MainMenuManager] deleteConfirmPanel non assegnato: nessuna eliminazione senza " +
+                             "conferma. Vedi guida setup Editor Rev BX-f.");
+            return;
+        }
+
+        _idDaEliminare = dati.characterId;
+        if (deleteConfirmText != null)
+            deleteConfirmText.text = string.Format(textDeleteConfirm, dati.characterName, dati.personalCredits);
+
+        deleteConfirmPanel.SetActive(true);
+        _confermaEliminazioneAperta = true;
+        if (enableControllerNav) FocusPrimarioPannello();   // → Cancel (PrimarioPerStato), un frame dopo
+    }
+
+    /// <summary>Cancel della finestra, oppure B / Esc: chiude e torna su Delete.</summary>
+    private void OnAnnullaEliminazione() => ChiudiConfermaEliminazione(true);
+
+    private void ChiudiConfermaEliminazione(bool tornaSuElimina)
+    {
+        bool eraAperta = _confermaEliminazioneAperta;
+        _confermaEliminazioneAperta = false;
+        _idDaEliminare = "";
+        if (deleteConfirmPanel != null) deleteConfirmPanel.SetActive(false);
+
+        if (tornaSuElimina && eraAperta && enableControllerNav)
+        {
+            if (_focusRoutine != null) { StopCoroutine(_focusRoutine); _focusRoutine = null; }
+            SelezionaSelectable(selectBtnElimina);
+        }
+    }
+
+    /// <summary>
+    /// Delete della finestra: elimina il personaggio fissato all'apertura. Se ne restano altri, la
+    /// lista si ricostruisce e il focus va sul personaggio attivo (invariato, o il primo rimasto se è
+    /// stato eliminato quello attivo). Se non ne resta nessuno, creazione obbligatoria come al primo
+    /// avvio (senza Indietro).
+    /// </summary>
+    private void OnConfermaEliminazione()
+    {
+        string id = _idDaEliminare;
+        ChiudiConfermaEliminazione(false);
+
+        var profile = LocalCharacterProfile.Instance;
+        if (string.IsNullOrEmpty(id) || profile == null) return;
+        profile.DeleteCharacter(id);
+
+        if (!profile.HasAnyCharacter)
+        {
+            _creatingFromSelect = false;
+            TransitionTo(Stato.CharacterCreation);
+            return;
+        }
+
+        _selectedCharId = profile.CharacterId;
+        RicostruisciListaPersonaggi();
+        if (enableControllerNav) FocusPrimarioPannello();
+    }
+
+    // ── LISTA SCORREVOLE (Rev BX-f · Q130-a) ──────────────────────────────────
+
+    /// <summary>ScrollRect della lista personaggi (cercato la prima volta a pannello attivo).</summary>
+    private ScrollRect ScrollLista()
+    {
+        if (_scrollLista == null && selectListContainer != null)
+            _scrollLista = selectListContainer.GetComponentInParent<ScrollRect>();
+        return _scrollLista;
+    }
+
+    /// <summary>
+    /// Se l'elemento è una voce della lista e non è tutto visibile, sposta il contenuto quanto basta
+    /// per mostrarlo intero (sopra o sotto). Elementi fuori dalla lista: nessun effetto.
+    /// </summary>
+    private void TieniVisibileNellaLista(GameObject elemento)
+    {
+        var scroll = ScrollLista();
+        if (scroll == null || scroll.content == null || elemento == null) return;
+
+        var voce = elemento.transform as RectTransform;
+        if (voce == null || !voce.IsChildOf(scroll.content)) return;
+
+        var viewport = scroll.viewport != null ? scroll.viewport : scroll.transform as RectTransform;
+        if (viewport == null) return;
+
+        // Layout aggiornato: la lista può essere stata ricostruita in questo frame.
+        LayoutRebuilder.ForceRebuildLayoutImmediate(scroll.content);
+
+        Bounds b = RectTransformUtility.CalculateRelativeRectTransformBounds(viewport, voce);
+        Rect area = viewport.rect;
+
+        float scarto = 0f;
+        if (b.max.y > area.yMax) scarto = b.max.y - area.yMax;        // voce sopra: contenuto giù
+        else if (b.min.y < area.yMin) scarto = b.min.y - area.yMin;   // voce sotto: contenuto su
+        if (Mathf.Abs(scarto) < 0.5f) return;
+
+        scroll.StopMovement();
+        var pos = scroll.content.anchoredPosition;
+        pos.y -= scarto;
+        scroll.content.anchoredPosition = pos;
     }
 
     private void OnNuovoPersonaggio()

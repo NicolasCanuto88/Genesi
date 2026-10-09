@@ -31,6 +31,11 @@ using UnityEngine.EventSystems;
 ///   - Il riquadro segue la selezione solo se cade sotto questo canvas. Prima ogni istanza (sei
 ///     nella scena Game) disegnava un riquadro anche per selezioni di altri canvas.
 ///   - Nessuna lettura diretta di Keyboard.current / Gamepad.current / Mouse.current.
+///
+/// REV BX-f (Q130-a) — LISTE SCORREVOLI: se la selezione sta dentro il viewport di uno ScrollRect,
+/// il riquadro si limita alla parte visibile del viewport e sparisce quando la voce ne esce del
+/// tutto (es. lista scorsa con la rotella). Prima restava disegnato fuori dalla lista, sopra i
+/// bottoni vicini. Vale per ogni canvas con questo componente (anche i monitor della nave).
 /// </summary>
 [DisallowMultipleComponent]
 public class MenuSelectionHighlight : MonoBehaviour
@@ -63,6 +68,7 @@ public class MenuSelectionHighlight : MonoBehaviour
 
     private RectTransform _canvasRect;
     private GameObject _current;
+    private RectTransform _viewport;  // Rev BX-f — viewport dello ScrollRect che contiene la selezione, o null
     private Vector2 _targetPos, _targetSize;
     private bool _hasTarget;
 
@@ -137,6 +143,7 @@ public class MenuSelectionHighlight : MonoBehaviour
         {
             SetVisible(false);
             _current = null;
+            _viewport = null;
             _hasTarget = false;
             return;
         }
@@ -144,12 +151,30 @@ public class MenuSelectionHighlight : MonoBehaviour
         if (sel != _current)
         {
             _current = sel;
-            SetVisible(true);
+            _viewport = ViewportOf(sel.transform);   // Rev BX-f
         }
 
         ComputeTarget(sel.GetComponent<RectTransform>());
+
+        // Rev BX-f — visibile solo se la selezione ha una parte visibile (vedi ComputeTarget).
+        SetVisible(_hasTarget);
+        if (!_hasTarget) return;
+
         AnimateToTarget();
         if (pulse) ApplyPulse();
+    }
+
+    /// <summary>
+    /// Rev BX-f — viewport dello ScrollRect (sotto questo canvas) che contiene la selezione; null se
+    /// la selezione non sta in una lista scorrevole. Una scrollbar è figlia dello ScrollRect ma non
+    /// del viewport: non viene ritagliata.
+    /// </summary>
+    private RectTransform ViewportOf(Transform sel)
+    {
+        var scroll = sel.GetComponentInParent<ScrollRect>();
+        if (scroll == null || !scroll.transform.IsChildOf(transform)) return null;
+        var viewport = scroll.viewport != null ? scroll.viewport : scroll.transform as RectTransform;
+        return viewport != null && sel.IsChildOf(viewport) ? viewport : null;
     }
 
     /// <summary>
@@ -162,7 +187,10 @@ public class MenuSelectionHighlight : MonoBehaviour
                && sel.transform.IsChildOf(transform);
     }
 
-    /// <summary>Converte i corner-world del target in coordinate locali del canvas.</summary>
+    /// <summary>
+    /// Converte i corner-world del target in coordinate locali del canvas. Rev BX-f: dentro una lista
+    /// scorrevole il rettangolo è ritagliato sul viewport; se non ne resta nulla, nessun target.
+    /// </summary>
     private void ComputeTarget(RectTransform target)
     {
         if (target == null) { _hasTarget = false; return; }
@@ -171,6 +199,16 @@ public class MenuSelectionHighlight : MonoBehaviour
         target.GetWorldCorners(corners); // 0=BL 1=TL 2=TR 3=BR
         Vector2 min = _canvasRect.InverseTransformPoint(corners[0]);
         Vector2 max = _canvasRect.InverseTransformPoint(corners[2]);
+
+        if (_viewport != null)
+        {
+            _viewport.GetWorldCorners(corners);
+            Vector2 vMin = _canvasRect.InverseTransformPoint(corners[0]);
+            Vector2 vMax = _canvasRect.InverseTransformPoint(corners[2]);
+            min = Vector2.Max(min, vMin);
+            max = Vector2.Min(max, vMax);
+            if (max.x <= min.x || max.y <= min.y) { _hasTarget = false; return; }
+        }
 
         Vector2 size = (max - min) + new Vector2(padding, padding) * 2f;
         Vector2 center = (min + max) * 0.5f;
