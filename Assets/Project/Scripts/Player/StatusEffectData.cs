@@ -139,7 +139,7 @@ public class StatusEffectData : ScriptableObject
     public StatusEffectType type = StatusEffectType.Poison;
 
     [Tooltip("Nome leggibile per debug/UI futura.")]
-    public string displayName = "Nuovo Stato";
+    public string displayName = "New Status";
 
     [TextArea] public string description = "";
 

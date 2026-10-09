@@ -67,8 +67,8 @@ namespace SpaceSurvivor.Ship
 
         // ── Testi (override dei default engineering-repair della base) ────────
 
-        protected override string PromptText => "PREMI E PER AGGANCIARE";
-        protected override string CompleteText => "AGGANCIO ACQUISITO!";
+        protected override string PromptText => "PRESS [{mash}] TO LOCK";      // Rev BX-e
+        protected override string CompleteText => "LOCK ACQUIRED!";
 
         // NB: win-mode = repair puro → NESSUN override di GetStartProgress /
         // CompletesAtHundred / FailsAtFloor (restano ai default della base).
@@ -109,7 +109,7 @@ namespace SpaceSurvivor.Ship
         // ── Hook dominio ──────────────────────────────────────────────────────
 
         protected override string GetTargetDisplayName()
-            => _target != null && _target.Data != null ? _target.Data.DisplayName : "CONTATTO";
+            => _target != null && _target.Data != null ? _target.Data.DisplayName : "CONTACT";
 
         protected override float GetInitialDecayRate() => lockDecayRate;
 

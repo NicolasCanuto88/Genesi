@@ -206,10 +206,10 @@ namespace SpaceSurvivor.UI
             // Il parametro ps resta in firma per possibili consumer futuri
             // (es. mostrare velocità cruise durante approccio pre-Docking).
             if (speedText != null)
-                speedText.text = $"VELOCITÀ: {dc.CurrentRcsSpeed:F1} u/s";
+                speedText.text = $"SPEED: {dc.CurrentRcsSpeed:F1} u/s";
 
             if (distanceText != null)
-                distanceText.text = $"DISTANZA: {dc.AxialDistance:F0} u";
+                distanceText.text = $"DISTANCE: {dc.AxialDistance:F0} u";
         }
 
         private void UpdateConfirmPrompt(DockingController dc)

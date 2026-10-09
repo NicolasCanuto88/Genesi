@@ -72,7 +72,7 @@ namespace SpaceSurvivor.Poi
 
         [Tooltip("Nome visualizzato nella ScannerUI (es. \"Relitto abbandonato\"). " +
                  "Localizzabile in futuro — per ora stringa libera.")]
-        [SerializeField] private string displayName = "Relitto abbandonato";
+        [SerializeField] private string displayName = "Abandoned wreck";
 
         // ── Rappresentazione visuale ─────────────────────────────────────────
         [Header("Rappresentazione visuale")]

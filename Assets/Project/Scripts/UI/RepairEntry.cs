@@ -64,10 +64,10 @@ public class RepairEntry : MonoBehaviour
 
     [Header("Testi")]
     [Tooltip("Mostrato in materialsText quando il sistema è ONLINE (IsRepairable() == false).")]
-    [SerializeField] private string textSystemOperational = "Sistema operativo — nessuna riparazione necessaria";
+    [SerializeField] private string textSystemOperational = "System operational — no repair needed";
 
     [Tooltip("Prefisso mostrato prima dell'elenco materiali totali richiesti.")]
-    [SerializeField] private string textTotalRequiredPrefix = "Riparazione completa richiede: ";
+    [SerializeField] private string textTotalRequiredPrefix = "Full repair requires: ";
 
     private IRepairable _target;
     private Action<IRepairable> _onAvvia;
@@ -138,11 +138,11 @@ public class RepairEntry : MonoBehaviour
                 stateBadge.color = colorOnline;
                 break;
             case ShipSystemState.DegradedLight:
-                stateBadge.text = "DEGRADATO";
+                stateBadge.text = "DEGRADED";
                 stateBadge.color = colorDegraded;
                 break;
             case ShipSystemState.DegradedHeavy:
-                stateBadge.text = "DEGRADATO GRAVE";
+                stateBadge.text = "SEVERELY DEGRADED";
                 stateBadge.color = colorCritical;
                 break;
             case ShipSystemState.Offline:
@@ -200,14 +200,14 @@ public class RepairEntry : MonoBehaviour
         }
         else if (materialsText != null)
         {
-            materialsText.text = "Nessun materiale richiesto";
+            materialsText.text = "No materials required";
         }
 
         if (avviaButton != null)
             avviaButton.interactable = materialsAvailable;
 
         if (avviaButtonLabel != null)
-            avviaButtonLabel.text = materialsAvailable ? "AVVIA" : "MATERIALI INSUFFICIENTI";
+            avviaButtonLabel.text = materialsAvailable ? "START" : "NOT ENOUGH MATERIALS";
     }
 
     private void HandleAvviaClicked()
@@ -226,16 +226,16 @@ public class RepairEntry : MonoBehaviour
     /// </summary>
     private static string ItemDisplayName(ItemType type) => type switch
     {
-        ItemType.MechanicalPart => "Parte Meccanica",
-        ItemType.WireBundle => "Fascio di Cavi",
-        ItemType.ElectronicComponent => "Componente Elettronico",
-        ItemType.HullPlate => "Piastra dello Scafo",
-        ItemType.CoolantCanister => "Tanica Refrigerante",
-        ItemType.FuelCell => "Cella di Carburante",
-        ItemType.MedkitBase => "Medikit Base",
-        ItemType.MedkitAdvanced => "Medikit Avanzato",
-        ItemType.O2EmergencyTank => "Tanica O₂ Emergenza",
-        ItemType.Antidote => "Antidoto",
+        ItemType.MechanicalPart => "Mechanical Part",
+        ItemType.WireBundle => "Wire Bundle",
+        ItemType.ElectronicComponent => "Electronic Component",
+        ItemType.HullPlate => "Hull Plate",
+        ItemType.CoolantCanister => "Coolant Canister",
+        ItemType.FuelCell => "Fuel Cell",
+        ItemType.MedkitBase => "Medkit",
+        ItemType.MedkitAdvanced => "Advanced Medkit",
+        ItemType.O2EmergencyTank => "Emergency O₂ Tank",
+        ItemType.Antidote => "Antidote",
         _ => type.ToString()
     };
 }

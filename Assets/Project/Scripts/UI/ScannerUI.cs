@@ -270,7 +270,7 @@ namespace SpaceSurvivor.UI
 
             // Label mostra la vista di destinazione.
             if (toggleViewLabel != null)
-                toggleViewLabel.text = _radarMode ? "◂ LISTA" : "RADAR ▸";
+                toggleViewLabel.text = _radarMode ? "◂ LIST" : "RADAR ▸";
 
             // Navigazione: anello chiuso Toggle↔Lista (lista) o nessuna direzione (radar).
             RewireNavigation();
@@ -366,7 +366,7 @@ namespace SpaceSurvivor.UI
             PoiInstance poi = _lastSelectedPoi;
             if (poi == null || poi.Data == null)
             {
-                detailText.text = "Seleziona un contatto.";
+                detailText.text = "Select a contact.";
                 return;
             }
 
@@ -384,43 +384,43 @@ namespace SpaceSurvivor.UI
 
             // Riga stato aggancio (Rev BK).
             if (IsLocked(poi))
-                _sb.AppendLine("<b>● AGGANCIATO (live)</b>");
+                _sb.AppendLine("<b>● LOCKED (live)</b>");
 
             // T1 — sempre disponibile se rilevato (tipo/massa/distanza).
-            _sb.AppendLine($"Tipo: {poi.Data.Type}");
-            _sb.AppendLine($"Massa: {poi.Data.Mass:F0}");
-            _sb.AppendLine(dist < 1000f ? $"Distanza: {dist:F0} m" : $"Distanza: {dist / 1000f:F1} km");
+            _sb.AppendLine($"Type: {poi.Data.Type}");
+            _sb.AppendLine($"Mass: {poi.Data.Mass:F0}");
+            _sb.AppendLine(dist < 1000f ? $"Distance: {dist:F0} m" : $"Distance: {dist / 1000f:F1} km");
 
             // T2 — composizione + O₂ sì/no.
             if (tier >= 2)
             {
                 string comp = string.IsNullOrWhiteSpace(poi.Data.Composition)
-                    ? "Sconosciuta" : poi.Data.Composition;
+                    ? "Unknown" : poi.Data.Composition;
                 bool hasO2 = reserve != null && reserve.InitialResidual > 0f;
-                _sb.AppendLine($"Composizione: {comp}");
-                _sb.AppendLine($"O₂: {(hasO2 ? "sì" : "no")}");
+                _sb.AppendLine($"Composition: {comp}");
+                _sb.AppendLine($"O₂: {(hasO2 ? "yes" : "no")}");
             }
 
             // T3 — quantità O₂ (live) + nemici sì/no (STUB).
             if (tier >= 3)
             {
                 string o2Qty = reserve != null ? $"{reserve.Residual:F0}" : "—";
-                _sb.AppendLine($"O₂ residuo: {o2Qty}");
-                _sb.AppendLine($"Nemici: {(poi.Data.StubHasEnemies ? "sì" : "no")} <size=70%>(stub)</size>");
+                _sb.AppendLine($"Residual O₂: {o2Qty}");
+                _sb.AppendLine($"Enemies: {(poi.Data.StubHasEnemies ? "yes" : "no")} <size=70%>(stub)</size>");
             }
 
             // T4 — blueprint + sistemi + layout (STUB).
             if (tier >= 4)
             {
                 _sb.AppendLine($"Blueprint: {StubOrDash(poi.Data.StubBlueprintInfo)} <size=70%>(stub)</size>");
-                _sb.AppendLine($"Sistemi: {StubOrDash(poi.Data.StubShipSystemsInfo)} <size=70%>(stub)</size>");
+                _sb.AppendLine($"Systems: {StubOrDash(poi.Data.StubShipSystemsInfo)} <size=70%>(stub)</size>");
                 _sb.AppendLine($"Layout: {StubOrDash(poi.Data.StubLayoutInfo)} <size=70%>(stub)</size>");
             }
 
             // Hint se il tier rivelato non copre ancora T2+.
             if (tier < 2)
             {
-                _sb.AppendLine($"<size=80%><i>Scan attivo per T2+ (tier nave T{shipTier}).</i></size>");
+                _sb.AppendLine($"<size=80%><i>Active scan for T2+ (ship tier T{shipTier}).</i></size>");
             }
 
             detailText.text = _sb.ToString();
@@ -569,17 +569,17 @@ namespace SpaceSurvivor.UI
             var poi = _lastSelectedPoi;
             if (poi == null || poi.NetworkObject == null)
             {
-                label = "AGGANCIO —";
+                label = "LOCK —";
             }
             else
             {
                 ulong id = poi.NetworkObject.NetworkObjectId;
                 if (lockedId != 0ul && id == lockedId)
-                    label = "SGANCIA";
+                    label = "RELEASE";
                 else if ((byte)poi.ScanState >= (byte)PoiScanState.Scanned)
-                    label = "AGGANCIA";
+                    label = "LOCK";
                 else
-                    label = "AGGANCIO N/D";
+                    label = "LOCK N/A";
             }
 
             lockButtonLabel.text = label;

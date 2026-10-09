@@ -214,19 +214,19 @@ namespace SpaceSurvivor.Ship
             if (hit)
             {
                 points = SliderHitPoints;
-                msg = "CENTRATO! +15";
+                msg = $"PERFECT! +{SliderHitPoints:0}";      // Rev BX-e: dal valore, non scritto a mano
                 color = palette.Good;
             }
             else if (near)
             {
                 points = SliderNearPoints;
-                msg = "QUASI +5";
+                msg = $"CLOSE +{SliderNearPoints:0}";
                 color = palette.Warning;
             }
             else
             {
                 points = SliderMissPoints;
-                msg = "MANCATO −20";
+                msg = $"MISSED −{-SliderMissPoints:0}";
                 color = palette.Critical;
             }
 

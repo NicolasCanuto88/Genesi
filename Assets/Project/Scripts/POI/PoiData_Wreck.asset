@@ -13,7 +13,7 @@ MonoBehaviour:
   m_Name: PoiData_Wreck
   m_EditorClassIdentifier: Assembly-CSharp::SpaceSurvivor.Poi.PoiData
   type: 0
-  displayName: Relitto abbandonato
+  displayName: Abandoned wreck
   visualPrefab: {fileID: 2280671918096256926, guid: fbca7f3ad0f85574ea1a3baade24c7b5, type: 3}
   spawnDistanceMin: 2000
   spawnDistanceMax: 6000
@@ -32,8 +32,8 @@ MonoBehaviour:
   mass: 5
   impactDamageMultiplier: 1
   wreckO2ReserveInitial: 40
-  composition: Lega di titanio, scafo militare
+  composition: Titanium alloy, military hull
   stubHasEnemies: 0
-  stubBlueprintInfo: Blueprint di Prova
-  stubShipSystemsInfo: Stub Ship di Prova
-  stubLayoutInfo: Layout di Prova
+  stubBlueprintInfo: Test blueprint
+  stubShipSystemsInfo: Test systems
+  stubLayoutInfo: Test layout

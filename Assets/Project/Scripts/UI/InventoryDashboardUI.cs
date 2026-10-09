@@ -204,7 +204,7 @@ public class InventoryDashboardUI : MonoBehaviour, IDashboardPanel
             if (percent < thresholdCritical)
             {
                 sb.AppendLine(qty == 0
-                    ? $"<color=#FF3333>● {GetDisplayName(type)}: ESAURITO</color>"
+                    ? $"<color=#FF3333>● {GetDisplayName(type)}: OUT OF STOCK</color>"
                     : $"<color=#FF5500>● {GetDisplayName(type)}: {qty}/{max}</color>");
                 anyLow = true;
             }

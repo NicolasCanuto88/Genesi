@@ -1484,7 +1484,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::PowerReadout
   label: {fileID: 734259430}
-  prefix: 'W DISPONIBILE: '
+  prefix: 'W AVAILABLE: '
   warningAvailableFraction: 0.15
   colorNormal: {r: 0, g: 0.784, b: 0.937, a: 1}
   colorWarning: {r: 1, g: 0.85, b: 0, a: 1}
@@ -17656,7 +17656,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::PowerReadout
   label: {fileID: 1060099441}
-  prefix: 'W DISPONIBILE: '
+  prefix: 'W AVAILABLE: '
   warningAvailableFraction: 0.15
   colorNormal: {r: 0, g: 0.784, b: 0.937, a: 1}
   colorWarning: {r: 1, g: 0.85, b: 0, a: 1}
@@ -24432,7 +24432,7 @@ MonoBehaviour:
   m_OnCullStateChanged:
     m_PersistentCalls:
       m_Calls: []
-  m_text: PREMI E PER RIPARARE
+  m_text: PRESS E TO REPAIR
   m_isRightToLeft: 0
   m_fontAsset: {fileID: 11400000, guid: 8f586378b4e144a9851e7b34d9b748ee, type: 2}
   m_sharedMaterial: {fileID: 2180264, guid: 8f586378b4e144a9851e7b34d9b748ee, type: 2}
@@ -40995,7 +40995,7 @@ MonoBehaviour:
   m_OnCullStateChanged:
     m_PersistentCalls:
       m_Calls: []
-  m_text: NORMALE
+  m_text: NORMAL
   m_isRightToLeft: 0
   m_fontAsset: {fileID: 11400000, guid: a1ecca717a54bdc4181f39c3345bfe37, type: 2}
   m_sharedMaterial: {fileID: 5595164888071055425, guid: a1ecca717a54bdc4181f39c3345bfe37, type: 2}
@@ -53767,7 +53767,7 @@ MonoBehaviour:
   m_OnCullStateChanged:
     m_PersistentCalls:
       m_Calls: []
-  m_text: PREMI E PER RIPARARE
+  m_text: PRESS E TO REPAIR
   m_isRightToLeft: 0
   m_fontAsset: {fileID: 11400000, guid: 8f586378b4e144a9851e7b34d9b748ee, type: 2}
   m_sharedMaterial: {fileID: 2180264, guid: 8f586378b4e144a9851e7b34d9b748ee, type: 2}
@@ -61268,7 +61268,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::PowerReadout
   label: {fileID: 1954889996}
-  prefix: 'W DISPONIBILE: '
+  prefix: 'W AVAILABLE: '
   warningAvailableFraction: 0.15
   colorNormal: {r: 0, g: 0.784, b: 0.937, a: 1}
   colorWarning: {r: 1, g: 0.85, b: 0, a: 1}
@@ -64609,7 +64609,7 @@ MonoBehaviour:
   m_OnCullStateChanged:
     m_PersistentCalls:
       m_Calls: []
-  m_text: "Autonomia: \u221E"
+  m_text: "Time left: \u221E"
   m_isRightToLeft: 0
   m_fontAsset: {fileID: 11400000, guid: a1ecca717a54bdc4181f39c3345bfe37, type: 2}
   m_sharedMaterial: {fileID: 5595164888071055425, guid: a1ecca717a54bdc4181f39c3345bfe37, type: 2}
@@ -70126,7 +70126,7 @@ MonoBehaviour:
   m_OnCullStateChanged:
     m_PersistentCalls:
       m_Calls: []
-  m_text: PREMI E PER RIPARARE
+  m_text: PRESS E TO REPAIR
   m_isRightToLeft: 0
   m_fontAsset: {fileID: 11400000, guid: 8f586378b4e144a9851e7b34d9b748ee, type: 2}
   m_sharedMaterial: {fileID: 2180264, guid: 8f586378b4e144a9851e7b34d9b748ee, type: 2}
@@ -103741,7 +103741,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::PowerReadout
   label: {fileID: 740990902}
-  prefix: 'W DISPONIBILE: '
+  prefix: 'W AVAILABLE: '
   warningAvailableFraction: 0.15
   colorNormal: {r: 0, g: 0.784, b: 0.937, a: 1}
   colorWarning: {r: 1, g: 0.85, b: 0, a: 1}
@@ -125169,7 +125169,7 @@ MonoBehaviour:
   m_OnCullStateChanged:
     m_PersistentCalls:
       m_Calls: []
-  m_text: "Autonomia: \u221E"
+  m_text: "Time left: \u221E"
   m_isRightToLeft: 0
   m_fontAsset: {fileID: 11400000, guid: 181f11a91dc8dbf47bbc425bec7bb046, type: 2}
   m_sharedMaterial: {fileID: -1072348374891951019, guid: 181f11a91dc8dbf47bbc425bec7bb046, type: 2}
@@ -128424,7 +128424,7 @@ MonoBehaviour:
   m_OnCullStateChanged:
     m_PersistentCalls:
       m_Calls: []
-  m_text: RIPARAZIONI
+  m_text: REPAIRS
   m_isRightToLeft: 0
   m_fontAsset: {fileID: 11400000, guid: 181f11a91dc8dbf47bbc425bec7bb046, type: 2}
   m_sharedMaterial: {fileID: -1072348374891951019, guid: 181f11a91dc8dbf47bbc425bec7bb046, type: 2}
@@ -154455,8 +154455,8 @@ MonoBehaviour:
   colorCritical: {r: 1, g: 0.2, b: 0, a: 1}
   colorOffline: {r: 0.5, g: 0.5, b: 0.5, a: 1}
   colorMissingHex: '#FF3300'
-  textSystemOperational: "Sistema operativo \u2014 nessuna riparazione necessaria"
-  textTotalRequiredPrefix: 'Riparazione completa richiede: '
+  textSystemOperational: "System operational \u2014 no repair needed"
+  textTotalRequiredPrefix: 'Full repair requires: '
 --- !u!4 &746289653260263716
 Transform:
   m_ObjectHideFlags: 0
@@ -166814,8 +166814,8 @@ MonoBehaviour:
   m_OnCullStateChanged:
     m_PersistentCalls:
       m_Calls: []
-  m_text: "Soglia 50% \u2014 Richiede: 2\xD7 Componente Elettronico (1)   1\xD7 Tanica
-    Refrigerante (2)"
+  m_text: "Threshold 50% \u2014 Requires: 2\xD7 Electronic Component (1)   1\xD7
+    Coolant Canister (2)"
   m_isRightToLeft: 0
   m_fontAsset: {fileID: 11400000, guid: 181f11a91dc8dbf47bbc425bec7bb046, type: 2}
   m_sharedMaterial: {fileID: -1072348374891951019, guid: 181f11a91dc8dbf47bbc425bec7bb046, type: 2}
@@ -211568,7 +211568,7 @@ MonoBehaviour:
   m_OnCullStateChanged:
     m_PersistentCalls:
       m_Calls: []
-  m_text: '"PROPULSIONE'
+  m_text: PROPULSION
   m_isRightToLeft: 0
   m_fontAsset: {fileID: 11400000, guid: 181f11a91dc8dbf47bbc425bec7bb046, type: 2}
   m_sharedMaterial: {fileID: -1072348374891951019, guid: 181f11a91dc8dbf47bbc425bec7bb046, type: 2}
@@ -239047,7 +239047,7 @@ MonoBehaviour:
   m_OnCullStateChanged:
     m_PersistentCalls:
       m_Calls: []
-  m_text: DEGRADATO
+  m_text: DEGRADED
   m_isRightToLeft: 0
   m_fontAsset: {fileID: 11400000, guid: 181f11a91dc8dbf47bbc425bec7bb046, type: 2}
   m_sharedMaterial: {fileID: -1072348374891951019, guid: 181f11a91dc8dbf47bbc425bec7bb046, type: 2}
@@ -270053,7 +270053,7 @@ MonoBehaviour:
   m_OnCullStateChanged:
     m_PersistentCalls:
       m_Calls: []
-  m_text: RECATI AL PANNELLO...
+  m_text: GO TO PANEL...
   m_isRightToLeft: 0
   m_fontAsset: {fileID: 11400000, guid: 181f11a91dc8dbf47bbc425bec7bb046, type: 2}
   m_sharedMaterial: {fileID: -1072348374891951019, guid: 181f11a91dc8dbf47bbc425bec7bb046, type: 2}
@@ -402397,7 +402397,7 @@ MonoBehaviour:
   m_OnCullStateChanged:
     m_PersistentCalls:
       m_Calls: []
-  m_text: MATERIALI INSUFFICIENTI
+  m_text: NOT ENOUGH MATERIALS
   m_isRightToLeft: 0
   m_fontAsset: {fileID: 11400000, guid: c782f12ce158b2b4b8ef61e420158a8c, type: 2}
   m_sharedMaterial: {fileID: -2445316984332920248, guid: c782f12ce158b2b4b8ef61e420158a8c, type: 2}
@@ -409968,7 +409968,7 @@ MonoBehaviour:
   m_OnCullStateChanged:
     m_PersistentCalls:
       m_Calls: []
-  m_text: NESSUN CONTATTO
+  m_text: NO CONTACTS
   m_isRightToLeft: 0
   m_fontAsset: {fileID: 11400000, guid: c782f12ce158b2b4b8ef61e420158a8c, type: 2}
   m_sharedMaterial: {fileID: -2445316984332920248, guid: c782f12ce158b2b4b8ef61e420158a8c, type: 2}
@@ -426950,7 +426950,7 @@ MonoBehaviour:
   m_OnCullStateChanged:
     m_PersistentCalls:
       m_Calls: []
-  m_text: "VELOCIT\xC0: 0.0 u/s"
+  m_text: 'SPEED: 0.0 u/s'
   m_isRightToLeft: 0
   m_fontAsset: {fileID: 11400000, guid: 2920d8fc9491f3c4db39fb4418aa5b1f, type: 2}
   m_sharedMaterial: {fileID: -2262495658236982309, guid: 2920d8fc9491f3c4db39fb4418aa5b1f, type: 2}
@@ -432016,8 +432016,8 @@ MonoBehaviour:
   m_OnCullStateChanged:
     m_PersistentCalls:
       m_Calls: []
-  m_text: "Soglia 50% \u2014 Richiede: 2\xD7 Componente Elettronico (1)   1\xD7 Tanica
-    Refrigerante (2)"
+  m_text: "Threshold 50% \u2014 Requires: 2\xD7 Electronic Component (1)   1\xD7
+    Coolant Canister (2)"
   m_isRightToLeft: 0
   m_fontAsset: {fileID: 11400000, guid: 181f11a91dc8dbf47bbc425bec7bb046, type: 2}
   m_sharedMaterial: {fileID: -1072348374891951019, guid: 181f11a91dc8dbf47bbc425bec7bb046, type: 2}
@@ -432630,7 +432630,7 @@ MonoBehaviour:
   m_OnCullStateChanged:
     m_PersistentCalls:
       m_Calls: []
-  m_text: Premi Space per ATTRACCARE
+  m_text: PRESS SPACE / A TO DOCK
   m_isRightToLeft: 0
   m_fontAsset: {fileID: 11400000, guid: c782f12ce158b2b4b8ef61e420158a8c, type: 2}
   m_sharedMaterial: {fileID: -2445316984332920248, guid: c782f12ce158b2b4b8ef61e420158a8c, type: 2}
@@ -463565,7 +463565,7 @@ MonoBehaviour:
   m_OnCullStateChanged:
     m_PersistentCalls:
       m_Calls: []
-  m_text: MATERIALI INSUFFICIENTI
+  m_text: NOT ENOUGH MATERIALS
   m_isRightToLeft: 0
   m_fontAsset: {fileID: 11400000, guid: c782f12ce158b2b4b8ef61e420158a8c, type: 2}
   m_sharedMaterial: {fileID: -2445316984332920248, guid: c782f12ce158b2b4b8ef61e420158a8c, type: 2}
@@ -471312,7 +471312,7 @@ MonoBehaviour:
   m_OnCullStateChanged:
     m_PersistentCalls:
       m_Calls: []
-  m_text: PREMI E PER RIPARARE
+  m_text: PRESS E TO REPAIR
   m_isRightToLeft: 0
   m_fontAsset: {fileID: 11400000, guid: 8f586378b4e144a9851e7b34d9b748ee, type: 2}
   m_sharedMaterial: {fileID: 2180264, guid: 8f586378b4e144a9851e7b34d9b748ee, type: 2}
@@ -496772,8 +496772,8 @@ MonoBehaviour:
   colorCritical: {r: 1, g: 0.2, b: 0, a: 1}
   colorOffline: {r: 0.5, g: 0.5, b: 0.5, a: 1}
   colorMissingHex: '#FF3300'
-  textSystemOperational: "Sistema operativo \u2014 nessuna riparazione necessaria"
-  textTotalRequiredPrefix: 'Riparazione completa richiede: '
+  textSystemOperational: "System operational \u2014 no repair needed"
+  textTotalRequiredPrefix: 'Full repair requires: '
 --- !u!1 &7630972912764251108
 GameObject:
   m_ObjectHideFlags: 0
@@ -524968,7 +524968,7 @@ MonoBehaviour:
   m_OnCullStateChanged:
     m_PersistentCalls:
       m_Calls: []
-  m_text: 'DISTANZA: 0.0 m'
+  m_text: 'DISTANCE: 0.0 m'
   m_isRightToLeft: 0
   m_fontAsset: {fileID: 11400000, guid: 2920d8fc9491f3c4db39fb4418aa5b1f, type: 2}
   m_sharedMaterial: {fileID: -2262495658236982309, guid: 2920d8fc9491f3c4db39fb4418aa5b1f, type: 2}
@@ -526726,7 +526726,7 @@ MonoBehaviour:
   m_OnCullStateChanged:
     m_PersistentCalls:
       m_Calls: []
-  m_text: STATO SOTTOSISTEMI
+  m_text: SUBSYSTEM STATUS
   m_isRightToLeft: 0
   m_fontAsset: {fileID: 11400000, guid: 181f11a91dc8dbf47bbc425bec7bb046, type: 2}
   m_sharedMaterial: {fileID: -1072348374891951019, guid: 181f11a91dc8dbf47bbc425bec7bb046, type: 2}
@@ -550980,7 +550980,7 @@ MonoBehaviour:
   m_OnCullStateChanged:
     m_PersistentCalls:
       m_Calls: []
-  m_text: NESSUN CONTATTO
+  m_text: NO CONTACTS
   m_isRightToLeft: 0
   m_fontAsset: {fileID: 11400000, guid: c782f12ce158b2b4b8ef61e420158a8c, type: 2}
   m_sharedMaterial: {fileID: -2445316984332920248, guid: c782f12ce158b2b4b8ef61e420158a8c, type: 2}
@@ -564646,7 +564646,7 @@ MonoBehaviour:
   m_OnCullStateChanged:
     m_PersistentCalls:
       m_Calls: []
-  m_text: "MOTORI OFFLINE \u2014 Ripristino: 0%"
+  m_text: "ENGINES OFFLINE \u2014 RESTORING: 0%"
   m_isRightToLeft: 0
   m_fontAsset: {fileID: 11400000, guid: a1ecca717a54bdc4181f39c3345bfe37, type: 2}
   m_sharedMaterial: {fileID: 5595164888071055425, guid: a1ecca717a54bdc4181f39c3345bfe37, type: 2}
@@ -565674,7 +565674,7 @@ MonoBehaviour:
   m_OnCullStateChanged:
     m_PersistentCalls:
       m_Calls: []
-  m_text: DEGRADATO
+  m_text: DEGRADED
   m_isRightToLeft: 0
   m_fontAsset: {fileID: 11400000, guid: 181f11a91dc8dbf47bbc425bec7bb046, type: 2}
   m_sharedMaterial: {fileID: -1072348374891951019, guid: 181f11a91dc8dbf47bbc425bec7bb046, type: 2}
@@ -568198,7 +568198,7 @@ MonoBehaviour:
   m_OnCullStateChanged:
     m_PersistentCalls:
       m_Calls: []
-  m_text: PREMI E PER RIPARARE
+  m_text: PRESS E TO REPAIR
   m_isRightToLeft: 0
   m_fontAsset: {fileID: 11400000, guid: 8f586378b4e144a9851e7b34d9b748ee, type: 2}
   m_sharedMaterial: {fileID: 2180264, guid: 8f586378b4e144a9851e7b34d9b748ee, type: 2}

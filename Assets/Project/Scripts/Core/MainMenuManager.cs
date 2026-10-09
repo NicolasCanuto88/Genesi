@@ -77,6 +77,10 @@ using TMPro;
 ///     non elimina nulla. Eliminato l'ultimo personaggio si passa alla creazione obbligatoria.
 ///   - Il campo nome della creazione parte sempre vuoto: prima riprendeva il nome del personaggio
 ///     attivo (residuo del profilo a slot unico) e portava a personaggi con lo stesso nome.
+///
+/// REV BX-e (Q129-a) — TESTI IN INGLESE: messaggi di creazione, lobby e connessione. Il ruolo del
+/// badge passa da CrewRoles.DisplayNameOf: un profilo salvato con "Pilota" mostra "Pilot". I testi
+/// fissi della scena li cambia lo strumento Tools/Genesi/BX-e.
 /// </summary>
 [DefaultExecutionOrder(100)]
 public class MainMenuManager : MonoBehaviour
@@ -864,8 +868,8 @@ public class MainMenuManager : MonoBehaviour
     private void OnCreationConferma()
     {
         string nome = creationNameInput != null ? creationNameInput.text.Trim() : "";
-        if (string.IsNullOrEmpty(nome)) { MostraErroreCreazione("Inserisci un nome per il personaggio."); return; }
-        if (string.IsNullOrEmpty(_ruoloSelezionato)) { MostraErroreCreazione("Seleziona un ruolo per continuare."); return; }
+        if (string.IsNullOrEmpty(nome)) { MostraErroreCreazione("Enter a name for your character."); return; }
+        if (string.IsNullOrEmpty(_ruoloSelezionato)) { MostraErroreCreazione("Choose a role to continue."); return; }
 
         LocalCharacterProfile.Instance.CreateCharacter(nome, _ruoloSelezionato);
 
@@ -916,10 +920,10 @@ public class MainMenuManager : MonoBehaviour
         bool haPersonaggio = profile.HasActiveCharacter;
 
         if (mainCharacterNameText != null)
-            mainCharacterNameText.text = haPersonaggio ? profile.CharacterName : "Nessun personaggio";
+            mainCharacterNameText.text = haPersonaggio ? profile.CharacterName : "No character";
 
         if (mainCharacterRoleText != null)
-            mainCharacterRoleText.text = haPersonaggio ? profile.Role : "—";
+            mainCharacterRoleText.text = haPersonaggio ? CrewRoles.DisplayNameOf(profile.Role) : "—";   // Rev BX-e
 
         if (mainCharacterDot != null)
             mainCharacterDot.color = haPersonaggio ? RoleColors.Get(profile.Role) : colorRuoloNormale;
@@ -1180,8 +1184,8 @@ public class MainMenuManager : MonoBehaviour
     {
         lobbyHostPanel?.SetActive(true);
         if (lobbySessionTypeBadge != null)
-            lobbySessionTypeBadge.text = _tipoSessione == TipoSessione.Aperta ? "APERTA" : "SU INVITO";
-        if (lobbyJoinCodeText != null) lobbyJoinCodeText.text = "Avvio in corso...";
+            lobbySessionTypeBadge.text = _tipoSessione == TipoSessione.Aperta ? "OPEN" : "INVITE ONLY";
+        if (lobbyJoinCodeText != null) lobbyJoinCodeText.text = "Starting...";
         if (lobbyBtnInizia != null) lobbyBtnInizia.interactable = false;
         if (lobbyBtnCopiaCode != null) lobbyBtnCopiaCode.interactable = false;
         CablaNavigazioneLobby();   // Rev BX-b (gate)
@@ -1234,7 +1238,7 @@ public class MainMenuManager : MonoBehaviour
         if (lobbyPlayerCountText == null || NetworkManager.Singleton == null) return;
         int n = NetworkManager.Singleton.IsServer
             ? NetworkManager.Singleton.ConnectedClientsIds.Count : 0;
-        lobbyPlayerCountText.text = $"Equipaggio a bordo: {n} / 5";
+        lobbyPlayerCountText.text = $"Crew aboard: {n} / 5";
     }
 
     // ── JOIN ──────────────────────────────────────────────────────────────────
@@ -1242,7 +1246,7 @@ public class MainMenuManager : MonoBehaviour
     private void MostraJoin()
     {
         joinPanel?.SetActive(true);
-        if (joinStatusText != null) joinStatusText.text = "Inserisci il codice ricevuto dall'host.";
+        if (joinStatusText != null) joinStatusText.text = "Enter the code from the host.";
         if (joinBtnConferma != null) joinBtnConferma.interactable = true;
         if (joinBtnIndietro != null) joinBtnIndietro.interactable = true;
     }
@@ -1253,7 +1257,7 @@ public class MainMenuManager : MonoBehaviour
         string codice = joinCodeInput != null ? joinCodeInput.text.Trim().ToUpper() : "";
         if (string.IsNullOrEmpty(codice))
         {
-            if (joinStatusText != null) joinStatusText.text = "Inserisci il codice per continuare.";
+            if (joinStatusText != null) joinStatusText.text = "Enter the code to continue.";
             return;
         }
 
@@ -1261,18 +1265,18 @@ public class MainMenuManager : MonoBehaviour
         _codiceInserito = codice;   // Rev BX-c
         if (joinBtnConferma != null) joinBtnConferma.interactable = false;
         if (joinBtnIndietro != null) joinBtnIndietro.interactable = false;
-        if (joinStatusText != null) joinStatusText.text = "Connessione in corso...";
+        if (joinStatusText != null) joinStatusText.text = "Connecting...";
 
         try
         {
             if (relayManager != null)
                 await relayManager.StartClientAsync(codice);
             else
-                throw new InvalidOperationException("RelayManager non trovato.");
+                throw new InvalidOperationException("Relay service unavailable.");
         }
         catch (Exception e)
         {
-            if (joinStatusText != null) joinStatusText.text = $"Errore: {e.Message}";
+            if (joinStatusText != null) joinStatusText.text = $"Error: {e.Message}";
             if (joinBtnConferma != null) joinBtnConferma.interactable = true;
             if (joinBtnIndietro != null) joinBtnIndietro.interactable = true;
             _isConnecting = false;
@@ -1284,7 +1288,7 @@ public class MainMenuManager : MonoBehaviour
     private void OnServerStarted()
     {
         string codice = relayManager != null && !string.IsNullOrEmpty(relayManager.LastJoinCode)
-            ? relayManager.LastJoinCode : "(locale)";
+            ? relayManager.LastJoinCode : "(local)";
 
         if (lobbyJoinCodeText != null) lobbyJoinCodeText.text = codice;
         if (lobbyBtnInizia != null) lobbyBtnInizia.interactable = true;
@@ -1309,7 +1313,7 @@ public class MainMenuManager : MonoBehaviour
         bool èClientLocale = clientId == NetworkManager.Singleton.LocalClientId;
 
         if (èClientPuro && èClientLocale && joinStatusText != null)
-            joinStatusText.text = "Connesso. In attesa dell'host...";
+            joinStatusText.text = "Connected. Waiting for the host...";
 
         // Rev BX-c — codice per il menu di pausa: quello con cui ci si è uniti.
         if (èClientPuro && èClientLocale)
@@ -1359,7 +1363,7 @@ public class MainMenuManager : MonoBehaviour
         _debugSkipDone = true;
 
         if (!LocalCharacterProfile.Instance.HasAnyCharacter)
-            LocalCharacterProfile.Instance.CreateCharacter("DEBUG", "Pilota");
+            LocalCharacterProfile.Instance.CreateCharacter("DEBUG", CrewRoles.ToDisplayName(CrewRole.Pilot));
 
         if (menuCanvas != null) menuCanvas.gameObject.SetActive(false);
         if (EventSystem.current != null) EventSystem.current.SetSelectedGameObject(null);

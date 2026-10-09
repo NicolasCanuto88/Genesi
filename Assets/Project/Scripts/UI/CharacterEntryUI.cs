@@ -58,7 +58,7 @@ public class CharacterEntryUI : MonoBehaviour
         _onSelected = onSelected;
 
         if (nameLabel != null) nameLabel.text = data.characterName;
-        if (roleLabel != null) roleLabel.text = data.role;
+        if (roleLabel != null) roleLabel.text = CrewRoles.DisplayNameOf(data.role);   // Rev BX-e: "Pilota" salvato → "Pilot"
 
         if (leftStripe != null)
             leftStripe.color = RoleColors.Get(data.role);

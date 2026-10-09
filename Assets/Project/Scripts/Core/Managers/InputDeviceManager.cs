@@ -185,6 +185,13 @@ public class InputDeviceManager : MonoBehaviour
         return IsGamepad ? "Y" : "F";
     }
 
+    // Rev BX-e — tasto dei minigame a pressione ripetuta: azione "RepairMash" della mappa Player
+    // (E / A). Usato dai prompt di riparazione, aggancio e stabilizzazione (segnaposto {mash}).
+    public string GetMashPrompt()
+    {
+        return IsGamepad ? "A" : "E";
+    }
+
     public string FormatPrompt(string template)
     {
         return template
@@ -199,6 +206,7 @@ public class InputDeviceManager : MonoBehaviour
             .Replace("{cycledrug}", GetCycleDrugPrompt())
             .Replace("{grenade}", GetGrenadePrompt())
             .Replace("{drone}", GetDronePrompt())
-            .Replace("{shield}", GetShieldPrompt());       // Rev BV-b
+            .Replace("{shield}", GetShieldPrompt())        // Rev BV-b
+            .Replace("{mash}", GetMashPrompt());           // Rev BX-e
     }
 }

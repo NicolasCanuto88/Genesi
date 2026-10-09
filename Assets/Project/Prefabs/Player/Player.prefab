@@ -1756,7 +1756,7 @@ MonoBehaviour:
   m_OnCullStateChanged:
     m_PersistentCalls:
       m_Calls: []
-  m_text: Lista Equipaggio
+  m_text: Crew list
   m_isRightToLeft: 0
   m_fontAsset: {fileID: 11400000, guid: a1ecca717a54bdc4181f39c3345bfe37, type: 2}
   m_sharedMaterial: {fileID: 5595164888071055425, guid: a1ecca717a54bdc4181f39c3345bfe37, type: 2}

@@ -29,10 +29,23 @@ using UnityEngine;
 /// di essere ricreato nella scena di gioco.
 ///
 /// ⚠️ Dipende da: nessuno — è il livello più basso della catena di profilo.
+///
+/// REV BX-e (Q129-a): valori predefiniti in inglese ("Unnamed", "Unassigned" = CrewRoles.UnassignedLabel).
+/// I profili salvati prima restano validi: "Senza nome" vale ancora come nome predefinito
+/// (IsDefaultName) e i ruoli italiani li legge CrewRoles.Parse. Il file non viene riscritto.
 /// </summary>
 public class LocalCharacterProfile : MonoBehaviour
 {
     private const string SAVE_FILE_NAME = "character_save.json";
+
+    // Rev BX-e — valori predefiniti (inglese) e nome predefinito dei profili salvati prima.
+    public const string DefaultCharacterName = "Unnamed";
+    public const string DefaultRole = "Unassigned";            // = CrewRoles.UnassignedLabel
+    private const string LegacyDefaultCharacterName = "Senza nome";
+
+    /// <summary>Rev BX-e — true per il nome predefinito, nuovo o dei profili salvati prima.</summary>
+    public static bool IsDefaultName(string characterName)
+        => characterName == DefaultCharacterName || characterName == LegacyDefaultCharacterName;
 
     // ── SINGLETON ─────────────────────────────────────────────────────────────
     public static LocalCharacterProfile Instance { get; private set; }
@@ -51,8 +64,8 @@ public class LocalCharacterProfile : MonoBehaviour
     public class CharacterData
     {
         public string characterId = "";
-        public string characterName = "Senza nome";
-        public string role = "Non assegnato";
+        public string characterName = DefaultCharacterName;
+        public string role = DefaultRole;
         public int personalCredits = 0;
     }
 
@@ -84,8 +97,8 @@ public class LocalCharacterProfile : MonoBehaviour
     // ── API — LETTURA (STESSA API DI PRIMA, ora delega al personaggio attivo) ─
 
     public string CharacterId => _activeCharacter?.characterId ?? "";
-    public string CharacterName => _activeCharacter?.characterName ?? "Senza nome";
-    public string Role => _activeCharacter?.role ?? "Non assegnato";
+    public string CharacterName => _activeCharacter?.characterName ?? DefaultCharacterName;
+    public string Role => _activeCharacter?.role ?? DefaultRole;
     public int PersonalCredits => _activeCharacter?.personalCredits ?? 0;
 
     /// <summary>True se esiste almeno un personaggio creato.</summary>
@@ -136,7 +149,7 @@ public class LocalCharacterProfile : MonoBehaviour
                 var legacy = JsonUtility.FromJson<LegacySaveData>(json);
 
                 if (legacy != null && !string.IsNullOrEmpty(legacy.characterName)
-                    && legacy.characterName != "Senza nome")
+                    && !IsDefaultName(legacy.characterName))
                 {
                     LogV("[LocalCharacterProfile] Migrazione dal formato v0.9.7.");
                     _data = new SaveData();
@@ -146,7 +159,7 @@ public class LocalCharacterProfile : MonoBehaviour
                                           ? Guid.NewGuid().ToString()
                                           : legacy.characterId,
                         characterName = legacy.characterName,
-                        role = legacy.role ?? "Non assegnato",
+                        role = legacy.role ?? DefaultRole,
                         personalCredits = legacy.personalCredits
                     };
                     _data.characters.Add(migrated);

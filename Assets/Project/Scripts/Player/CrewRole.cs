@@ -18,11 +18,11 @@
 /// </summary>
 public enum CrewRole : byte
 {
-    None          = 0,   // non assegnato / sconosciuto → hook di ruolo a identità
-    Pilot         = 1,
-    Engineer      = 2,
-    Scanner       = 3,
-    Corpsman      = 4,   // ex "Medico" (rinomina M3 close)
+    None = 0,   // non assegnato / sconosciuto → hook di ruolo a identità
+    Pilot = 1,
+    Engineer = 2,
+    Scanner = 3,
+    Corpsman = 4,   // ex "Medico" (rinomina M3 close)
     Quartermaster = 5    // quinto ruolo (M3 close) — contenuto in Fase 3b
 }
 
@@ -33,13 +33,18 @@ public enum CrewRole : byte
 ///
 /// LEGACY: i profili creati prima di Rev BM hanno role = "Medico". Parse lo
 /// riconosce come alias di Corpsman — nessuna migrazione del file di salvataggio
-/// (non distruttivo). L'etichetta mostrata per quei profili resta "Medico" finché
-/// il personaggio non viene ricreato (cosmetico, noto).
+/// (non distruttivo).
+///
+/// REV BX-e (Q129-a) — INGLESE: le etichette sono in inglese (Pilot, Engineer, …, Unassigned) e
+/// sono anche la stringa salvata dai personaggi nuovi. Parse legge inglese e italiano, così i
+/// profili salvati prima (Pilota, Ingegnere, Medico, Non assegnato) restano validi senza
+/// riscriverli. Le UI mostrano DisplayNameOf(stringa salvata): un profilo vecchio con "Pilota"
+/// appare come "Pilot".
 /// </summary>
 public static class CrewRoles
 {
     /// <summary>Etichetta per ruolo assente — coincide col default di LocalCharacterProfile.</summary>
-    public const string UnassignedLabel = "Non assegnato";
+    public const string UnassignedLabel = "Unassigned";
 
     /// <summary>
     /// Ruoli selezionabili alla creazione personaggio, NELL'ORDINE dei bottoni di
@@ -64,24 +69,25 @@ public static class CrewRoles
         return Selectable[index];
     }
 
-    /// <summary>Etichetta UI canonica (italiano) — è anche la stringa persistita nel profilo.</summary>
+    /// <summary>Etichetta UI canonica (inglese, Rev BX-e) — è anche la stringa persistita nel profilo.</summary>
     public static string ToDisplayName(CrewRole role)
     {
         switch (role)
         {
-            case CrewRole.Pilot:         return "Pilota";
-            case CrewRole.Engineer:      return "Ingegnere";
-            case CrewRole.Scanner:       return "Scanner";
-            case CrewRole.Corpsman:      return "Corpsman";
+            case CrewRole.Pilot: return "Pilot";
+            case CrewRole.Engineer: return "Engineer";
+            case CrewRole.Scanner: return "Scanner";
+            case CrewRole.Corpsman: return "Corpsman";
             case CrewRole.Quartermaster: return "Quartermaster";
-            default:                     return UnassignedLabel;
+            default: return UnassignedLabel;
         }
     }
 
     /// <summary>
     /// Converte la stringa persistita (LocalCharacterProfile.Role) nel ruolo.
     /// Case-insensitive, tollera spazi. "Medico" = alias legacy di Corpsman.
-    /// Stringa vuota/sconosciuta/"Non assegnato" → None.
+    /// Rev BX-e: legge i nomi inglesi e quelli italiani dei profili salvati prima.
+    /// Stringa vuota/sconosciuta/"Unassigned"/"Non assegnato" → None.
     /// </summary>
     public static CrewRole Parse(string raw)
     {
@@ -89,15 +95,23 @@ public static class CrewRoles
 
         switch (raw.Trim().ToLowerInvariant())
         {
-            case "pilota":        return CrewRole.Pilot;
-            case "ingegnere":     return CrewRole.Engineer;
-            case "scanner":       return CrewRole.Scanner;
+            case "pilot":
+            case "pilota": return CrewRole.Pilot;      // italiano: profili pre Rev BX-e
+            case "engineer":
+            case "ingegnere": return CrewRole.Engineer;   // italiano: profili pre Rev BX-e
+            case "scanner": return CrewRole.Scanner;
             case "corpsman":
-            case "medico":        return CrewRole.Corpsman;   // alias legacy (pre Rev BM)
+            case "medico": return CrewRole.Corpsman;   // alias legacy (pre Rev BM)
             case "quartermaster": return CrewRole.Quartermaster;
-            default:              return CrewRole.None;
+            default: return CrewRole.None;
         }
     }
+
+    /// <summary>
+    /// Rev BX-e — etichetta da mostrare per la stringa salvata nel profilo, nella lingua corrente:
+    /// un profilo vecchio con "Pilota" mostra "Pilot". Stringa sconosciuta → "Unassigned".
+    /// </summary>
+    public static string DisplayNameOf(string raw) => ToDisplayName(Parse(raw));
 
     /// <summary>
     /// true se il valore è un membro definito dell'enum. Usato dal server per

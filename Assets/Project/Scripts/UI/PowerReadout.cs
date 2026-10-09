@@ -37,7 +37,7 @@ public class PowerReadout : MonoBehaviour
 
     [Header("Formato")]
     [Tooltip("Prefisso mostrato prima del valore. Il suffisso W e aggiunto dopo il numero.")]
-    [SerializeField] private string prefix = "DISPONIBILE ";
+    [SerializeField] private string prefix = "AVAILABLE ";
 
     [Header("Soglia giallo")]
     [Tooltip("Frazione di potenza disponibile 0-1 su MaxPowerOutput sotto la quale il " +

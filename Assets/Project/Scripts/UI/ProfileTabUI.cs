@@ -106,7 +106,7 @@ public class ProfileTabUI : MonoBehaviour, IDashboardPanel
         RefreshMedKit();
 
         if (skillStubLabel != null)
-            skillStubLabel.text = "Skill tree — da definire (GDD §10)";
+            skillStubLabel.text = "Skill tree — coming soon";
     }
 
     /// <summary>
@@ -168,7 +168,7 @@ public class ProfileTabUI : MonoBehaviour, IDashboardPanel
         if (roleLabel == null) return;
 
         LocalCharacterProfile profile = LocalCharacterProfile.Instance;
-        string role = profile != null ? profile.Role : "—";
+        string role = profile != null ? CrewRoles.DisplayNameOf(profile.Role) : "—";   // Rev BX-e
 
         PlayerQuartermasterGadgets gadgets = PlayerQuartermasterGadgets.LocalInstance;
         if (gadgets != null && gadgets.IsQuartermaster &&

@@ -283,7 +283,7 @@ public class ElectricalDegradationManager : NetworkBehaviour
             : "OK ×1.00";
 
         return $"HULL ×{netHullMultiplier.Value:0.00} · EM ×{netEMMultiplier.Value:0.00} · BALLAST {ballast}\n" +
-               $"TOTALE ×{GetTotalMultiplier():0.00}";
+               $"TOTAL ×{GetTotalMultiplier():0.00}";
     }
 
     // ===== POWER EVENTS =====

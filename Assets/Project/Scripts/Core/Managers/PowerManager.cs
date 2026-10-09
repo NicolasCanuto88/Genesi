@@ -321,7 +321,7 @@ public class PowerManager : NetworkBehaviour
         if (reservePercent < 0.3f)
         {
             LogVWarn($"[PowerManager] Reserve too low ({reservePercent * 100f:F0}%) — need 30%");
-            RestoreFailedRpc("Riserva insufficiente — attendere ricarica");
+            RestoreFailedRpc("Reserve too low — wait for recharge");
             return;
         }
 
@@ -329,7 +329,7 @@ public class PowerManager : NetworkBehaviour
         if (consumptionPercent > 0.7f)
         {
             LogVWarn($"[PowerManager] Load too high ({consumptionPercent * 100f:F0}%)");
-            RestoreFailedRpc("Carico troppo alto — spegnere sistemi non essenziali");
+            RestoreFailedRpc("Load too high — switch off non-essential systems");
             return;
         }
 
@@ -393,18 +393,18 @@ public class PowerManager : NetworkBehaviour
         float reservePercent = netPowerReserve.Value / maxPowerReserve;
         if (reservePercent < 0.3f)
         {
-            reason = $"Riserva troppo bassa ({reservePercent * 100f:F0}% / 30% richiesto)";
+            reason = $"Reserve too low ({reservePercent * 100f:F0}% / 30% required)";
             return false;
         }
 
         float consumptionPercent = netPowerConsumption.Value / MaxPowerOutput;
         if (consumptionPercent > 0.7f)
         {
-            reason = $"Carico troppo alto ({consumptionPercent * 100f:F0}% / 70% max)";
+            reason = $"Load too high ({consumptionPercent * 100f:F0}% / 70% max)";
             return false;
         }
 
-        reason = "Pronto al ripristino";
+        reason = "Ready to restore";
         return true;
     }
 

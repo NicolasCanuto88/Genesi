@@ -167,8 +167,16 @@ namespace SpaceSurvivor.Ship
 
         // ── Testi status (overridabili — default engineering-flavored) ──────────
 
-        protected virtual string PromptText => "PREMI E PER RIPARARE";
-        protected virtual string CompleteText => "SISTEMA RIPARATO!";
+        // Rev BX-e — testi in inglese. Il prompt può contenere i segnaposto dei tasti di
+        // InputDeviceManager.FormatPrompt ({mash} = E / A): va mostrato con FormattedPromptText.
+        protected virtual string PromptText => "PRESS [{mash}] TO REPAIR";
+        protected virtual string CompleteText => "SYSTEM REPAIRED!";
+
+        /// <summary>Rev BX-e — PromptText con i tasti del dispositivo in uso (tastiera o gamepad).</summary>
+        protected string FormattedPromptText
+            => InputDeviceManager.Instance != null
+                ? InputDeviceManager.Instance.FormatPrompt(PromptText)
+                : PromptText.Replace("{mash}", "E");
 
         // ── Hook astratti (dominio) ─────────────────────────────────────────────
 
@@ -302,7 +310,7 @@ namespace SpaceSurvivor.Ship
                 if (_graceTimer <= 0f)
                 {
                     _inGracePeriod = false;
-                    SetStatus(PromptText, colorNeutral);
+                    SetStatus(FormattedPromptText, colorNeutral);
 
                     // Rev BL — Q1-b: input abilitato SOLO ora (fine grace).
                     // _isActive è già true (BeginSession) → invariante
@@ -317,7 +325,7 @@ namespace SpaceSurvivor.Ship
                 {
                     if (statusText != null)
                     {
-                        statusText.text = $"INIZIA TRA {Mathf.CeilToInt(_graceTimer)}...";
+                        statusText.text = $"STARTING IN {Mathf.CeilToInt(_graceTimer)}...";
                         statusText.color = colorWarning;
                     }
                     UpdateUI();
@@ -384,7 +392,7 @@ namespace SpaceSurvivor.Ship
             if (systemNameText != null)
                 systemNameText.text = GetTargetDisplayName().ToUpper();
 
-            SetStatus(PromptText, colorNeutral);
+            SetStatus(FormattedPromptText, colorNeutral);
 
             // Rev BL — Q1-b (gate input in grace): l'interazione NON viene abilitata
             // qui. Durante il grace period nessun input è cablato e nessuno slider si
@@ -458,7 +466,7 @@ namespace SpaceSurvivor.Ship
         {
             // Riparazione parziale: mantiene le soglie già raggiunte.
             // I materiali già consumati alle soglie precedenti NON vengono rimborsati.
-            SetStatus("TEMPO SCADUTO", colorCritical);
+            SetStatus("TIME'S UP", colorCritical);
             CloseInternal();
             _onInterrupted?.Invoke();
         }
@@ -499,7 +507,7 @@ namespace SpaceSurvivor.Ship
                 return;
             }
 
-            SetStatus($"SOGLIA {pct:F0}% RAGGIUNTA", colorGood, 2f);
+            SetStatus($"{pct:F0}% THRESHOLD REACHED", colorGood, 2f);
         }
 
         // ── UI ────────────────────────────────────────────────────────────────
@@ -534,7 +542,7 @@ namespace SpaceSurvivor.Ship
             yield return new WaitForSeconds(delay);
             if (statusText != null)
             {
-                statusText.text = _isActive ? PromptText : "";
+                statusText.text = _isActive ? FormattedPromptText : "";
                 statusText.color = colorNeutral;
             }
         }
