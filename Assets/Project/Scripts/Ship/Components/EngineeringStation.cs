@@ -51,6 +51,13 @@ public class EngineeringStation : MonoBehaviour, IInteractable
     /// </summary>
     public bool IsUsingStation => isUsingStation;
     private bool isExiting = false;
+
+    /// <summary>
+    /// Rev BX-b — true durante la transizione di uscita (da ExitStation alla fine del lerp):
+    /// IsUsingStation resta true fino all'ultimo frame, ma la dashboard non è più in uso.
+    /// Letta da DashboardHubController per mettere l'hub a riposo all'inizio dell'uscita.
+    /// </summary>
+    public bool IsExiting => isExiting;
     private PlayerController playerController;
     private CharacterController characterController;
     private PlayerInput playerInputComponent;

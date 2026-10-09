@@ -23,6 +23,16 @@ using UnityEngine;
 ///   - 'sections' elencate nello stesso ordine degli indici usati dai button hub
 ///   - ogni sezione porta un IDashboardPanel (su di se o su un figlio):
 ///     Open()/Close() vengono chiamati all'apertura/chiusura della sezione.
+///
+/// HUB A RIPOSO (Rev BX-b · Q119-a): quando nessuno è seduto l'hub resta visibile sul
+/// monitor (come all'avvio della scena) ma NON è interattivo, non riceve raycast e non ha
+/// nessun elemento selezionato. Prima, dall'avvio della scena, l'hub era interattivo e il suo
+/// primo button era selezionato anche senza nessuno seduto: camminando con WASD (che è anche
+/// Navigate nella mappa UI) la selezione e il riquadro ciano si spostavano sul monitor, e col
+/// gamepad A (Jump, che è anche Submit) apriva una sezione a caso. All'uscita dalla postazione
+/// l'hub ora torna nello stesso stato di riposo (prima spariva: monitor vuoto dopo il primo uso).
+/// L'hub diventa interattivo e seleziona il primo button solo all'ingresso del giocatore.
+/// ShowSection e ShowHub non fanno nulla a postazione libera (difesa: nessun click a riposo).
 /// </summary>
 [RequireComponent(typeof(CanvasGroup))]
 public class DashboardHubController : MonoBehaviour
@@ -46,6 +56,16 @@ public class DashboardHubController : MonoBehaviour
     private int currentSection = -1;            // -1 = hub mostrato
     private bool dashboardWasActive;
 
+    /// <summary>
+    /// Rev BX-b — vero mentre il giocatore locale è seduto alla postazione e non si sta alzando.
+    /// L'uscita dura una transizione (fino a 1 s): prima, in quel tempo, la rete di sicurezza
+    /// riselezionava il primo button e il riquadro saltava lì mentre la camera si allontanava.
+    /// Ora l'hub va a riposo all'inizio dell'uscita.
+    /// </summary>
+    private bool IsStationActive => engineeringStation != null
+                                    && engineeringStation.IsUsingStation
+                                    && !engineeringStation.IsExiting;
+
     private void Awake()
     {
         hubGroup = GetComponent<CanvasGroup>();
@@ -62,21 +82,22 @@ public class DashboardHubController : MonoBehaviour
                 panels[i] = sections[i].GetComponentInChildren<IDashboardPanel>(includeInactive: true);
         }
 
-        ShowHubInternal();
+        // Rev BX-b — all'avvio della scena nessuno è seduto: hub a riposo, niente selezione.
+        ShowRestState();
     }
 
     private void Update()
     {
-        bool active = engineeringStation != null && engineeringStation.IsUsingStation;
+        bool active = IsStationActive;
 
         // All'apertura della postazione: reset all'hub.
         if (active && !dashboardWasActive)
             ShowHubInternal();
 
-        // Alla chiusura: chiudi la sezione attiva e nascondi tutto (copre tutte le
+        // Alla chiusura: chiudi la sezione attiva e torna all'hub a riposo (copre tutte le
         // sezioni, non solo la prima — a differenza del vecchio Close esplicito).
         if (!active && dashboardWasActive)
-            CloseAll();
+            ShowRestState();
 
         dashboardWasActive = active;
 
@@ -89,11 +110,29 @@ public class DashboardHubController : MonoBehaviour
     // ── API pubblica per i button (cablata in scena via OnClick) ───────────────
 
     /// <summary>Button HOME di una sezione: torna all'hub.</summary>
-    public void ShowHub() => ShowHubInternal();
+    public void ShowHub()
+    {
+        // Rev BX-b — a postazione libera l'hub resta a riposo.
+        if (!IsStationActive)
+        {
+            ShowRestState();
+            return;
+        }
+
+        ShowHubInternal();
+    }
 
     /// <summary>Button dell'hub: apre la sezione all'indice indicato.</summary>
     public void ShowSection(int index)
     {
+        // Rev BX-b — a postazione libera nessuna sezione si apre (difesa: a riposo l'hub non
+        // è interattivo, ma un Submit su una selezione rimasta non deve aprire nulla).
+        if (!IsStationActive)
+        {
+            if (logVerbose) Debug.Log("[DashboardHub] ShowSection ignorato: postazione libera.");
+            return;
+        }
+
         if (sections == null || index < 0 || index >= sections.Length)
         {
             if (logVerbose) Debug.LogWarning("[DashboardHub] ShowSection indice fuori range: " + index);
@@ -124,15 +163,10 @@ public class DashboardHubController : MonoBehaviour
     private void ShowHubInternal()
     {
         // Chiudi la sezione eventualmente aperta.
-        if (currentSection >= 0 && panels != null && currentSection < panels.Length && panels[currentSection] != null)
-            panels[currentSection].Close();
+        CloseCurrentSection();
 
         SetGroup(hubGroup, true);
-        if (sections != null)
-        {
-            for (int i = 0; i < sections.Length; i++)
-                SetGroup(sections[i], false);
-        }
+        HideAllSections();
 
         currentSection = -1;
 
@@ -141,19 +175,61 @@ public class DashboardHubController : MonoBehaviour
         if (logVerbose) Debug.Log("[DashboardHub] Hub mostrato.");
     }
 
-    private void CloseAll()
+    /// <summary>
+    /// Rev BX-b — hub a riposo: visibile ma non interattivo, senza raycast, sezioni nascoste,
+    /// nessuna sezione aperta e nessuna selezione su hub o sezioni.
+    /// </summary>
+    private void ShowRestState()
+    {
+        CloseCurrentSection();
+
+        if (hubGroup != null)
+        {
+            hubGroup.alpha = 1f;
+            hubGroup.interactable = false;
+            hubGroup.blocksRaycasts = false;
+        }
+        HideAllSections();
+
+        currentSection = -1;
+        ClearSelectionIfOurs();
+        if (logVerbose) Debug.Log("[DashboardHub] Hub a riposo.");
+    }
+
+    /// <summary>
+    /// Rev BX-b — azzera la selezione EventSystem solo se cade sull'hub o su una sua sezione:
+    /// una selezione rimasta su un button a riposo mostrerebbe il riquadro sul monitor.
+    /// Le selezioni di altri pannelli non si toccano.
+    /// </summary>
+    private void ClearSelectionIfOurs()
+    {
+        var es = UnityEngine.EventSystems.EventSystem.current;
+        if (es == null) return;
+
+        GameObject sel = es.currentSelectedGameObject;
+        if (sel == null) return;
+
+        bool ours = sel.transform.IsChildOf(transform);
+        if (!ours && sections != null)
+        {
+            for (int i = 0; i < sections.Length && !ours; i++)
+                ours = sections[i] != null && sel.transform.IsChildOf(sections[i].transform);
+        }
+
+        if (ours) es.SetSelectedGameObject(null);
+    }
+
+    private void CloseCurrentSection()
     {
         if (currentSection >= 0 && panels != null && currentSection < panels.Length && panels[currentSection] != null)
             panels[currentSection].Close();
+    }
 
-        SetGroup(hubGroup, false);
-        if (sections != null)
-        {
-            for (int i = 0; i < sections.Length; i++)
-                SetGroup(sections[i], false);
-        }
-
-        currentSection = -1;
+    private void HideAllSections()
+    {
+        if (sections == null) return;
+        for (int i = 0; i < sections.Length; i++)
+            SetGroup(sections[i], false);
     }
 
     // Chooser dell'hub: il primo button interactable sotto questo GameObject

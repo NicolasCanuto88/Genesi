@@ -1,7 +1,6 @@
 using UnityEngine;
 using UnityEngine.UI;
 using UnityEngine.EventSystems;
-using UnityEngine.InputSystem;
 
 /// <summary>
 /// MenuSelectionHighlight — Milestone 3 · navigazione controller.
@@ -19,8 +18,19 @@ using UnityEngine.InputSystem;
 /// è selezionato adesso". Questo componente lo fornisce in modo uniforme e
 /// indipendente dallo stile dei singoli bottoni.
 ///
-/// Va messo sul Canvas del menu (MainMenuCanvas). Costruisce da solo la
-/// propria gerarchia grafica a runtime — nessun prefab/sprite richiesto.
+/// Va messo sul Canvas del menu (MainMenuCanvas, monitor, menu di pausa). Costruisce da solo
+/// la propria gerarchia grafica a runtime — nessun prefab/sprite richiesto.
+///
+/// REV BX-b (Q126-a) — SEMPRE VISIBILE, SOLO IL PROPRIO CANVAS:
+///   - Il riquadro è visibile ogni volta che c'è una selezione valida sotto questo canvas.
+///     Prima si nascondeva in "modalità mouse" (rilevata dal mouse, anche da un salto del
+///     puntatore all'avvio) e la prima direzione premuta doveva solo rivelarlo: all'avvio del
+///     menu principale non si vedeva nessuna selezione e la prima pressione spostava già la
+///     voce. Modalità mouse, flag statico ControllerActive e campo alwaysShow sono rimossi
+///     (il valore salvato nelle scene viene ignorato).
+///   - Il riquadro segue la selezione solo se cade sotto questo canvas. Prima ogni istanza (sei
+///     nella scena Game) disegnava un riquadro anche per selezioni di altri canvas.
+///   - Nessuna lettura diretta di Keyboard.current / Gamepad.current / Mouse.current.
 /// </summary>
 [DisallowMultipleComponent]
 public class MenuSelectionHighlight : MonoBehaviour
@@ -45,13 +55,6 @@ public class MenuSelectionHighlight : MonoBehaviour
     [SerializeField] private bool pulse = true;
     [SerializeField] private float pulseSpeed = 3.5f;
 
-    [Tooltip("Se true, il frame è SEMPRE visibile sull'elemento selezionato, anche " +
-             "senza input di navigazione e anche col mouse. Attivarlo sugli schermi di " +
-             "bordo (dashboard ingegnere/hub) dove si naviga solo a frecce/controller e " +
-             "l'evidenziazione deve esserci fin dall'avvio. Lasciarlo OFF sul menu " +
-             "principale (dove col mouse il frame va nascosto).")]
-    [SerializeField] private bool alwaysShow = false;
-
     private RectTransform _root;      // contenitore che si muove/ridimensiona
     private RectTransform _fill;
     private Image _fillImg;
@@ -62,19 +65,6 @@ public class MenuSelectionHighlight : MonoBehaviour
     private GameObject _current;
     private Vector2 _targetPos, _targetSize;
     private bool _hasTarget;
-
-    // Il frame ha senso solo con controller/tastiera: col mouse basta il
-    // feedback hover (accent bar). Mostriamo il frame solo quando l'ultimo
-    // input è stato di navigazione (stick/dpad/frecce), e lo nascondiamo appena
-    // si muove/clicca il mouse.
-    private bool _controllerMode;
-
-    /// <summary>
-    /// Modalità input corrente del menu, condivisa: true = controller/tastiera,
-    /// false = mouse. Letta da <see cref="MenuButtonAccent"/> per accendere
-    /// l'accent sull'elemento "selezionato" solo quando si naviga a controller.
-    /// </summary>
-    public static bool ControllerActive { get; private set; }
 
     private void Awake()
     {
@@ -139,47 +129,11 @@ public class MenuSelectionHighlight : MonoBehaviour
         rt.offsetMax = Vector2.zero;
     }
 
-    /// <summary>Aggiorna la modalità input: mouse → nasconde, controller/tastiera → mostra.</summary>
-    private void UpdateInputMode()
-    {
-        var mouse = Mouse.current;
-        if (mouse != null)
-        {
-            bool mouseUsed =
-                mouse.delta.ReadValue().sqrMagnitude > 1f ||
-                mouse.leftButton.wasPressedThisFrame ||
-                mouse.rightButton.wasPressedThisFrame ||
-                mouse.scroll.ReadValue().sqrMagnitude > 0.01f;
-            if (mouseUsed) _controllerMode = false;
-        }
-
-        var gp = Gamepad.current;
-        bool gpUsed = gp != null && (
-            gp.leftStick.ReadValue().sqrMagnitude > 0.1f ||
-            gp.dpad.ReadValue().sqrMagnitude > 0.1f ||
-            gp.buttonSouth.wasPressedThisFrame || gp.buttonEast.wasPressedThisFrame ||
-            gp.buttonWest.wasPressedThisFrame || gp.buttonNorth.wasPressedThisFrame);
-
-        var kb = Keyboard.current;
-        bool kbUsed = kb != null && (
-            kb.upArrowKey.isPressed || kb.downArrowKey.isPressed ||
-            kb.leftArrowKey.isPressed || kb.rightArrowKey.isPressed ||
-            kb.tabKey.wasPressedThisFrame ||
-            kb.enterKey.wasPressedThisFrame || kb.spaceKey.wasPressedThisFrame);
-
-        if (gpUsed || kbUsed) _controllerMode = true;
-
-        ControllerActive = _controllerMode;
-    }
-
     private void LateUpdate()
     {
-        UpdateInputMode();
-
         var sel = EventSystem.current != null ? EventSystem.current.currentSelectedGameObject : null;
 
-        bool valid = (alwaysShow || _controllerMode) && sel != null && sel.activeInHierarchy && sel.GetComponent<Selectable>() != null;
-        if (!valid)
+        if (!IsValidHere(sel))
         {
             SetVisible(false);
             _current = null;
@@ -196,6 +150,16 @@ public class MenuSelectionHighlight : MonoBehaviour
         ComputeTarget(sel.GetComponent<RectTransform>());
         AnimateToTarget();
         if (pulse) ApplyPulse();
+    }
+
+    /// <summary>
+    /// Rev BX-b — selezione da mostrare qui: attiva, con un Selectable, e sotto questo canvas.
+    /// </summary>
+    private bool IsValidHere(GameObject sel)
+    {
+        return sel != null && sel.activeInHierarchy
+               && sel.GetComponent<Selectable>() != null
+               && sel.transform.IsChildOf(transform);
     }
 
     /// <summary>Converte i corner-world del target in coordinate locali del canvas.</summary>

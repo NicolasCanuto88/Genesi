@@ -16,6 +16,10 @@ using TMPro;
 /// riusando l'elemento LeftAccentBar già presente nella gerarchia.
 ///
 /// Se il bottone non è interactable, l'accent resta spento.
+///
+/// REV BX-b (Q126-a): lo stato "selezionato" accende sempre l'accent. Prima lo accendeva solo
+/// in modalità controller/tastiera (flag statico di MenuSelectionHighlight, rimosso): sui monitor
+/// un movimento del mouse lo spegneva pur con la voce ancora selezionata.
 /// </summary>
 [RequireComponent(typeof(Button))]
 [DisallowMultipleComponent]
@@ -66,11 +70,12 @@ public class MenuButtonAccent : MonoBehaviour,
     public void OnPointerDown(PointerEventData e) => _pressed = true;
     public void OnPointerUp(PointerEventData e) => _pressed = false;
 
-    // Hover vale sempre (mouse). Lo stato "selezionato" accende l'accent solo
-    // in modalità controller/tastiera: col mouse deve illuminarsi soltanto la
-    // voce effettivamente sotto il puntatore, non quella selezionata a runtime.
+    // Hover (mouse) o selezione (EventSystem) accendono l'accent. Rev BX-b (Q126-a): la
+    // selezione vale sempre, come il riquadro di MenuSelectionHighlight, che non ha più una
+    // modalità mouse. Col mouse possono essere accese insieme la voce selezionata e quella
+    // sotto il puntatore.
     private bool Active =>
-        (_hovered || (_selected && MenuSelectionHighlight.ControllerActive))
+        (_hovered || _selected)
         && _button != null && _button.interactable;
 
     private void Update()
