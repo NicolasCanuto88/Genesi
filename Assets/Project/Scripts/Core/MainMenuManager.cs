@@ -54,6 +54,17 @@ using TMPro;
 ///     e si preme una direzione, il focus viene ripristinato DOPO che il modulo UI ha elaborato
 ///     la pressione: si vede la voce ripristinata, senza un passo in più (ordine deterministico,
 ///     prima dipendeva dall'ordine casuale degli Update).
+///
+/// REV BX-c (Q121-a / Q123-a) — SESSIONE:
+///   - All'arrivo (Start) legge SessionFlow.ConsumeExitMessage(): al ritorno da una sessione
+///     chiusa o persa il messaggio compare nel pannello principale (mainSessionMessageText) finché
+///     non si passa a un altro pannello. Lo stato della sessione conclusa viene azzerato.
+///   - Il codice della sessione va in SessionFlow (host all'avvio del server, client alla
+///     connessione) perché il menu di pausa lo mostri: in partita RelayManager non esiste più.
+///   - Il NetworkManager di questa scena è quello nuovo: PauseMenuController distrugge il vecchio
+///     prima di caricare MainMenu.
+///   - Q128-a: bottone EXIT GAME (mainBtnEsci) in fondo al pannello principale, esce subito
+///     (SessionFlow.QuitGame; in Editor ferma il Play).
 /// </summary>
 [DefaultExecutionOrder(100)]
 public class MainMenuManager : MonoBehaviour
@@ -128,6 +139,14 @@ public class MainMenuManager : MonoBehaviour
     [SerializeField] private Button mainBtnOpzioni;
     [Tooltip("Credits")]
     [SerializeField] private Button mainBtnCrediti;
+    [Tooltip("ExitGame — bottone in fondo al pannello (Rev BX-c · Q128-a): esce dal gioco senza " +
+             "conferma. In Editor ferma il Play.")]
+    [SerializeField] private Button mainBtnEsci;
+
+    [Header("Main Menu — messaggio di sessione (Rev BX-c)")]
+    [Tooltip("MainMenuPanel/ContentContainer/SessionMessage — testo mostrato al ritorno da una " +
+             "sessione chiusa o persa (es. disconnessione). Vuoto e nascosto negli altri casi. Opzionale.")]
+    [SerializeField] private TextMeshProUGUI mainSessionMessageText;
 
     // ── CHARACTER SELECT ──────────────────────────────────────────────────────
     // Percorso: MainMenuCanvas/CharacterSelectPanel/ContentContainer/...
@@ -216,6 +235,8 @@ public class MainMenuManager : MonoBehaviour
     private TipoSessione _tipoSessione = TipoSessione.SuInvito;
     private bool _creatingFromSelect = false;
     private bool _isConnecting = false;
+    private string _messaggioSessione = string.Empty;   // Rev BX-c: da SessionFlow al ritorno da una sessione
+    private string _codiceInserito = string.Empty;      // Rev BX-c: codice usato per unirsi (per SessionFlow)
     private string _selectedCharId = "";
     private string _ruoloSelezionato = "";
 
@@ -287,6 +308,9 @@ public class MainMenuManager : MonoBehaviour
             Debug.LogWarning("[MainMenuManager] InputDeviceManager assente in MainMenu: il primo focus " +
                              "resta sui campi di testo anche col gamepad. Vedi guida setup Editor Rev BX-b.");
 
+        // Rev BX-c — ritorno da una sessione: messaggio (vuoto se l'uscita era voluta) e stato azzerato.
+        _messaggioSessione = SessionFlow.ConsumeExitMessage();
+
         bool primoAccesso = !LocalCharacterProfile.Instance.HasAnyCharacter;
         TransitionTo(primoAccesso ? Stato.CharacterCreation : Stato.MainMenu);
     }
@@ -322,6 +346,7 @@ public class MainMenuManager : MonoBehaviour
         if (mainBtnCarica != null) mainBtnCarica.interactable = false; // Blocco 5
         if (mainBtnOpzioni != null) mainBtnOpzioni.interactable = false; // M4
         if (mainBtnCrediti != null) mainBtnCrediti.interactable = false; // M4
+        if (mainBtnEsci != null) mainBtnEsci.onClick.AddListener(SessionFlow.QuitGame);   // Rev BX-c · Q128-a
 
         if (selectBtnNuovoPersonaggio != null) selectBtnNuovoPersonaggio.onClick.AddListener(OnNuovoPersonaggio);
         if (selectBtnConferma != null) selectBtnConferma.onClick.AddListener(OnSelectConferma);
@@ -344,6 +369,9 @@ public class MainMenuManager : MonoBehaviour
     private void TransitionTo(Stato nuovoStato)
     {
         _stato = nuovoStato;
+
+        // Rev BX-c — il messaggio di sessione vale solo finché si resta nel pannello principale.
+        if (nuovoStato != Stato.MainMenu) _messaggioSessione = string.Empty;
 
         characterCreationPanel?.SetActive(false);
         mainMenuPanel?.SetActive(false);
@@ -798,6 +826,19 @@ public class MainMenuManager : MonoBehaviour
         _isConnecting = false;
         _pendingAction = AzionePending.None;
         AggiornaBadgePersonaggio();
+        AggiornaMessaggioSessione();
+    }
+
+    /// <summary>
+    /// Rev BX-c — messaggio della sessione appena conclusa (SessionFlow), mostrato nel pannello
+    /// principale finché non si passa a un altro pannello. Vuoto: testo nascosto.
+    /// </summary>
+    private void AggiornaMessaggioSessione()
+    {
+        if (mainSessionMessageText == null) return;
+        bool mostra = !string.IsNullOrEmpty(_messaggioSessione);
+        mainSessionMessageText.text = mostra ? _messaggioSessione : string.Empty;
+        mainSessionMessageText.gameObject.SetActive(mostra);
     }
 
     private void AggiornaBadgePersonaggio()
@@ -994,6 +1035,7 @@ public class MainMenuManager : MonoBehaviour
         }
 
         _isConnecting = true;
+        _codiceInserito = codice;   // Rev BX-c
         if (joinBtnConferma != null) joinBtnConferma.interactable = false;
         if (joinBtnIndietro != null) joinBtnIndietro.interactable = false;
         if (joinStatusText != null) joinStatusText.text = "Connessione in corso...";
@@ -1030,6 +1072,10 @@ public class MainMenuManager : MonoBehaviour
         CablaNavigazioneLobby();
         if (_stato == Stato.LobbyHost && enableControllerNav && _focusRoutine == null && !SelezioneValida())
             SelezionaPrimario(PrimarioPerStato());
+
+        // Rev BX-c — codice per il menu di pausa (in partita RelayManager non c'è più).
+        bool conRelay = relayManager != null && !string.IsNullOrEmpty(relayManager.LastJoinCode);
+        SessionFlow.SetJoinCode(conRelay ? relayManager.LastJoinCode : "(local)");
     }
 
     private void OnClientConnected(ulong clientId)
@@ -1041,6 +1087,10 @@ public class MainMenuManager : MonoBehaviour
 
         if (èClientPuro && èClientLocale && joinStatusText != null)
             joinStatusText.text = "Connesso. In attesa dell'host...";
+
+        // Rev BX-c — codice per il menu di pausa: quello con cui ci si è uniti.
+        if (èClientPuro && èClientLocale)
+            SessionFlow.SetJoinCode(_codiceInserito);
     }
 
     private void OnClientDisconnected(ulong clientId)

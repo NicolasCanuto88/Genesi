@@ -143,6 +143,13 @@ public class PlayerQuartermasterGadgets : NetworkBehaviour
     /// <summary>Rev BV-c — true mentre il proprietario mira la Bubble Shield (solo owner).</summary>
     public bool IsAimingBubble => aimingBubble;
 
+    /// <summary>
+    /// Rev BX-c — true mentre il proprietario tiene premuto F / Y (pressione accettata, prima o dopo
+    /// la soglia; solo owner). Letto dal menu di pausa: con la mappa Player spenta il rilascio
+    /// arriverebbe da solo e un tocco attiverebbe lo scudo.
+    /// </summary>
+    public bool IsPressing => pressing;
+
     /// <summary>Durata e ricarica dello scudo personale al tier corrente (false se non disponibile).</summary>
     public bool TryGetPersonalShieldStats(out float durationSeconds, out float cooldownSeconds)
     {
