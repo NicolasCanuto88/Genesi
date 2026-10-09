@@ -24,6 +24,12 @@ using TMPro;
 /// lasciare la presa, e nessun altro oggetto deve diventare bersaglio. Con un vincolo attivo il raggio
 /// non viene lanciato; se il vincolato non è più vivo il vincolo cade da solo; se il suo CanInteract
 /// è falso non c'è bersaglio (niente prompt).
+///
+/// TABLET APERTO (Rev BX-a · Q117-a): con il tablet aperto o in transizione (TabletStation.IsBusy)
+/// non c'è bersaglio: niente prompt e Interact non avvia nulla. Prima ci si poteva sedere al Pilota
+/// (o a Ingegneria, Scanner, pannelli) con il tablet aperto, e all'uscita il giocatore restava
+/// fermo. Il vincolo della scala non viene toccato: torna attivo alla chiusura del tablet.
+/// L'altro verso (niente tablet da seduti) è in TabletStation.CanOpen.
 /// </summary>
 public class InteractionSystem : MonoBehaviour
 {
@@ -39,6 +45,8 @@ public class InteractionSystem : MonoBehaviour
     [Header("References")]
     [SerializeField] private Transform cameraTransform;
 
+    private TabletStation tablet;   // Rev BX-a: stesso GameObject del Player
+
     // State
     private IInteractable currentInteractable;
     private IInteractable activeInteractable;   // Rev BT-c: chi ha avviato l'interazione in corso
@@ -52,6 +60,8 @@ public class InteractionSystem : MonoBehaviour
 
     private void Awake()
     {
+        tablet = GetComponent<TabletStation>();   // Rev BX-a
+
         // Auto-find camera if not assigned
         if (cameraTransform == null)
         {
@@ -98,8 +108,18 @@ public class InteractionSystem : MonoBehaviour
         return true;
     }
 
+    /// <summary>Rev BX-a — tablet aperto o in transizione.</summary>
+    private bool IsTabletBusy => tablet != null && tablet.IsBusy;
+
     private void CheckForInteractable()
     {
+        // Rev BX-a (Q117-a) — con il tablet aperto nessun bersaglio (il vincolo resta, non si tocca).
+        if (IsTabletBusy)
+        {
+            SetCurrentInteractable(null);
+            return;
+        }
+
         // Rev BW-c — bersaglio vincolato: nessun raggio finché resta attivo.
         if (lockedInteractable != null)
         {
@@ -196,7 +216,9 @@ public class InteractionSystem : MonoBehaviour
         // Il tuo Input Actions ha "Hold" interaction per Interact
         // Quindi questo viene chiamato quando inizia l'hold
         // Rev BT-c: IsAlive scarta un bersaglio distrutto dopo l'ultimo CheckForInteractable.
-        if (value.isPressed && IsAlive(currentInteractable) && !isInteracting)
+        // Rev BX-a: il tablet può essersi aperto in questo stesso frame (Tab ed E insieme), dopo
+        // l'ultimo CheckForInteractable: si ricontrolla qui.
+        if (value.isPressed && !IsTabletBusy && IsAlive(currentInteractable) && !isInteracting)
         {
             StartInteraction();
         }

@@ -49,10 +49,6 @@ using UnityEngine.InputSystem;
 ///    InputActions (es. Tab da tastiera, un tasto libero su gamepad — Select/View
 ///    o D-Pad Up, per non sovrapporsi a [South]=Interact/RepairMash o [North]=RepairKey_1).
 ///
-/// ⚠️ Edge case non gestito in questa sessione: apertura del Tablet mentre il
-///    giocatore è già seduto a un'altra postazione (Engineering/Medical/Pilot) —
-///    da testare e, se necessario, bloccare in una sessione futura.
-///
 /// REV BO-a — BLOCCO ESTERNO (SetOpenBlocked / IsBusy), additivo:
 ///   Il letto della Recovery Bay (RecoveryBed) blocca l'APERTURA del tablet mentre
 ///   il giocatore è sdraiato o sta curando. Motivo (audit Rev AF/AG): tablet e
@@ -64,8 +60,26 @@ using UnityEngine.InputSystem;
 ///     possibile.
 ///   - IsBusy = aperto o in transizione: chi apre una postazione lo controlla PRIMA
 ///     di entrare.
-///   Le altre postazioni (Engineering/Medical/Pilot/pannelli) NON lo usano ancora:
-///   l'edge case sopra resta aperto per loro (debito tracciato nel GDD delta).
+///
+/// REV BX-a (Q117-a) — TABLET E POSTAZIONI SI ESCLUDONO, IN ENTRAMBI I VERSI:
+///   Prima solo Medical Station, scala e letto controllavano il tablet. Davanti al Pilota (e a
+///   Ingegneria, Scanner, pannelli di riparazione e stabilizzazione) si poteva aprire il tablet e
+///   poi sedersi, o sedersi e poi aprire il tablet: all'uscita uno dei due ripristini rimetteva
+///   PlayerController a false e il giocatore restava fermo, senza movimento né visuale.
+///   La regola ora vive in due punti centrali e copre ogni postazione presente e futura:
+///   - InteractionSystem non offre interazioni (né prompt né Interact) con il tablet aperto o
+///     in transizione: da tablet aperto non ci si siede.
+///   - Il tablet si apre solo da giocatore libero (CanOpen): vivo, PlayerController attivo (non
+///     seduto, non a un pannello, non sul letto, non a terra), nessuna interazione continua in
+///     corso (rianimazione), nessun blocco esterno. Da seduti il tablet non si apre.
+///   - A terra il tablet si chiude da solo, e alla chiusura il movimento torna solo a un
+///     giocatore vivo: il freeze Downed di PlayerHealthSystem resta l'autorità (stessa regola
+///     della Medical Station, Q12-a). Prima un giocatore a terra che chiudeva il tablet tornava a
+///     muoversi; uno rianimato a tablet aperto restava fermo.
+///   - Sulla scala il comportamento non cambia (Rev BW-c): PlayerController resta attivo in
+///     salita, quindi il tablet si apre; la scala sospende la salita e il suo prompt finché il
+///     tablet è aperto.
+///   SetOpenBlocked resta (Medical Station, letto): ora è ridondante ma innocuo.
 /// </summary>
 [RequireComponent(typeof(PlayerInput))]
 public class TabletStation : MonoBehaviour
@@ -99,6 +113,8 @@ public class TabletStation : MonoBehaviour
     private Camera playerCamera;
     private PlayerInput playerInput;
     private InputAction cancelAction;
+    private PlayerHealthSystem playerHealth;            // Rev BX-a: vivo / a terra
+    private InteractionSystem interactionSystem;        // Rev BX-a: interazione continua in corso
 
     private Quaternion originalCameraLocalRotation;
     private bool wasPlayerControllerEnabled;
@@ -115,11 +131,30 @@ public class TabletStation : MonoBehaviour
     /// </summary>
     public void SetOpenBlocked(bool blocked) => openBlocked = blocked;
 
+    /// <summary>
+    /// Rev BX-a (Q117-a) — il tablet si apre solo da giocatore libero: vivo, PlayerController
+    /// attivo (non seduto, non a un pannello, non sul letto, non a terra), nessuna interazione
+    /// continua in corso e nessun blocco esterno. Vedi commento di classe.
+    /// </summary>
+    public bool CanOpen()
+    {
+        if (openBlocked) return false;
+        if (playerController == null || !playerController.enabled) return false;
+        if (!IsAliveLocal()) return false;
+        if (interactionSystem != null && interactionSystem.IsInteracting) return false;
+        return true;
+    }
+
+    /// <summary>Rev BX-a — vivo secondo lo stato replicato; senza PlayerHealthSystem si considera vivo.</summary>
+    private bool IsAliveLocal() => playerHealth == null || playerHealth.IsAlive;
+
     private void Awake()
     {
         playerController = GetComponent<PlayerController>();
         playerInput = GetComponent<PlayerInput>();
         playerCamera = GetComponentInChildren<Camera>();
+        playerHealth = GetComponent<PlayerHealthSystem>();
+        interactionSystem = GetComponent<InteractionSystem>();
 
         if (playerInput != null)
             cancelAction = playerInput.actions.FindAction("Cancel", throwIfNotFound: false);
@@ -140,7 +175,17 @@ public class TabletStation : MonoBehaviour
         if (cooldownTimer > 0f)
             cooldownTimer -= Time.deltaTime;
 
-        if (isOpen && !isTransitioning && cancelAction != null && cancelAction.WasPressedThisFrame())
+        if (!isOpen || isTransitioning) return;
+
+        // Rev BX-a — a terra il tablet si chiude da solo (il ripristino non rimette in moto
+        // un giocatore a terra: vedi CloseTablet).
+        if (!IsAliveLocal())
+        {
+            CloseTablet();
+            return;
+        }
+
+        if (cancelAction != null && cancelAction.WasPressedThisFrame())
             CloseTablet();
     }
 
@@ -152,7 +197,7 @@ public class TabletStation : MonoBehaviour
         if (cooldownTimer > 0f || isTransitioning) return;
 
         if (isOpen) CloseTablet();
-        else if (!openBlocked) OpenTablet();   // Rev BO-a: apertura bloccabile dall'esterno
+        else if (CanOpen()) OpenTablet();   // Rev BX-a: solo da giocatore libero (include il blocco esterno BO-a)
     }
 
     private void OpenTablet()
@@ -193,8 +238,10 @@ public class TabletStation : MonoBehaviour
             if (tabletRoot != null)
                 tabletRoot.SetActive(false);
 
+            // Rev BX-a — mai rimettere in moto un giocatore a terra: il freeze Downed di
+            // PlayerHealthSystem resta l'autorità (stessa regola della Medical Station, Q12-a).
             if (playerController != null)
-                playerController.enabled = wasPlayerControllerEnabled;
+                playerController.enabled = wasPlayerControllerEnabled && IsAliveLocal();
         }));
     }
 
