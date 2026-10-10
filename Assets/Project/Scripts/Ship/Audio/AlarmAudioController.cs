@@ -79,8 +79,10 @@ public class AlarmAudioController : MonoBehaviour
 
     private void HandleAlarmStateChanged(AlarmSystem.AlarmSeverity severity)
     {
-        // Opzione A: audio solo in Emergency (blackout).
+        // Opzione A: audio solo in Emergency.
         // Warning e Critical → solo beacon visivi, atmosfera preservata.
+        // Rev BY (Q140-a): il blackout non è più un Emergency (in blackout AlarmSystem comunica None);
+        // oggi l'Emergency è l'O₂ basso, che dopo il blackout fa ripartire la sirena.
         if (severity != AlarmSystem.AlarmSeverity.Emergency)
         {
             StartFade(0f, fadeOutDuration, stopAtEnd: true);
@@ -126,10 +128,10 @@ public class AlarmAudioController : MonoBehaviour
     {
         switch (severity)
         {
-            case AlarmSystem.AlarmSeverity.Warning:   return warningPitch;
-            case AlarmSystem.AlarmSeverity.Critical:  return criticalPitch;
+            case AlarmSystem.AlarmSeverity.Warning: return warningPitch;
+            case AlarmSystem.AlarmSeverity.Critical: return criticalPitch;
             case AlarmSystem.AlarmSeverity.Emergency: return emergencyPitch;
-            default:                                  return 1f;
+            default: return 1f;
         }
     }
 

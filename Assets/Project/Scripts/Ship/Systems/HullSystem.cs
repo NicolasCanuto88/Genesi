@@ -15,6 +15,11 @@ namespace SpaceSurvivor.Ship
     ///   - Trigger AlarmSystem.HullCritical con isteresi (default 20% / 25%)
     ///   - Espone HullPercent e OnHullChanged per ShipSystemsDashboardUI
     ///
+    /// ALLARME REPLICATO (Rev BY · Q141-a): lo stato "scafo critico" è una NetworkVariable
+    /// (IsHullAlarmActive, evento OnHullAlarmChanged su tutti i client). L'AlarmSystem di ogni client lo
+    /// legge da lì; prima l'allarme esisteva solo sull'AlarmSystem del server e i client non vedevano i
+    /// lampeggianti. Sul server resta anche la chiamata diretta ad AlarmSystem (idempotente).
+    ///
     /// NON implementa IPowerConsumer — lo scafo non consuma energia.
     /// NON intercetta danno dagli scudi — ShieldSystem filtra il danno
     ///   prima che arrivi qui, chiamando HullSystem.NotifyDamagePassthrough().
@@ -36,6 +41,12 @@ namespace SpaceSurvivor.Ship
         /// Parametri: (currentHP, maxHP, percent 0–1)
         /// </summary>
         public event Action<float, float, float> OnHullChanged;
+
+        /// <summary>
+        /// Rev BY (Q141-a) — fired su tutti i client quando lo stato "scafo critico" cambia.
+        /// Parametro: true = allarme attivo.
+        /// </summary>
+        public event Action<bool> OnHullAlarmChanged;
 
         /// <summary>
         /// Fired sul server quando HP raggiunge 0.
@@ -66,6 +77,12 @@ namespace SpaceSurvivor.Ship
             NetworkVariableReadPermission.Everyone,
             NetworkVariableWritePermission.Server);
 
+        // Rev BY (Q141-a) — allarme "scafo critico" replicato (prima: bool privato del server).
+        private NetworkVariable<bool> netHullAlarm = new NetworkVariable<bool>(
+            false,
+            NetworkVariableReadPermission.Everyone,
+            NetworkVariableWritePermission.Server);
+
         // ===== INSPECTOR =====
 
         [Header("Upgrade Data")]
@@ -84,7 +101,6 @@ namespace SpaceSurvivor.Ship
         // ===== STATO PRIVATO (server-only) =====
 
         private HullUpgradeData currentUpgrade;
-        private bool alarmActive = false;
 
         // ===== PUBLIC READ API =====
 
@@ -93,6 +109,9 @@ namespace SpaceSurvivor.Ship
         public float HullPercent => netMaxHP.Value > 0f
             ? Mathf.Clamp01(netCurrentHP.Value / netMaxHP.Value)
             : 0f;
+
+        /// <summary>Rev BY (Q141-a) — true se lo scafo è sotto la soglia critica (replicato).</summary>
+        public bool IsHullAlarmActive => netHullAlarm.Value;
 
         // ===== NGO LIFECYCLE =====
 
@@ -108,9 +127,13 @@ namespace SpaceSurvivor.Ship
 
             netCurrentHP.OnValueChanged += HandleHPChanged;
             netMaxHP.OnValueChanged += HandleHPChanged;
+            netHullAlarm.OnValueChanged += HandleHullAlarmChanged;   // Rev BY (Q141-a)
 
             if (IsServer)
+            {
+                netHullAlarm.Value = false;   // Rev BY: valore iniziale scritto solo dal server (regola BW-d)
                 InitUpgrade();
+            }
 
             OnInstanceReady?.Invoke();
             LogV($"[HullSystem] Online — {netCurrentHP.Value:F0}/{netMaxHP.Value:F0} HP");
@@ -120,6 +143,7 @@ namespace SpaceSurvivor.Ship
         {
             netCurrentHP.OnValueChanged -= HandleHPChanged;
             netMaxHP.OnValueChanged -= HandleHPChanged;
+            netHullAlarm.OnValueChanged -= HandleHullAlarmChanged;   // Rev BY (Q141-a)
 
             if (Instance == this) Instance = null;
         }
@@ -265,17 +289,18 @@ namespace SpaceSurvivor.Ship
 
             float percent = HullPercent;
 
-            if (!alarmActive && percent < currentUpgrade.criticalThreshold)
+            // Rev BY (Q141-a): lo stato è la NetworkVariable (scritta solo qui, sul server).
+            if (!netHullAlarm.Value && percent < currentUpgrade.criticalThreshold)
             {
-                alarmActive = true;
+                netHullAlarm.Value = true;
                 AlarmSystem.Instance?.RaiseAlarm(
                     AlarmSystem.AlarmSource.HullCritical,
                     AlarmSystem.AlarmSeverity.Critical);
                 LogVWarn($"[HullSystem] ⚠ SCAFO CRITICO: {percent * 100f:F1}%");
             }
-            else if (alarmActive && percent >= currentUpgrade.criticalHysteresis)
+            else if (netHullAlarm.Value && percent >= currentUpgrade.criticalHysteresis)
             {
-                alarmActive = false;
+                netHullAlarm.Value = false;
                 AlarmSystem.Instance?.ClearAlarm(AlarmSystem.AlarmSource.HullCritical);
                 LogV($"[HullSystem] Scafo rientrato nella soglia: {percent * 100f:F1}%");
             }
@@ -286,6 +311,11 @@ namespace SpaceSurvivor.Ship
         private void HandleHPChanged(float previousValue, float newValue)
         {
             OnHullChanged?.Invoke(netCurrentHP.Value, netMaxHP.Value, HullPercent);
+        }
+
+        private void HandleHullAlarmChanged(bool previousValue, bool newValue)
+        {
+            OnHullAlarmChanged?.Invoke(newValue);   // Rev BY (Q141-a) — consumato da AlarmSystem
         }
 
         // ===== Debug logging (Rev BA) =====

@@ -97,7 +97,10 @@ public class WarningBeacon : MonoBehaviour
     private void HandleAlarmStateChanged(AlarmSystem.AlarmSeverity severity)
     {
         // In blackout la nave è già al buio — il beacon si spegne con tutto il resto.
-        // L'audio AlarmAudioController continua indipendentemente (batteria separata).
+        // Rev BY (Q140-a): in blackout AlarmSystem comunica già None (sirena e lampeggianti tacciono,
+        // e al ritorno della corrente comunica lo stato reale). Questo controllo resta ma è ridondante;
+        // da solo era fragile: guarda solo i cambi di gravità, quindi un Emergency già in corso
+        // all'inizio del blackout lasciava i lampeggianti accesi.
         bool isBlackout = PowerManager.Instance != null && PowerManager.Instance.IsInBlackout;
 
         if (severity == AlarmSystem.AlarmSeverity.None || isBlackout)

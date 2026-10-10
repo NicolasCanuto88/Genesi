@@ -35,7 +35,16 @@ namespace SpaceSurvivor.Ship
     ///   4. Assegna il subsystem IRepairable target (es. PropulsionSystem)
     ///   5. Assegna lo StabilizationMinigameEngineering (figlio di questo GameObject)
     ///   6. Assegna PlayerInput reference (stessa delle altre stazioni)
-    ///   7. debugArmed = true per testare; registra il GameObject nei NetworkPrefabs
+    ///   7. Registra il GameObject nei NetworkPrefabs. debugArmed resta spento (vedi sotto)
+    ///   8. (Rev BY) PanelViewFraming sullo stesso GameObject, con snap point e look-at point
+    ///
+    /// SPENTA FINO AL COMBAT (Rev BY · Q134-a): debugArmed vale false per default, come ogni flag di
+    /// debug, e va tenuto spento in scena. Spento = CanInteract falso, quindi nessun prompt. Per provare
+    /// la meccanica: in Play, menu contestuale del componente → "DEBUG — Ri-arma stabilizzazione"
+    /// (agisce solo sull'istanza dell'Editor che lo esegue).
+    ///
+    /// INQUADRATURA (Rev BY · Q135-a) e A TERRA DURANTE IL MINIGAME (Rev BY · Q136-a): come RepairPanel
+    /// (vedi lì). Chiusura unica in EndSession.
     /// </summary>
     public class StabilizationPanel : NetworkBehaviour, IInteractable
     {
@@ -56,15 +65,21 @@ namespace SpaceSurvivor.Ship
 
         [Header("Debug — arming (Q3-c, in attesa Combat M4.7)")]
         [Tooltip("Arma la stabilizzazione per il test. Sostituito dallo stato acuto " +
-                 "networked di cascata al Combat. Vero = pannello interagibile.")]
-        [SerializeField] private bool debugArmed = true;
+                 "networked di cascata al Combat. Vero = pannello interagibile. " +
+                 "Rev BY (Q134-a): default off, spento in scena fino al Combat.")]
+        [SerializeField] private bool debugArmed = false;
 
         // ── Stato runtime (client/UI) ────────────────────────────────────────
         private PlayerController _playerController;
         private CharacterController _characterController;
+        private PlayerHealthSystem _playerHealth;   // Rev BY (Q136-a)
+        private PanelViewFraming _framing;           // Rev BY (Q135-a) — facoltativo
         private float _cooldown;
         private InputAction _cancelAction;
         private bool _isActive;
+
+        private const float ExitCooldown = 0.5f;
+        private const float CompleteCooldown = 1.0f;
 
         // IRepairable cachata (usata per il nome sistema; nessun consumo materiali)
         private IRepairable _repairable;
@@ -74,6 +89,7 @@ namespace SpaceSurvivor.Ship
         private void Awake()
         {
             _repairable = stabilizableTarget as IRepairable;
+            _framing = GetComponent<PanelViewFraming>();   // Rev BY (Q135-a)
 
             if (_repairable == null)
                 Debug.LogWarning($"[StabilizationPanel] {name}: stabilizableTarget non implementa IRepairable.");
@@ -86,7 +102,16 @@ namespace SpaceSurvivor.Ship
         {
             if (_cooldown > 0f) _cooldown -= Time.deltaTime;
 
-            if (_isActive && _cancelAction != null && _cancelAction.WasPressedThisFrame())
+            if (!_isActive) return;
+
+            // Rev BY (Q136-a) — a terra durante il minigame: uscita forzata, prima di tutto il resto.
+            if (_playerHealth != null && !_playerHealth.IsAlive)
+            {
+                EndSession(ExitCooldown, interruptMinigame: true);
+                return;
+            }
+
+            if (_cancelAction != null && _cancelAction.WasPressedThisFrame())
                 ExitStabilization();
         }
 
@@ -128,6 +153,7 @@ namespace SpaceSurvivor.Ship
         {
             _playerController = interactor.GetComponent<PlayerController>();
             _characterController = interactor.GetComponent<CharacterController>();
+            _playerHealth = interactor.GetComponent<PlayerHealthSystem>();   // Rev BY (Q136-a)
 
             // Recupera Cancel action da PlayerInput (mai hardcodato)
             PlayerInput pi = playerInputReference != null
@@ -143,35 +169,57 @@ namespace SpaceSurvivor.Ship
 
             _isActive = true;
 
+            // Rev BY (Q135-a) — giocatore davanti al pannello, camera sul monitor.
+            if (_framing != null) _framing.Begin(interactor);
+
             // Apri minigame — passa riferimento a questo panel per l'esito server-side
             stabilizationMinigame?.Open(_repairable, this, OnMinigameComplete, OnMinigameInterrupted);
         }
 
+        /// <summary>Uscita chiesta dal giocatore (Cancel).</summary>
         private void ExitStabilization()
         {
-            _isActive = false;
-            _cooldown = 0.5f;
-
-            // Ripristina player
-            if (_playerController != null) _playerController.enabled = true;
-            if (_characterController != null) _characterController.enabled = true;
-
-            stabilizationMinigame?.Interrupt();
+            EndSession(ExitCooldown, interruptMinigame: true);
         }
 
         private void OnMinigameComplete()
         {
-            _isActive = false;
-            _cooldown = 1.0f;
-
-            if (_playerController != null) _playerController.enabled = true;
-            if (_characterController != null) _characterController.enabled = true;
+            if (!_isActive) return;
+            EndSession(CompleteCooldown, interruptMinigame: false);   // il minigame si è già chiuso
         }
 
         private void OnMinigameInterrupted()
         {
-            // Interruzione interna (Cancel o floor sfondato): ripristina come l'uscita.
-            ExitStabilization();
+            // Interruzione interna (floor sfondato). Se _isActive è già falso la chiusura è in corso
+            // (Interrupt chiamato da EndSession): niente da ripetere.
+            if (!_isActive) return;
+            EndSession(ExitCooldown, interruptMinigame: false);   // il minigame si è già chiuso
+        }
+
+        /// <summary>
+        /// Rev BY — unica chiusura della sessione, come RepairPanel.EndSession: stato spento,
+        /// inquadratura chiusa, giocatore ripristinato (PlayerController solo da vivi, Q136-a),
+        /// minigame interrotto se ancora aperto.
+        /// </summary>
+        private void EndSession(float cooldown, bool interruptMinigame)
+        {
+            if (!_isActive) return;
+
+            _isActive = false;
+            _cooldown = cooldown;
+
+            if (_framing != null) _framing.End();
+
+            if (_playerController != null)
+            {
+                // Come le postazioni: la velocità interna è rimasta quella di prima del pannello.
+                _playerController.ResetVelocity();
+                _playerController.enabled = _playerHealth == null || _playerHealth.IsAlive;
+            }
+
+            if (_characterController != null) _characterController.enabled = true;
+
+            if (interruptMinigame) stabilizationMinigame?.Interrupt();   // → OnMinigameInterrupted, che esce subito
         }
 
         // ── Esito server-authority (SEAM Combat M4.7) ─────────────────────────

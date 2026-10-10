@@ -12394,6 +12394,7 @@ GameObject:
   - component: {fileID: 232239847}
   - component: {fileID: 232239843}
   - component: {fileID: 232239842}
+  - component: {fileID: 232239848}
   m_Layer: 6
   m_Name: Ship_Interior_Module_01
   m_TagString: Untagged
@@ -12416,6 +12417,7 @@ Transform:
   m_Children:
   - {fileID: 1668730917}
   - {fileID: 677041323}
+  - {fileID: 1962263365}
   m_Father: {fileID: 1255071817}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!114 &232239842
@@ -12587,6 +12589,22 @@ MonoBehaviour:
   AutoObjectParentSync: 1
   SyncOwnerTransformWhenParented: 1
   AllowOwnerToParent: 0
+--- !u!114 &232239848
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 232239840}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: bd9e36e5272c0e7459ca7b990b65c41e, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::SpaceSurvivor.Ship.PanelViewFraming
+  playerSnapPoint: {fileID: 1962263365}
+  cameraLookAtPoint: {fileID: 1811115832}
+  snapTransitionSpeed: 5
+  cameraTransitionSpeed: 8
 --- !u!1 &234524951
 GameObject:
   m_ObjectHideFlags: 0
@@ -18318,6 +18336,7 @@ RectTransform:
   m_ConstrainProportionsScale: 0
   m_Children:
   - {fileID: 643041020}
+  - {fileID: 516158305}
   m_Father: {fileID: 6717031382212409820}
   m_LocalEulerAnglesHint: {x: 0, y: 90, z: 0}
   m_AnchorMin: {x: 0, y: 0}
@@ -29921,6 +29940,41 @@ MeshFilter:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 515641376}
   m_Mesh: {fileID: 7341618117918356261, guid: e5eda5f90f945124084ca70562e68a07, type: 3}
+--- !u!1 &516158304
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 516158305}
+  m_Layer: 0
+  m_Name: PanelLookAt
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!224 &516158305
+RectTransform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 516158304}
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 311130305}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+  m_AnchorMin: {x: 0.5, y: 0.5}
+  m_AnchorMax: {x: 0.5, y: 0.5}
+  m_AnchoredPosition: {x: 0, y: 0}
+  m_SizeDelta: {x: 100, y: 100}
+  m_Pivot: {x: 0.5, y: 0.5}
 --- !u!1 &516727739
 GameObject:
   m_ObjectHideFlags: 0
@@ -37993,7 +38047,6 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::AlarmSystem
   reactToPowerCritical: 1
-  reactToBlackout: 1
 --- !u!4 &669681226
 Transform:
   m_ObjectHideFlags: 0
@@ -38040,6 +38093,7 @@ RectTransform:
   m_ConstrainProportionsScale: 0
   m_Children:
   - {fileID: 1416787360}
+  - {fileID: 1811115832}
   m_Father: {fileID: 232239841}
   m_LocalEulerAnglesHint: {x: 0, y: 90, z: 0}
   m_AnchorMin: {x: 0, y: 0}
@@ -55610,6 +55664,37 @@ MonoBehaviour:
   m_hasFontAssetChanged: 0
   m_baseMaterial: {fileID: 0}
   m_maskOffset: {x: 0, y: 0, z: 0, w: 0}
+--- !u!1 &1010832859
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 1010832860}
+  m_Layer: 2
+  m_Name: PlayerSnapPoint (2)
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &1010832860
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1010832859}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0.7071068, z: 0, w: 0.7071068}
+  m_LocalPosition: {x: -0.8, y: 0, z: -0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 7114267388729555647}
+  m_LocalEulerAnglesHint: {x: 0, y: 90, z: 0}
 --- !u!1 &1011852419
 GameObject:
   m_ObjectHideFlags: 0
@@ -78253,6 +78338,37 @@ Transform:
   - {fileID: 1507660771}
   m_Father: {fileID: 324423349}
   m_LocalEulerAnglesHint: {x: 90, y: 0, z: 0}
+--- !u!1 &1461797215
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 1461797216}
+  m_Layer: 2
+  m_Name: PlayerSnapPoint (2)
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &1461797216
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1461797215}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0.7071068, z: 0, w: 0.7071068}
+  m_LocalPosition: {x: -0.8, y: 0, z: 1.66}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 6717031382212409820}
+  m_LocalEulerAnglesHint: {x: 0, y: 90, z: 0}
 --- !u!1 &1462288680
 GameObject:
   m_ObjectHideFlags: 0
@@ -88855,6 +88971,41 @@ Transform:
   m_Children: []
   m_Father: {fileID: 269443394}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!1 &1664439240
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 1664439241}
+  m_Layer: 6
+  m_Name: PanelLookAt
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!224 &1664439241
+RectTransform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1664439240}
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 1940787318659664698}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+  m_AnchorMin: {x: 0.5, y: 0.5}
+  m_AnchorMax: {x: 0.5, y: 0.5}
+  m_AnchoredPosition: {x: 0, y: 0}
+  m_SizeDelta: {x: 100, y: 100}
+  m_Pivot: {x: 0.5, y: 0.5}
 --- !u!1 &1666540831
 GameObject:
   m_ObjectHideFlags: 0
@@ -96032,6 +96183,41 @@ MeshFilter:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1808081553}
   m_Mesh: {fileID: 3906374406502564882, guid: 71784e876a170b14a80f56d6a9b0fd68, type: 3}
+--- !u!1 &1811115831
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 1811115832}
+  m_Layer: 0
+  m_Name: PanelLookAt
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!224 &1811115832
+RectTransform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1811115831}
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 677041323}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+  m_AnchorMin: {x: 0.5, y: 0.5}
+  m_AnchorMax: {x: 0.5, y: 0.5}
+  m_AnchoredPosition: {x: 0, y: 0}
+  m_SizeDelta: {x: 100, y: 100}
+  m_Pivot: {x: 0.5, y: 0.5}
 --- !u!1 &1814284174
 GameObject:
   m_ObjectHideFlags: 0
@@ -103838,6 +104024,37 @@ MeshFilter:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1960201641}
   m_Mesh: {fileID: 3906374406502564882, guid: a91370afc11cf4d40bfca513d5b47308, type: 3}
+--- !u!1 &1962263364
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 1962263365}
+  m_Layer: 2
+  m_Name: PlayerSnapPoint (1)
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &1962263365
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1962263364}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0.7071068, z: 0, w: 0.7071068}
+  m_LocalPosition: {x: -0.8, y: 0, z: 1.627}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 232239841}
+  m_LocalEulerAnglesHint: {x: 0, y: 90, z: 0}
 --- !u!1 &1962471128
 GameObject:
   m_ObjectHideFlags: 0
@@ -215818,6 +216035,7 @@ RectTransform:
   m_ConstrainProportionsScale: 0
   m_Children:
   - {fileID: 5284447343568231517}
+  - {fileID: 1664439241}
   m_Father: {fileID: 7114267388729555647}
   m_LocalEulerAnglesHint: {x: 0, y: 90, z: 0}
   m_AnchorMin: {x: 0, y: 0}
@@ -382265,7 +382483,7 @@ MonoBehaviour:
     localPosition: {x: 0, y: 3.5, z: -16}
     localEulerAngles: {x: 0, y: 0, z: 0}
     scale: {x: 13.5, y: 17, z: 65}
-  drawDebugGizmos: 1
+  drawDebugGizmos: 0
   obbColor: {r: 0.4, g: 0.7, b: 1, a: 1}
   sphereColor: {r: 0.4, g: 1, b: 0.5, a: 1}
 --- !u!23 &5211875315793643081
@@ -423664,7 +423882,7 @@ MonoBehaviour:
   stabilizationMinigame: {fileID: 604324182345578323}
   playerInputReference: {fileID: 0}
   interactionPrompt: '[{interact}] Stabilize system'
-  debugArmed: 1
+  debugArmed: 0
 --- !u!33 &6091824278314727665
 MeshFilter:
   m_ObjectHideFlags: 0
@@ -428933,6 +429151,7 @@ GameObject:
   - component: {fileID: 8020568468449594438}
   - component: {fileID: 8020568468449594437}
   - component: {fileID: 8020568468449594436}
+  - component: {fileID: 8020568468449594439}
   m_Layer: 6
   m_Name: Ship_Interior_Module_01
   m_TagString: Untagged
@@ -452883,6 +453102,7 @@ Transform:
   m_Children:
   - {fileID: 86551206977711221}
   - {fileID: 311130305}
+  - {fileID: 1461797216}
   m_Father: {fileID: 5510010281541123524}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!4 &6717616495377001392
@@ -471501,6 +471721,7 @@ Transform:
   - {fileID: 6419055495431759410}
   - {fileID: 4738716494247739762}
   - {fileID: 1940787318659664698}
+  - {fileID: 1010832860}
   m_Father: {fileID: 230440260}
   m_LocalEulerAnglesHint: {x: 0, y: -90, z: 0}
 --- !u!4 &7114430321750917757
@@ -513791,6 +514012,22 @@ MonoBehaviour:
   AutoObjectParentSync: 1
   SyncOwnerTransformWhenParented: 1
   AllowOwnerToParent: 0
+--- !u!114 &8020568468449594439
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 6231962468212253542}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: bd9e36e5272c0e7459ca7b990b65c41e, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::SpaceSurvivor.Ship.PanelViewFraming
+  playerSnapPoint: {fileID: 1461797216}
+  cameraLookAtPoint: {fileID: 516158305}
+  snapTransitionSpeed: 5
+  cameraTransitionSpeed: 8
 --- !u!23 &8020730278368110436
 MeshRenderer:
   m_ObjectHideFlags: 0
@@ -545043,6 +545280,7 @@ GameObject:
   - component: {fileID: 4076679373674755608}
   - component: {fileID: 5183004012042751090}
   - component: {fileID: 6090829536491940952}
+  - component: {fileID: 8673994793120179448}
   m_Layer: 6
   m_Name: Server_01
   m_TagString: Untagged
@@ -545050,6 +545288,22 @@ GameObject:
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
   m_IsActive: 1
+--- !u!114 &8673994793120179448
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 8673994793120179447}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: bd9e36e5272c0e7459ca7b990b65c41e, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::SpaceSurvivor.Ship.PanelViewFraming
+  playerSnapPoint: {fileID: 1010832860}
+  cameraLookAtPoint: {fileID: 1664439241}
+  snapTransitionSpeed: 5
+  cameraTransitionSpeed: 8
 --- !u!1 &8674165923660281930
 GameObject:
   m_ObjectHideFlags: 0

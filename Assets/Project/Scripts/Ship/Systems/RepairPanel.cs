@@ -60,6 +60,21 @@ namespace SpaceSurvivor.Ship
     ///   5. Assegna il RepairMinigameEngineering (figlio di questo GameObject)
     ///   6. Assegna PlayerInput reference (stessa dell'EngineeringStation)
     ///   7. Registra il prefab / GameObject nella lista NetworkPrefabs del NetworkManager
+    ///   8. (Rev BY) PanelViewFraming sullo stesso GameObject, con snap point e look-at point
+    ///
+    /// INQUADRATURA (Rev BY · Q135-a): se sullo stesso GameObject c'è un PanelViewFraming, all'apertura
+    /// il giocatore scivola davanti al pannello e la camera si gira verso il monitor; all'uscita lo
+    /// sguardo resta sul monitor. Senza il componente il pannello si comporta come prima.
+    ///
+    /// A TERRA DURANTE IL MINIGAME (Rev BY · Q136-a, schema di MedicalStation.ForceExitDowned): il
+    /// minigame si chiude, finisce l'inquadratura, si riaccende il CharacterController (il suo collider
+    /// serve al raycast del defibrillatore) ma non PlayerController, che il freeze Downed tiene spento.
+    /// All'uscita normale PlayerController si riaccende solo se il giocatore è vivo. Prima i due
+    /// componenti si riaccendevano sempre, anche a un giocatore a terra.
+    ///
+    /// CHIUSURA UNICA (Rev BY): tutte le uscite passano da EndSession, che spegne _isActive per primo.
+    /// Il callback di interruzione del minigame, che scatta dentro Interrupt(), trova _isActive già
+    /// falso e non ripete il ripristino (prima ExitRepair girava due volte per ogni Cancel).
     /// </summary>
     public class RepairPanel : NetworkBehaviour, IInteractable
     {
@@ -81,9 +96,14 @@ namespace SpaceSurvivor.Ship
         // ── Stato runtime (client/UI) ────────────────────────────────────────
         private PlayerController _playerController;
         private CharacterController _characterController;
+        private PlayerHealthSystem _playerHealth;   // Rev BY (Q136-a)
+        private PanelViewFraming _framing;           // Rev BY (Q135-a) — facoltativo
         private float _cooldown;
         private InputAction _cancelAction;
         private bool _isActive;
+
+        private const float ExitCooldown = 0.5f;
+        private const float CompleteCooldown = 1.0f;
 
         // ── Stato runtime (server — sessione di riparazione) ─────────────────
         // HP normalizzato (0-1) all'inizio della sessione corrente.
@@ -99,6 +119,7 @@ namespace SpaceSurvivor.Ship
         private void Awake()
         {
             _repairable = repairableTarget as IRepairable;
+            _framing = GetComponent<PanelViewFraming>();   // Rev BY (Q135-a)
 
             if (_repairable == null)
                 Debug.LogWarning($"[RepairPanel] {name}: repairableTarget non implementa IRepairable.");
@@ -111,7 +132,16 @@ namespace SpaceSurvivor.Ship
         {
             if (_cooldown > 0f) _cooldown -= Time.deltaTime;
 
-            if (_isActive && _cancelAction != null && _cancelAction.WasPressedThisFrame())
+            if (!_isActive) return;
+
+            // Rev BY (Q136-a) — a terra durante il minigame: uscita forzata, prima di tutto il resto.
+            if (_playerHealth != null && !_playerHealth.IsAlive)
+            {
+                EndSession(ExitCooldown, interruptMinigame: true);
+                return;
+            }
+
+            if (_cancelAction != null && _cancelAction.WasPressedThisFrame())
                 ExitRepair();
         }
 
@@ -162,6 +192,7 @@ namespace SpaceSurvivor.Ship
         {
             _playerController = interactor.GetComponent<PlayerController>();
             _characterController = interactor.GetComponent<CharacterController>();
+            _playerHealth = interactor.GetComponent<PlayerHealthSystem>();   // Rev BY (Q136-a)
 
             // Recupera Cancel action da PlayerInput (mai hardcodato)
             PlayerInput pi = playerInputReference != null
@@ -177,35 +208,58 @@ namespace SpaceSurvivor.Ship
 
             _isActive = true;
 
+            // Rev BY (Q135-a) — giocatore davanti al pannello, camera sul monitor.
+            if (_framing != null) _framing.Begin(interactor);
+
             // Apri minigame — passa riferimento a questo RepairPanel per l'RPC
             repairMinigame?.Open(_repairable, this, OnMinigameComplete, OnMinigameInterrupted);
         }
 
+        /// <summary>Uscita chiesta dal giocatore (Cancel).</summary>
         private void ExitRepair()
         {
-            _isActive = false;
-            _cooldown = 0.5f;
-
-            // Ripristina player
-            if (_playerController != null) _playerController.enabled = true;
-            if (_characterController != null) _characterController.enabled = true;
-
-            repairMinigame?.Interrupt();
+            EndSession(ExitCooldown, interruptMinigame: true);
         }
 
         private void OnMinigameComplete()
         {
-            _isActive = false;
-            _cooldown = 1.0f;
-
-            if (_playerController != null) _playerController.enabled = true;
-            if (_characterController != null) _characterController.enabled = true;
+            if (!_isActive) return;
+            EndSession(CompleteCooldown, interruptMinigame: false);   // il minigame si è già chiuso
         }
 
         private void OnMinigameInterrupted()
         {
-            // Il minigame è stato interrotto internamente (es. sistema tornato ONLINE)
-            ExitRepair();
+            // Interruzione interna (timer scaduto, sistema tornato ONLINE). Se _isActive è già falso
+            // la chiusura è in corso (Interrupt chiamato da EndSession): niente da ripetere.
+            if (!_isActive) return;
+            EndSession(ExitCooldown, interruptMinigame: false);   // il minigame si è già chiuso
+        }
+
+        /// <summary>
+        /// Rev BY — unica chiusura della sessione (Cancel, fine o interruzione del minigame, giocatore a
+        /// terra). Ordine: stato spento, inquadratura chiusa (lo sguardo passa a PlayerController),
+        /// giocatore ripristinato, minigame interrotto se ancora aperto. PlayerController si riaccende
+        /// solo da vivi (Q136-a); il CharacterController sempre (a terra serve al defibrillatore).
+        /// </summary>
+        private void EndSession(float cooldown, bool interruptMinigame)
+        {
+            if (!_isActive) return;
+
+            _isActive = false;
+            _cooldown = cooldown;
+
+            if (_framing != null) _framing.End();
+
+            if (_playerController != null)
+            {
+                // Come le postazioni: la velocità interna è rimasta quella di prima del pannello.
+                _playerController.ResetVelocity();
+                _playerController.enabled = _playerHealth == null || _playerHealth.IsAlive;
+            }
+
+            if (_characterController != null) _characterController.enabled = true;
+
+            if (interruptMinigame) repairMinigame?.Interrupt();   // → OnMinigameInterrupted, che esce subito
         }
 
         // ── RPC Server-Side — soglie relative alla sessione ───────────────────

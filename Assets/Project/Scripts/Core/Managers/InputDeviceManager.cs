@@ -1,11 +1,17 @@
 using UnityEngine;
 using UnityEngine.InputSystem;
 using System;
+using System.Collections.Generic;
 
 /// <summary>
 /// Detects which input device the player is currently using
 /// Auto-switches between Keyboard/Mouse and Gamepad based on last input
 /// Provides correct button prompt strings for UI
+///
+/// ETICHETTA DI UN BINDING (Rev BY · Q133-a): GetBindingLabel(InputAction) restituisce il tasto
+/// dell'azione per il dispositivo in uso. Lo usa lo slider dei minigame (RepairKey_0…3: Q/R/F/G con
+/// tastiera, X/Y/LB/RB col gamepad). Prima lo slider mostrava sempre il primo binding, cioè la
+/// tastiera, anche a chi giocava col gamepad.
 /// </summary>
 public class InputDeviceManager : MonoBehaviour
 {
@@ -190,6 +196,94 @@ public class InputDeviceManager : MonoBehaviour
     public string GetMashPrompt()
     {
         return IsGamepad ? "A" : "E";
+    }
+
+    // ===== ETICHETTA DI UN BINDING (Rev BY · Q133-a) =====
+
+    // Sigle del gamepad usate nel progetto (stesse dei prompt fissi sopra). Chiave: percorso del
+    // controllo dopo il dispositivo ("buttonSouth", "dpad/up"…).
+    private static readonly Dictionary<string, string> GamepadControlLabels =
+        new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+        {
+            { "buttonSouth", "A" },
+            { "buttonEast", "B" },
+            { "buttonWest", "X" },
+            { "buttonNorth", "Y" },
+            { "leftShoulder", "LB" },
+            { "rightShoulder", "RB" },
+            { "leftTrigger", "LT" },
+            { "rightTrigger", "RT" },
+            { "dpad/up", "D-pad Up" },
+            { "dpad/down", "D-pad Down" },
+            { "dpad/left", "D-pad Left" },
+            { "dpad/right", "D-pad Right" },
+            { "leftStickPress", "LS" },
+            { "rightStickPress", "RS" },
+            { "start", "Start" },
+            { "select", "Select" },
+        };
+
+    /// <summary>
+    /// Rev BY (Q133-a) — tasto dell'azione per il dispositivo in uso (tastiera e mouse o gamepad).
+    /// </summary>
+    public string GetBindingLabel(InputAction action)
+    {
+        return GetBindingLabel(action, IsGamepad);
+    }
+
+    /// <summary>
+    /// Rev BY (Q133-a) — tasto dell'azione per il dispositivo indicato. Prende il primo binding semplice
+    /// (non composito) del dispositivo: percorso &lt;Gamepad&gt; col gamepad, &lt;Keyboard&gt; o &lt;Mouse&gt;
+    /// con tastiera e mouse. La scelta è per percorso e non per schema: nel progetto molti binding hanno
+    /// groups vuoti. Col gamepad usa le sigle del progetto (A, B, X, Y, LB, RB…); con la tastiera il nome
+    /// leggibile del controllo (Q, R, F, G…). Senza binding del dispositivo ricade sul primo binding
+    /// semplice, come prima di Rev BY.
+    /// </summary>
+    public static string GetBindingLabel(InputAction action, bool gamepad)
+    {
+        if (action == null) return "?";
+
+        string fallbackPath = null;
+
+        foreach (var binding in action.bindings)
+        {
+            if (binding.isComposite || binding.isPartOfComposite) continue;
+
+            string path = binding.effectivePath;
+            if (string.IsNullOrEmpty(path)) continue;
+
+            if (fallbackPath == null) fallbackPath = path;
+
+            bool matchesDevice = gamepad ? IsGamepadPath(path) : IsKeyboardMousePath(path);
+            if (matchesDevice) return FormatBindingPath(path);
+        }
+
+        return fallbackPath != null ? FormatBindingPath(fallbackPath) : action.name.ToUpper();
+    }
+
+    private static bool IsGamepadPath(string path)
+    {
+        return path.StartsWith("<Gamepad>", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool IsKeyboardMousePath(string path)
+    {
+        return path.StartsWith("<Keyboard>", StringComparison.OrdinalIgnoreCase)
+            || path.StartsWith("<Mouse>", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static string FormatBindingPath(string path)
+    {
+        if (IsGamepadPath(path))
+        {
+            int slash = path.IndexOf('/');
+            string control = slash >= 0 ? path.Substring(slash + 1) : path;
+            if (GamepadControlLabels.TryGetValue(control, out string label)) return label;
+        }
+
+        return InputControlPath.ToHumanReadableString(
+            path,
+            InputControlPath.HumanReadableStringOptions.OmitDevice);
     }
 
     public string FormatPrompt(string template)

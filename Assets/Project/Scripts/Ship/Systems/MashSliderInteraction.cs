@@ -271,6 +271,12 @@ namespace SpaceSurvivor.Ship
             }
         }
 
+        /// <summary>
+        /// Tasto da mostrare sullo slider. Rev BY (Q133-a): secondo il dispositivo in uso
+        /// (InputDeviceManager.GetBindingLabel) — Q/R/F/G con tastiera, X/Y/LB/RB col gamepad.
+        /// Prima era sempre il primo binding, cioè la tastiera. Si ricalcola a ogni comparsa dello
+        /// slider, quindi segue il cambio di dispositivo. Senza InputDeviceManager: tastiera.
+        /// </summary>
         private string GetActionDisplayName(int index)
         {
             var keys = _settings.SliderKeys;
@@ -280,14 +286,10 @@ namespace SpaceSurvivor.Ship
             var action = keys[index]?.action;
             if (action == null) return "?";
 
-            foreach (var binding in action.bindings)
-            {
-                if (!binding.isPartOfComposite)
-                    return InputControlPath.ToHumanReadableString(
-                        binding.effectivePath,
-                        InputControlPath.HumanReadableStringOptions.OmitDevice);
-            }
-            return action.name.ToUpper();
+            var deviceManager = InputDeviceManager.Instance;
+            return deviceManager != null
+                ? deviceManager.GetBindingLabel(action)
+                : InputDeviceManager.GetBindingLabel(action, gamepad: false);
         }
     }
 }
