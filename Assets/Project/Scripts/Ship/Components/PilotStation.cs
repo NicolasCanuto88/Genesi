@@ -17,6 +17,8 @@ using UnityEngine.InputSystem;
 ///   - Camera ruota verso la plancia al termine della transizione
 ///   - Uscita via Cancel (Esc / B gamepad) con cooldown 0.5s
 ///   - Nessun VirtualCursor (PilotHUD è display-only, nessun click UI)
+///   - Rev BY (Q138-a): dopo un guasto motori, finché c'è una velocità da recuperare, il primo Cancel
+///     annulla il recupero (PropulsionSystem.CancelSpeedRecovery) e il secondo alza il pilota
 ///
 /// ARCHITETTURA A TRE ACTION MAP (Fase 3.1.4):
 ///
@@ -560,6 +562,18 @@ public class PilotStation : MonoBehaviour, IInteractable
             Debug.Log("[PilotStation] Cancel durante Docking — undock, resta seduto.");
             AnchorSystem.Instance?.RequestUndock();
             return; // Non alziamo il pilota (Docking richiede input continuo).
+        }
+
+        // Rev BY (Q138-a) — CANCEL IN DUE TEMPI DOPO UN GUASTO MOTORI: finché c'è una velocità da
+        // recuperare (dal guasto alla fine della risalita), la prima pressione annulla il recupero
+        // (in Autopilot passa anche a Manual con target 0) e il pilota resta seduto; la seconda lo
+        // alza. Stesso schema del Cancel durante il Docking. Il banner del pilota mostra il tasto.
+        // Lo stato è replicato (IsSpeedRecoveryPending): una seconda pressione prima che arrivi la
+        // risposta del server ripete la richiesta, che è idempotente.
+        if (ps != null && ps.IsSpeedRecoveryPending)
+        {
+            ps.CancelSpeedRecovery();
+            return; // Resta seduto: la prossima pressione lo alza.
         }
 
         // Rev AH.2: rimossa ExitThirdPersonChaseCam(restoreLookAtCockpit:false).

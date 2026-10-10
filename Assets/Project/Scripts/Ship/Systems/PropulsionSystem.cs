@@ -68,6 +68,16 @@ namespace SpaceSurvivor.Ship
     ///   Assegna questa istanza come repairableTarget al RepairPanel
     ///   posizionato fisicamente in sala motori.
     ///
+    /// RECUPERO DELLA VELOCITÀ ANNULLABILE (Rev BY · Q138-a):
+    ///   IsSpeedRecoveryPending (NetworkVariable) dice a tutti i client se dopo un guasto motori c'è una
+    ///   velocità da recuperare (_savedTargetSpeed &gt; 0, che prima esisteva solo sul server): vale dal
+    ///   guasto fino alla fine della risalita. CancelSpeedRecovery() (anche da client, via RPC) annulla
+    ///   il recupero: in Manual il target resta dov'è (a 0 durante il guasto); in Autopilot si passa a
+    ///   Manual con target 0. Il guasto in corso NON si annulla. La usa PilotStation: B / Esc in due tempi.
+    ///
+    /// DURATA DEL GUASTO (Rev BY · Q139-a): 5 s (prima 1,5 s). Il valore sta su questo componente e non
+    ///   in uno ScriptableObject: debito annotato.
+    ///
     /// DIPENDE DA:
     ///   PowerManager (IPowerConsumer) · InventorySystem (FuelCell)
     /// </summary>
@@ -111,10 +121,10 @@ namespace SpaceSurvivor.Ship
                  "è forzato a 0 e ogni input pilota (W/S in Manual) è ignorato. " +
                  "Alla fine, il TargetSpeed viene ripristinato gradualmente al " +
                  "valore pre-urto con rate 'throttleRecoveryRate'.\n\n" +
-                 "Default 1.5s = punto di partenza per playtest. Debito D14 " +
-                 "(Rev AC): rendere proporzionale a radialInward.")]
+                 "Default 5s (Rev BY, Q139-a; prima 1.5s). Debito D14 " +
+                 "(Rev AC): rendere proporzionale a radialInward. Debito: valore in SO.")]
         [Min(0f)]
-        [SerializeField] private float engineFailureDuration = 1.5f;
+        [SerializeField] private float engineFailureDuration = 5f;
 
         [Tooltip("Rate in u/s con cui TargetSpeed viene ripristinato verso il " +
                  "valore pre-urto (_savedTargetSpeed) durante la fase di recovery, " +
@@ -171,6 +181,12 @@ namespace SpaceSurvivor.Ship
 
         private readonly NetworkVariable<float> _netEngineFailureDuration =
             new(0f, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Server);
+
+        // Rev BY (Q138-a) — c'è una velocità da recuperare dopo il guasto (_savedTargetSpeed > 0).
+        // Scritta solo da SyncSpeedRecoveryFlag (server). Letta da PilotStation (B / Esc in due tempi)
+        // e dal banner del pilota.
+        private readonly NetworkVariable<bool> _netSpeedRecoveryPending =
+            new(false, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Server);
 
         // ── Runtime (server) ──────────────────────────────────────────────────
         private PropulsionUpgradeData _data;
@@ -291,6 +307,12 @@ namespace SpaceSurvivor.Ship
             }
         }
 
+        /// <summary>
+        /// Rev BY (Q138-a) — true se dopo un guasto motori c'è una velocità da recuperare: dal guasto
+        /// fino alla fine della risalita, o finché il recupero non viene annullato. Replicato.
+        /// </summary>
+        public bool IsSpeedRecoveryPending => _netSpeedRecoveryPending.Value;
+
         // ── Lifecycle NGO ─────────────────────────────────────────────────────
         public override void OnNetworkSpawn()
         {
@@ -312,6 +334,7 @@ namespace SpaceSurvivor.Ship
                 _netCurrentSpeed.Value = 0f;
                 _netTargetSpeed.Value = 0f;
                 _netAnchoredPoiId.Value = 0ul;
+                _netSpeedRecoveryPending.Value = false;   // Rev BY (Q138-a)
             }
 
             _netHealth.OnValueChanged += OnHealthChanged;
@@ -354,6 +377,7 @@ namespace SpaceSurvivor.Ship
             if (!IsServer) return;
 
             UpdateThrottleAndSpeed();
+            SyncSpeedRecoveryFlag();   // Rev BY (Q138-a): un solo punto di scrittura per frame
 
             _fuelTickTimer += Time.deltaTime;
             if (_fuelTickTimer < FuelTickInterval) return;
@@ -920,7 +944,60 @@ namespace SpaceSurvivor.Ship
             LogVWarn($"[PropulsionSystem] Avaria motori: {engineFailureDuration:F2}s " +
                              $"(TargetSpeed salvato: {_savedTargetSpeed:F1} m/s, state: {state})");
 
+            SyncSpeedRecoveryFlag();   // Rev BY (Q138-a): il pilota lo vede subito, non al frame dopo
+
             OnEnginesFailed?.Invoke(engineFailureDuration);
+        }
+
+        /// <summary>
+        /// Rev BY (Q138-a) — annulla il recupero della velocità dopo un guasto motori. Chiamabile da
+        /// client (RPC). Non annulla il guasto in corso: la nave resta senza motori fino alla scadenza.
+        ///   - Manual (e Coasting): _savedTargetSpeed = 0, il target resta dov'è (a 0 durante il guasto,
+        ///     al valore raggiunto durante la risalita).
+        ///   - Autopilot: si passa a Manual con target 0.
+        /// Senza recupero in corso non fa nulla.
+        /// </summary>
+        public void CancelSpeedRecovery()
+        {
+            if (IsServer) CancelSpeedRecoveryInternal();
+            else CancelSpeedRecoveryRpc();
+        }
+
+        [Rpc(SendTo.Server)]
+        private void CancelSpeedRecoveryRpc() => CancelSpeedRecoveryInternal();
+
+        private void CancelSpeedRecoveryInternal()
+        {
+            if (_savedTargetSpeed <= 0f) return;
+
+            if (CurrentNavState == NavigationState.Autopilot)
+            {
+                // OnNavStateChanged gira subito sul server (NetworkVariable scritta qui) e azzera
+                // guasto e recupero a ogni cambio di stato: il guasto in corso va rimesso, perché
+                // si annulla solo il recupero. Il timestamp replicato del guasto non viene toccato.
+                float failureUntil = _engineFailureUntil;
+                SetNavStateInternal(NavigationState.Manual);
+                _engineFailureUntil = failureUntil;
+                _netTargetSpeed.Value = 0f;
+            }
+
+            _savedTargetSpeed = 0f;
+            SyncSpeedRecoveryFlag();
+
+            LogV($"[PropulsionSystem] Recupero velocità annullato dal pilota (state: {CurrentNavState}).");
+        }
+
+        /// <summary>
+        /// Rev BY (Q138-a) — allinea la NetworkVariable a _savedTargetSpeed. Server-only. Chiamata a ogni
+        /// frame da Update (copre tutti i punti che azzerano il recupero) e subito dopo guasto e annullamento.
+        /// </summary>
+        private void SyncSpeedRecoveryFlag()
+        {
+            if (!IsServer) return;
+
+            bool pending = _savedTargetSpeed > 0f;
+            if (_netSpeedRecoveryPending.Value != pending)
+                _netSpeedRecoveryPending.Value = pending;
         }
 
         // ── Fuel Consumption ──────────────────────────────────────────────────

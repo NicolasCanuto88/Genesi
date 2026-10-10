@@ -47,6 +47,11 @@ using SpaceSurvivor.Ship;
 /// In multiplayer ogni client ha la sua istanza del banner (parte del
 /// canvas del proprio HUD) e polla la stessa NetworkVariable → sincronizzazione
 /// automatica lato UI.
+///
+/// SUGGERIMENTO DEL PILOTA (Rev BY · Q138-a): con showCancelRecoveryHint acceso (solo sull'istanza nel
+/// PilotFlightHUD) il banner aggiunge una seconda riga "[B] Cancel speed recovery" ("[ESC]" con
+/// tastiera, da InputDeviceManager.FormatPrompt) finché c'è una velocità da recuperare
+/// (PropulsionSystem.IsSpeedRecoveryPending). Il banner sul monitor Energia lo tiene spento.
 /// </summary>
 [DisallowMultipleComponent]
 [RequireComponent(typeof(CanvasGroup))]
@@ -67,8 +72,16 @@ public class EngineFailureBannerController : MonoBehaviour
     [Tooltip("Frequenza pulse in Hz. Rev AE default 1Hz.")]
     [SerializeField] private float pulseFrequencyHz = 1.0f;
 
+    [Header("Suggerimento del pilota (Rev BY · Q138-a)")]
+    [Tooltip("Acceso solo sul banner del PilotFlightHUD: aggiunge la riga \"[B] Cancel speed recovery\" " +
+             "mentre c'è una velocità da recuperare. Spento sul monitor Energia.")]
+    [SerializeField] private bool showCancelRecoveryHint = false;
+
     [Header("Debug")]
     [SerializeField] private bool logVerbose = false;
+
+    // Rev BY (Q138-a) — testo nuovo in inglese; {cancel} = B / ESC (FormatPrompt).
+    private const string CancelRecoveryHintTemplate = "[{cancel}] Cancel speed recovery";
 
     // ── Runtime state ─────────────────────────────────────────────────────────
     private enum BannerState { Hidden, FadingIn, Showing, FadingOut }
@@ -177,6 +190,19 @@ public class EngineFailureBannerController : MonoBehaviour
         if (label == null || propulsion == null) return;
 
         int percent = Mathf.RoundToInt(propulsion.EngineFailureRatio * 100f);
-        label.text = $"ENGINES OFFLINE — RESTORING: {percent}%";
+        string text = $"ENGINES OFFLINE — RESTORING: {percent}%";
+
+        // Rev BY (Q138-a) — seconda riga, più piccola, solo sul banner del pilota.
+        if (showCancelRecoveryHint && propulsion.IsSpeedRecoveryPending)
+            text += $"\n<size=70%>{FormatHint(CancelRecoveryHintTemplate)}</size>";
+
+        label.text = text;
+    }
+
+    private static string FormatHint(string template)
+    {
+        return InputDeviceManager.Instance != null
+            ? InputDeviceManager.Instance.FormatPrompt(template)
+            : template.Replace("{cancel}", "ESC");
     }
 }

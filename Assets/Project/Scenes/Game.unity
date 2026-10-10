@@ -10311,6 +10311,7 @@ MonoBehaviour:
   fadeOutDuration: 0.3
   pulseAlphaMin: 0.85
   pulseFrequencyHz: 1
+  showCancelRecoveryHint: 1
   logVerbose: 0
 --- !u!225 &187357896
 CanvasGroup:
@@ -98480,7 +98481,7 @@ MonoBehaviour:
   startingTierIndex: 0
   startingState: 0
   startPowered: 1
-  engineFailureDuration: 1.5
+  engineFailureDuration: 5
   throttleRecoveryRate: 20
   showDebugUI: 0
   logVerbose: 0
@@ -313591,6 +313592,7 @@ MonoBehaviour:
   fadeOutDuration: 0.3
   pulseAlphaMin: 0.85
   pulseFrequencyHz: 1
+  showCancelRecoveryHint: 0
   logVerbose: 0
 --- !u!1 &3814833651256765792
 GameObject:

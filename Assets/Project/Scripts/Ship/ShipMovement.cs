@@ -1,7 +1,9 @@
 using System;
+using System.Collections.Generic;
 using Unity.Netcode;
 using UnityEngine;
 using SpaceSurvivor.Collision;
+using SpaceSurvivor.Poi;
 
 namespace SpaceSurvivor.Ship
 {
@@ -119,9 +121,24 @@ namespace SpaceSurvivor.Ship
     ///     oppure invertire il binding A/D nel InputActions asset.
     ///   - Nessun clamp pitch (6DoF completo, ogni assetto raggiungibile).
     ///
+    /// ── MODIFICHE REV BY (Q137-a — la rotazione si ferma agli urti) ──────────
+    ///
+    ///   1. GUASTO MOTORI: finché PropulsionSystem.IsInEngineFailure, i rate angolari restano a zero
+    ///      (ResetAngularRates) e non si manovra. Prima la nave continuava a girare per inerzia (e col
+    ///      pilota che teneva la direzione) anche durante il guasto causato proprio da un urto.
+    ///   2. CONTATTO IN ROTAZIONE: il passo di rotazione si calcola come candidato. Se aumenta la
+    ///      compenetrazione massima contro i POI rispetto a prima, non si applica e i rate vanno a zero;
+    ///      se la lascia uguale o la riduce, si applica (così non si ripete l'incastro della v1, che
+    ///      congelava ogni rotazione a contatto). Calcolo: CompoundColliderMath.ComputeMaxPenetration su
+    ///      PoiRegistry.All (MaxPoiPenetrationDepth).
+    ///   La spinta sul POI della v3 resta: ResolveRotationPenetration riceve sempre la rotazione tentata,
+    ///   quindi anche un passo annullato spinge il POI (ApplyMomentumTransferToPoi) e, sopra soglia, fa
+    ///   scattare l'urto (danno, shake, guasto motori). Il rilevamento continuo in rotazione resta il
+    ///   debito D18.
+    ///
     /// DIPENDE DA: PropulsionSystem (YawAcceleration, PitchAcceleration,
-    ///   RollAcceleration [Rev AH], CurrentSpeed, CurrentNavState),
-    ///   CompoundColliderAuthoring (Rev AB).
+    ///   RollAcceleration [Rev AH], CurrentSpeed, CurrentNavState, IsInEngineFailure [Rev BY]),
+    ///   CompoundColliderAuthoring (Rev AB), PoiRegistry (Rev BY).
     /// USATO DA:   ExternalWorldFollower, PilotStation, DockingController,
     ///             PoiCollisionResolver, LookToSteerController (Rev AH.3).
     /// </summary>
@@ -166,6 +183,13 @@ namespace SpaceSurvivor.Ship
         private float _currentYawRate;
         private float _currentPitchRate;
         private float _currentRollRate;
+
+        /// <summary>
+        /// Rev BY (Q137-a) — tolleranza sul confronto della compenetrazione prima/dopo un passo di
+        /// rotazione (unità logiche). Evita di annullare i passi a compenetrazione invariata per errori
+        /// di arrotondamento (scivolamento lungo una superficie).
+        /// </summary>
+        private const float RotationPenetrationTolerance = 1e-4f;
 
         // ── Cache compound collider (Rev AB) ─────────────────────────────────
         [Header("Collisione compound (Rev AB — Blocco 3.2.d D5)")]
@@ -319,9 +343,18 @@ namespace SpaceSurvivor.Ship
         {
             var propulsion = PropulsionSystem.Instance;
 
+            // Rev BY (Q137-a, parte 1) — durante il guasto motori la nave non gira: rate a zero e
+            // nessuna manovra finché il guasto dura (IsInEngineFailure, replicato: banner e manovra
+            // finiscono insieme su ogni client).
+            if (propulsion != null && propulsion.IsInEngineFailure)
+            {
+                ResetAngularRates();
+                return;
+            }
+
             // MS-2 (Rev AH): canSteer non dipende più dalla velocità.
             // Vecchio: canSteer = Manual && CurrentSpeed >= minSpeedToSteer
-            // Nuovo:   canSteer = Manual
+            // Nuovo:   canSteer = Manual (Rev BY: e nessun guasto motori, gestito sopra)
             bool canSteer = CurrentNavState == NavigationState.Manual;
 
             float dt = Time.fixedDeltaTime;
@@ -369,7 +402,17 @@ namespace SpaceSurvivor.Ship
                 _currentYawRate * dt,
                 _currentRollRate * dt);
 
-            _logicalRotation.Value = _logicalRotation.Value * delta;
+            Quaternion currentRotation = _logicalRotation.Value;
+            Quaternion candidateRotation = currentRotation * delta;
+
+            // Rev BY (Q137-a, parte 2) — il passo si applica solo se non aumenta la compenetrazione
+            // massima contro i POI. Un passo che la aumenta si annulla e i rate vanno a zero; i passi
+            // che la lasciano uguale o la riducono restano permessi (uscire da un contatto è sempre
+            // possibile, a differenza del freeze v1).
+            if (WouldIncreasePoiPenetration(currentRotation, candidateRotation))
+                ResetAngularRates();
+            else
+                _logicalRotation.Value = candidateRotation;
 
             // Rev AI (fix rotation collision v3 — definitivo).
             //
@@ -388,11 +431,73 @@ namespace SpaceSurvivor.Ship
             //     MOTORI OFFLINE via ShipImpactHandler).
             //
             // Fix strutturale completo (rotation swept CCD) resta debito D18 M4+.
+            //
+            // Rev BY (Q137-a): il resolver riceve la rotazione TENTATA (candidateRotation), anche quando
+            // il passo è stato annullato sopra. Così la spinta sul POI (v3) e l'urto sopra soglia restano:
+            // la nave non entra nel POI, ma il contatto spinge il POI e fa scattare danno, shake e guasto
+            // motori come prima.
             var resolver = PoiCollisionResolver.Instance;
             if (resolver != null)
             {
-                resolver.ResolveRotationPenetration(_logicalPosition.Value, _logicalRotation.Value, dt);
+                resolver.ResolveRotationPenetration(_logicalPosition.Value, candidateRotation, dt);
             }
+        }
+
+        /// <summary>
+        /// Rev BY (Q137-a) — azzera i rate angolari (yaw, pitch, roll). Operazione distinta dal
+        /// rallentamento per inerzia: la nave smette di girare in questo tick. Server-only.
+        /// </summary>
+        private void ResetAngularRates()
+        {
+            _currentYawRate = 0f;
+            _currentPitchRate = 0f;
+            _currentRollRate = 0f;
+        }
+
+        /// <summary>
+        /// Rev BY (Q137-a) — true se, alla posizione logica attuale, passare da currentRotation a
+        /// candidateRotation aumenta la compenetrazione massima contro i POI (oltre la tolleranza).
+        /// Senza compound della nave non c'è confronto possibile: false (comportamento v3).
+        /// </summary>
+        private bool WouldIncreasePoiPenetration(Quaternion currentRotation, Quaternion candidateRotation)
+        {
+            IReadOnlyList<CompoundVolume> shipVolumes = _compound != null ? _compound.Volumes : null;
+            if (shipVolumes == null || shipVolumes.Count == 0) return false;
+
+            Vector3 position = _logicalPosition.Value;
+            float before = MaxPoiPenetrationDepth(position, currentRotation, shipVolumes);
+            float after = MaxPoiPenetrationDepth(position, candidateRotation, shipVolumes);
+
+            return after > before + RotationPenetrationTolerance;
+        }
+
+        /// <summary>
+        /// Rev BY (Q137-a) — compenetrazione massima del compound della nave contro tutti i POI
+        /// registrati (PoiRegistry, server-only), con la stessa matematica del resolver
+        /// (CompoundColliderMath.ComputeMaxPenetration). 0 = nessun contatto.
+        /// </summary>
+        private static float MaxPoiPenetrationDepth(
+            Vector3 shipPosition,
+            Quaternion shipRotation,
+            IReadOnlyList<CompoundVolume> shipVolumes)
+        {
+            float maxDepth = 0f;
+
+            foreach (var poi in PoiRegistry.All)
+            {
+                if (poi == null) continue;
+                var poiVolumes = poi.CollisionVolumes;
+                if (poiVolumes == null || poiVolumes.Count == 0) continue;
+
+                CompoundColliderMath.PairContact pair = CompoundColliderMath.ComputeMaxPenetration(
+                    shipPosition, shipRotation, shipVolumes,
+                    poi.LogicalPosition, poi.LogicalRotation, poiVolumes,
+                    fallbackNormal: Vector3.up);
+
+                if (pair.Depth > maxDepth) maxDepth = pair.Depth;
+            }
+
+            return maxDepth;
         }
 
         /// <summary>
