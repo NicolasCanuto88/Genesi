@@ -381,12 +381,12 @@ public class ShipSystemsDashboardUI : MonoBehaviour, IDashboardPanel
 
     private string ComputeAutonomy(float currentLevel, float netRatePerMinute)
     {
-        if (netRatePerMinute >= 0f) return "Autonomia: ∞";
+        if (netRatePerMinute >= 0f) return "Time left: ∞";
         float minutes = currentLevel / Mathf.Abs(netRatePerMinute);
-        if (minutes > 999f) return "Autonomia: ∞";
+        if (minutes > 999f) return "Time left: ∞";
         int mins = Mathf.FloorToInt(minutes);
         int secs = Mathf.FloorToInt((minutes - mins) * 60f);
-        return $"Autonomia: {mins:D2}:{secs:D2}";
+        return $"Time left: {mins:D2}:{secs:D2}";
     }
 
     // ── Reactor ───────────────────────────────────────────────────────────────
@@ -474,7 +474,7 @@ public class ShipSystemsDashboardUI : MonoBehaviour, IDashboardPanel
     {
         if (repairStatusMessageText == null || target == null) return;
 
-        repairStatusMessageText.text = $"➜ RECATI AL PANNELLO: {target.GetSystemName().ToUpperInvariant()}";
+        repairStatusMessageText.text = $"➜ GO TO PANEL: {target.GetSystemName().ToUpperInvariant()}";
         repairStatusMessageText.color = colorDegraded;
 
         if (_repairStatusRoutine != null) StopCoroutine(_repairStatusRoutine);
@@ -538,18 +538,18 @@ public class ShipSystemsDashboardUI : MonoBehaviour, IDashboardPanel
                 case ElectricalDegradationManager.BallastState.Integro:
                     SetBadge(diagBallastBadge, "OK", colorOnline); break;
                 case ElectricalDegradationManager.BallastState.Lieve:
-                    SetBadge(diagBallastBadge, "LIEVE", colorDegraded); break;
+                    SetBadge(diagBallastBadge, "LIGHT", colorDegraded); break;
                 case ElectricalDegradationManager.BallastState.Medio:
-                    SetBadge(diagBallastBadge, "MEDIO", colorCritical); break;
+                    SetBadge(diagBallastBadge, "MEDIUM", colorCritical); break;
                 case ElectricalDegradationManager.BallastState.Avanzato:
-                    SetBadge(diagBallastBadge, "AVANZATO", colorCritical); break;
+                    SetBadge(diagBallastBadge, "SEVERE", colorCritical); break;
             }
         }
 
         // Totale testo
         if (diagTotalText != null)
         {
-            diagTotalText.text = $"TOTALE  ×{total:0.00}";
+            diagTotalText.text = $"TOTAL  ×{total:0.00}";
             diagTotalText.color = MultiplierColor(total);
         }
 
@@ -557,11 +557,11 @@ public class ShipSystemsDashboardUI : MonoBehaviour, IDashboardPanel
         if (diagTotalBadge != null)
         {
             if (total >= diagCriticalThreshold)
-                SetBadge(diagTotalBadge, "CRITICO", colorCritical);
+                SetBadge(diagTotalBadge, "CRITICAL", colorCritical);
             else if (total >= diagWarningThreshold)
-                SetBadge(diagTotalBadge, "DEGRADATO", colorDegraded);
+                SetBadge(diagTotalBadge, "DEGRADED", colorDegraded);
             else
-                SetBadge(diagTotalBadge, "NORMALE", colorOnline);
+                SetBadge(diagTotalBadge, "NORMAL", colorOnline);
         }
     }
 
@@ -595,9 +595,9 @@ public class ShipSystemsDashboardUI : MonoBehaviour, IDashboardPanel
             SetText(diagHullText, "HULL  ×1.00", colorOnline);
             SetText(diagEMText, "EM  ×1.00", colorOnline);
             SetText(diagBallastText, "BALLAST  ×1.00", colorOnline);
-            SetText(diagTotalText, "TOTALE  ×1.00", colorOnline);
+            SetText(diagTotalText, "TOTAL  ×1.00", colorOnline);
             SetBadge(diagBallastBadge, "OK", colorOnline);
-            SetBadge(diagTotalBadge, "NORMALE", colorOnline);
+            SetBadge(diagTotalBadge, "NORMAL", colorOnline);
         }
     }
 

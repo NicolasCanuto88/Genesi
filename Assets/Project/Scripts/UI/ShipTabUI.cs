@@ -66,7 +66,7 @@ public class ShipTabUI : MonoBehaviour, IDashboardPanel
     private void RefreshSystemsStatus()
     {
         if (systemsStatusLabel == null) return;
-        systemsStatusLabel.text = "Stato sistemi — dettaglio su Monitor 2, Sala Macchine";
+        systemsStatusLabel.text = "Systems status — details on the Engineering monitor";
     }
 
     private void RefreshCrewList()

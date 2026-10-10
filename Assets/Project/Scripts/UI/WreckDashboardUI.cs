@@ -113,35 +113,35 @@ public class WreckDashboardUI : MonoBehaviour, IDashboardPanel
         if (umbilicalStatusText != null)
         {
             string s;
-            if (u == null) s = "OMBELICALE: N/D";
-            else if (!u.IsRequested) s = "OMBELICALE: SPENTO";
-            else if (u.IsPowered) s = "OMBELICALE: ATTIVO";
-            else s = "OMBELICALE: IN ATTESA"; // richiesto ma nessun relitto ancorato o sheddato
+            if (u == null) s = "UMBILICAL: N/A";
+            else if (!u.IsRequested) s = "UMBILICAL: OFF";
+            else if (u.IsPowered) s = "UMBILICAL: ACTIVE";
+            else s = "UMBILICAL: STANDBY"; // richiesto ma nessun relitto ancorato o sheddato
             umbilicalStatusText.text = s;
         }
         if (umbilicalButtonLabel != null)
-            umbilicalButtonLabel.text = (u != null && u.IsRequested) ? "SPEGNI OMBELICALE" : "ACCENDI OMBELICALE";
+            umbilicalButtonLabel.text = (u != null && u.IsRequested) ? "UMBILICAL OFF" : "UMBILICAL ON";
 
         // Residuo relitto
         if (reserveText != null)
         {
             var r = (u != null) ? u.CurrentReserve : null;
             reserveText.text = (r != null)
-                ? $"RESIDUO RELITTO: {r.Residual:F0} / {r.InitialResidual:F0}"
-                : "RESIDUO RELITTO: nessun relitto";
+                ? $"WRECK O₂: {r.Residual:F0} / {r.InitialResidual:F0}"
+                : "WRECK O₂: no wreck";
         }
 
         // Pump
         if (harvestButton != null) harvestButton.interactable = powered; // Q0-a: serve ombelicale attivo
         if (harvestButtonLabel != null)
-            harvestButtonLabel.text = (p != null && p.Mode == WreckPumpMode.Harvest) ? "FERMA HARVEST" : "AVVIA HARVEST";
+            harvestButtonLabel.text = (p != null && p.Mode == WreckPumpMode.Harvest) ? "STOP HARVEST" : "START HARVEST";
 
         if (pumpStatusText != null)
         {
             string s;
-            if (p == null) s = "PUMP: N/D";
-            else if (p.Mode == WreckPumpMode.Harvest) s = powered ? "PUMP: HARVEST attivo" : "PUMP: HARVEST (in attesa alimentazione)";
-            else if (p.Mode == WreckPumpMode.Supply) s = "PUMP: SUPPLY (non disponibile)";
+            if (p == null) s = "PUMP: N/A";
+            else if (p.Mode == WreckPumpMode.Harvest) s = powered ? "PUMP: HARVEST active" : "PUMP: HARVEST (waiting for power)";
+            else if (p.Mode == WreckPumpMode.Supply) s = "PUMP: SUPPLY (unavailable)";
             else s = "PUMP: OFF";
             pumpStatusText.text = s;
         }

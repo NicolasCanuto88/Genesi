@@ -65,8 +65,8 @@ namespace SpaceSurvivor.Ship
 
         // ── Testi (override dei default engineering-repair della base) ────────
 
-        protected override string PromptText => "PREMI E PER STABILIZZARE";
-        protected override string CompleteText => "SUBSYSTEM STABILIZZATO!";
+        protected override string PromptText => "PRESS [{mash}] TO STABILIZE";   // Rev BX-e
+        protected override string CompleteText => "SUBSYSTEM STABILIZED!";
 
         // ── Win-mode Path H (override dei seam base, tutti default = repair) ───
 
@@ -153,7 +153,7 @@ namespace SpaceSurvivor.Ship
         /// </summary>
         protected override void OnFloorBreached()
         {
-            SetStatus("SUBSYSTEM PERSO", colorCritical);
+            SetStatus("SUBSYSTEM LOST", colorCritical);
             if (stabilizationPanel != null)
                 stabilizationPanel.NotifyStabilizationOutcomeRpc(false);
             base.OnFloorBreached(); // CloseInternal + _onInterrupted
